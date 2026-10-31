@@ -1,180 +1,374 @@
-import axios from 'axios';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  hasSession,
+  setTokens,
+  TokenPair,
+} from './session';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 30_000,
 });
 
+// Public, un-authenticated paths — a 401 here is the answer, never a reason
+// to log the user out or try a token refresh.
+const AUTH_PATHS = ['/auth/login', '/auth/register', '/auth/google', '/auth/refresh', '/auth/forgot-password', '/auth/reset-password'];
+
+function isAuthPath(url: string): boolean {
+  return AUTH_PATHS.some((p) => url.includes(p)) || url.includes('/daily/guest');
+}
+
 api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+  const token = getAccessToken();
+  if (token && !isAuthPath(config.url || '')) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
+// ── Silent refresh (single-flight) ────────────────────────────────────────
+let refreshing: Promise<boolean> | null = null;
+
+/**
+ * Exchange the refresh token for a new pair. Concurrent callers share one
+ * in-flight request so a burst of 401s doesn't rotate the token N times
+ * (which the server would treat as reuse and revoke everything).
+ */
+export function refreshSession(): Promise<boolean> {
+  if (refreshing) return refreshing;
+  const refresh = getRefreshToken();
+  if (!refresh) return Promise.resolve(false);
+  refreshing = axios
+    .post<TokenPair>(`${API_URL}/api/auth/refresh`, { refresh_token: refresh }, { timeout: 15_000 })
+    .then((res) => {
+      setTokens(res.data);
+      return true;
+    })
+    .catch(() => {
+      clearTokens();
+      return false;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
+}
+
+function redirectToLogin() {
+  if (typeof window === 'undefined') return;
+  const here = window.location.pathname + window.location.search;
+  const next = here.startsWith('/login') || here === '/' ? '' : `?next=${encodeURIComponent(here)}`;
+  window.location.href = `/login${next}`;
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const url = error.config?.url || '';
-    const isGuestCall = url.includes('/daily/guest');
-    if (error.response?.status === 401 && typeof window !== 'undefined' && !isGuestCall) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+  async (error: AxiosError) => {
+    const config = (error.config || {}) as AxiosRequestConfig & { _retried?: boolean };
+    const url = config.url || '';
+    const status = error.response?.status;
+
+    if (status === 401 && !isAuthPath(url) && typeof window !== 'undefined') {
+      // Step-up checks (delete account / games) return 401 for a wrong
+      // password — that is feedback, not an expired session.
+      const code = error.response?.headers?.['x-error-code'];
+      const isStepUp = url.includes('/users/me') && config.method?.toLowerCase() === 'delete';
+      if (!isStepUp && !config._retried && hasSession()) {
+        config._retried = true;
+        const ok = await refreshSession();
+        if (ok) return api.request(config);
+        redirectToLogin();
+      } else if (!isStepUp && !hasSession()) {
+        // No credentials at all: a protected page was opened logged-out.
+        if (code !== 'not_authenticated' || !url.includes('/auth/me')) redirectToLogin();
+      }
     }
     return Promise.reject(error);
   }
 );
 
+/** Best-effort human message from an API error. */
+export function errorMessage(err: unknown, fallback = 'Something went wrong.'): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail.length && typeof detail[0]?.msg === 'string') {
+    return detail[0].msg.replace(/^Value error, /, '');
+  }
+  if (detail && typeof detail === 'object' && typeof (detail as { message?: string }).message === 'string') {
+    return (detail as { message: string }).message;
+  }
+  return fallback;
+}
+
 /**
  * Client's local calendar date (YYYY-MM-DD). The daily puzzle is keyed to the
  * player's local date (Wordle-style), so the backend resolves "today" from
- * this rather than its own UTC clock — otherwise a user past local midnight
- * but before UTC midnight still gets yesterday's word.
+ * this rather than its own UTC clock.
  */
-function localDate(): string {
+export function localDate(): string {
   const n = new Date();
   const pad = (x: number) => String(x).padStart(2, '0');
   return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
 }
 
-// Auth
+// ── Auth ──────────────────────────────────────────────────────────────────
 export const authApi = {
   register: (data: { email: string; username: string; password: string }) =>
-    api.post('/auth/register', data),
-  login: (data: { email: string; password: string }) =>
-    api.post('/auth/login', data),
-  google: (credential: string) =>
-    api.post('/auth/google', { credential }),
+    api.post<TokenPair>('/auth/register', data),
+  login: (data: { email: string; password: string }) => api.post<TokenPair>('/auth/login', data),
+  google: (credential: string) => api.post<TokenPair>('/auth/google', { credential }),
   me: () => api.get('/auth/me'),
+  logout: (refresh_token: string | null) => api.post('/auth/logout', { refresh_token }),
+  logoutAll: () => api.post('/auth/logout-all'),
+  sessions: (current: string | null) =>
+    api.get<SessionInfo[]>('/auth/sessions', { params: current ? { current } : undefined }),
+  revokeSession: (id: string) => api.delete(`/auth/sessions/${id}`),
+  changePassword: (data: { current_password?: string; new_password: string }) =>
+    api.post<TokenPair>('/auth/change-password', data),
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token: string, password: string) =>
+    api.post<TokenPair>('/auth/reset-password', { token, password }),
 };
 
-// Games
-//
-// Calls that hit a collection *root* keep a trailing slash — `/games/` (and
-// likewise `/daily/`, `/leaderboard/`). Without it FastAPI 307-redirects to the
-// slashed path, and iOS/WebKit drops the Authorization header across that
-// redirect → "Not authenticated" on iPhone only (desktop browsers preserve it).
-// Sub-path routes like `/games/${id}` are unaffected — do NOT add slashes there.
+export interface SessionInfo {
+  id: string;
+  user_agent: string | null;
+  ip_address: string | null;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  current: boolean;
+}
+
+// ── Games ─────────────────────────────────────────────────────────────────
+// Collection roots keep a trailing slash (`/games/`, `/daily/`,
+// `/leaderboard/`): without it FastAPI 307-redirects and iOS/WebKit drops
+// the Authorization header across the redirect.
 export const gamesApi = {
-  create: (data: { mode: string; word_pool?: string }) =>
-    api.post('/games/', data),
+  create: (data: { mode: string; word_pool?: string; hard_mode?: boolean }) => api.post('/games/', data),
   submitGuess: (gameId: string, guess: string) =>
     api.post(`/games/${gameId}/guess`, { guess, local_date: localDate() }),
   get: (gameId: string) => api.get(`/games/${gameId}`),
-  list: (params?: { page?: number; per_page?: number; mode?: string }) =>
-    api.get('/games/', { params }),
+  list: (params?: { page?: number; per_page?: number; mode?: string }) => api.get('/games/', { params }),
   delete: (gameId: string) => api.delete(`/games/${gameId}`),
   /**
-   * Fire-and-forget abandon used from `pagehide` (tab close, refresh,
-   * navigate-away). `navigator.sendBeacon` can't attach an Authorization
-   * header — we use `fetch` with `keepalive: true`, which survives the
-   * unload AND accepts a Bearer token. Errors are swallowed (the page is
-   * already leaving); the server-side stale-cleanup on the user's next
-   * `create_game` is the safety net if this fetch never lands.
+   * Fire-and-forget abandon used from `pagehide`. `fetch` with
+   * `keepalive: true` survives the unload AND accepts a Bearer token
+   * (sendBeacon can't). Errors are swallowed; the server-side stale-game
+   * cleanup on the next create is the safety net.
    */
   abandonBeacon: (gameId: string) => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('token');
+    const token = getAccessToken();
     if (!token) return;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
     try {
       void fetch(`${API_URL}/api/games/${gameId}`, {
         method: 'DELETE',
-        headers,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         keepalive: true,
       });
     } catch {
-      /* page is unloading — nothing to do */
+      /* page is unloading */
     }
   },
 };
 
-// Analysis
+// ── Analysis ──────────────────────────────────────────────────────────────
 export const analysisApi = {
   analyze: (gameId: string) => api.post(`/analysis/games/${gameId}/analyze`),
+  labOpener: (word: string) => api.get<OpenerReport>(`/analysis/lab/opener/${encodeURIComponent(word)}`),
+  labPosition: (guesses: string[], patterns: number[]) =>
+    api.post<PositionReport>('/analysis/lab/position', { guesses, patterns }),
 };
 
-// Daily
+export interface OpenerPick {
+  word: string;
+  entropy: number;
+  expected_remaining: number;
+  rank: number;
+  is_possible_answer: boolean;
+}
+
+export interface OpenerReport {
+  word: string;
+  entropy: number;
+  best_entropy: number;
+  efficiency: number;
+  expected_remaining: number;
+  worst_case_remaining: number;
+  rank: number;
+  total_guesses: number;
+  percentile: number;
+  answers_total: number;
+  distinct_patterns: number;
+  pattern_buckets: { pattern: number; count: number; probability: number; examples: string[] }[];
+  best_openers: OpenerPick[];
+  neighbours: { word: string; entropy: number; rank: number }[];
+  facts: {
+    unique_letters: number;
+    vowels: number;
+    repeated_letters: number;
+    difficulty_elo: number;
+    is_possible_answer: boolean;
+  };
+}
+
+export interface PositionReport {
+  history: { guess: string; pattern: number; remaining_before: number; remaining_after: number }[];
+  remaining: number;
+  remaining_words: string[];
+  remaining_truncated: boolean;
+  entropy_left: number;
+  top_picks: {
+    word: string;
+    entropy: number;
+    expected_remaining: number;
+    is_possible_answer: boolean;
+    worst_case_remaining: number;
+  }[];
+  solved: boolean;
+}
+
+// ── Daily ─────────────────────────────────────────────────────────────────
 export const dailyApi = {
   get: () => api.get('/daily/', { params: { local_date: localDate() } }),
   play: () => api.post('/daily/play', null, { params: { local_date: localDate() } }),
   guest: () => api.post('/daily/guest', null, { params: { local_date: localDate() } }),
   guestGame: (gameId: string) => api.get(`/daily/guest/${gameId}`),
-  guestGuess: (gameId: string, guess: string) =>
-    api.post(`/daily/guest/${gameId}/guess`, { guess }),
-  archive: (year: number, month: number) =>
-    api.get('/daily/archive', { params: { year, month } }),
+  guestGuess: (gameId: string, guess: string) => api.post(`/daily/guest/${gameId}/guess`, { guess }),
+  archive: (year: number, month: number) => api.get('/daily/archive', { params: { year, month } }),
   replay: (date: string) => api.post('/daily/replay', { date }),
 };
 
-// Leaderboard
+// ── Leaderboard ───────────────────────────────────────────────────────────
 export const leaderboardApi = {
-  get: (params?: { page?: number; per_page?: number }) =>
-    api.get('/leaderboard/', { params }),
+  get: (params?: { page?: number; per_page?: number }) => api.get('/leaderboard/', { params }),
   nearMe: () => api.get('/leaderboard/near-me'),
-  openers: (limit?: number) =>
-    api.get('/leaderboard/openers', { params: limit ? { limit } : undefined }),
+  openers: (limit?: number) => api.get('/leaderboard/openers', { params: limit ? { limit } : undefined }),
+  season: (params?: { year?: number; month?: number; limit?: number }) =>
+    api.get<SeasonBoard>('/leaderboard/season', { params }),
 };
 
-// Users
+export interface SeasonEntry {
+  rank: number | null;
+  user_id: string;
+  username: string;
+  elo_rating: number;
+  elo_gain: number;
+  games: number;
+  wins: number;
+  peak_elo: number | null;
+  avg_accuracy: number | null;
+}
+
+export interface SeasonBoard {
+  season: {
+    name: string;
+    year: number;
+    month: number;
+    starts_at: string;
+    ends_at: string;
+    is_current: boolean;
+    days_left: number;
+  };
+  total_players: number;
+  entries: SeasonEntry[];
+  me: SeasonEntry | null;
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────
 export const usersApi = {
-  eloHistory: (days?: number) =>
-    api.get('/users/me/elo-history', { params: days ? { days } : undefined }),
+  eloHistory: (days?: number) => api.get('/users/me/elo-history', { params: days ? { days } : undefined }),
   stats: () => api.get('/users/me/stats'),
+  updateProfile: (data: { username?: string; profile_public?: boolean }) => api.patch('/users/me', data),
+  exportData: () => api.get('/users/me/export', { responseType: 'blob' }),
   deleteAllGames: (confirm: { password?: string; confirm_username?: string }) =>
     api.delete('/users/me/games', { data: confirm }),
   deleteAccount: (confirm: { password?: string; confirm_username?: string }) =>
     api.delete('/users/me', { data: confirm }),
 };
 
-// AI
+// ── Public profiles ───────────────────────────────────────────────────────
+export const profilesApi = {
+  get: (username: string) => api.get<PublicProfile>(`/profiles/${encodeURIComponent(username)}`),
+};
+
+export interface PublicProfile {
+  username: string;
+  avatar_url: string | null;
+  is_me: boolean;
+  member_since: string | null;
+  elo_rating: number;
+  peak_elo: number;
+  is_placement: boolean;
+  rated_games: number;
+  current_streak: number;
+  max_streak: number;
+  completed: number;
+  wins: number;
+  win_rate: number;
+  avg_guesses: number | null;
+  avg_accuracy: number | null;
+  best_accuracy: number | null;
+  favourite_opener: string | null;
+  favourite_opener_plays: number;
+  guess_distribution: Record<string, number>;
+  achievements: { type: string; unlocked_at: string | null }[];
+  elo_history: { elo: number; at: string | null }[];
+  recent_games: {
+    id: string;
+    mode: string;
+    status: string;
+    num_guesses: number;
+    hard_mode: boolean;
+    accuracy_score: number | null;
+    elo_delta: number | null;
+    completed_at: string | null;
+    patterns: number[];
+  }[];
+}
+
+// ── AI ────────────────────────────────────────────────────────────────────
 export const aiApi = {
   explainMove: (gameId: string, moveNumber: number) =>
     api.post('/ai/explain-move', { game_id: gameId, move_number: moveNumber }),
-  gameSummary: (gameId: string) =>
-    api.post(`/ai/game-summary/${gameId}`),
+  gameSummary: (gameId: string) => api.post(`/ai/game-summary/${gameId}`),
   coachChat: (gameId: string, message: string, history: Array<{ role: string; content: string }>) =>
     api.post(`/ai/coach-chat/${gameId}`, { message, history }),
 };
 
-// Learn (trainer) progress — synced per-account so it follows the user across
-// devices. `/learn/progress` is a fixed sub-path (no trailing-slash redirect
-// concern). PATCH merges as a high-water mark server-side; PUT is intentionally
-// avoided because the API's CORS policy doesn't allow it.
+// ── Learn progress ────────────────────────────────────────────────────────
 export const learnApi = {
-  getProgress: () =>
-    api.get<{ progress: Record<string, number> }>('/learn/progress'),
+  getProgress: () => api.get<{ progress: Record<string, number> }>('/learn/progress'),
   saveProgress: (progress: Record<string, number>) =>
     api.patch<{ progress: Record<string, number> }>('/learn/progress', { progress }),
 };
 
-// Achievements
+// ── Achievements ──────────────────────────────────────────────────────────
 export const achievementsApi = {
   mine: () => api.get('/achievements/me'),
   all: () => api.get('/achievements/all'),
 };
 
-// Admin
+// ── Admin ─────────────────────────────────────────────────────────────────
 export const adminApi = {
   users: (params?: { page?: number; per_page?: number; search?: string; role?: string; order_by?: string; order?: string }) =>
     api.get('/admin/users', { params }),
   user: (userId: string) => api.get(`/admin/users/${userId}`),
   resetElo: (userId: string) => api.post(`/admin/users/${userId}/reset-elo`),
   toggleAdmin: (userId: string) => api.post(`/admin/users/${userId}/toggle-admin`),
+  banUser: (userId: string, reason?: string) => api.post(`/admin/users/${userId}/ban`, { reason }),
+  unbanUser: (userId: string) => api.post(`/admin/users/${userId}/unban`),
   dailyWords: () => api.get('/admin/daily-words'),
-  setDailyWord: (data: { word: string; date: string; difficulty?: number }) =>
-    api.post('/admin/daily-words', data),
+  setDailyWord: (data: { word: string; date: string; difficulty?: number }) => api.post('/admin/daily-words', data),
   analytics: () => api.get('/admin/analytics'),
-  timeseries: (days?: number) =>
-    api.get('/admin/analytics/timeseries', { params: { days } }),
+  timeseries: (days?: number) => api.get('/admin/analytics/timeseries', { params: { days } }),
   distributions: () => api.get('/admin/analytics/distributions'),
   announcements: () => api.get('/admin/announcements'),
   createAnnouncement: (text: string) => api.post('/admin/announcements', { text }),
@@ -191,12 +385,12 @@ export const adminApi = {
   health: () => api.get('/admin/health'),
 };
 
-// Announcements (public)
+// ── Announcements (public) ────────────────────────────────────────────────
 export const announcementsApi = {
   active: () => api.get('/announcements/active'),
 };
 
-// Challenges
+// ── Challenges ────────────────────────────────────────────────────────────
 export const challengesApi = {
   create: () => api.post('/challenges/create'),
   get: (code: string) => api.get(`/challenges/${code}`),
@@ -205,12 +399,12 @@ export const challengesApi = {
   mine: () => api.get('/challenges/mine'),
 };
 
-// Community stats
+// ── Community stats ───────────────────────────────────────────────────────
 export const communityApi = {
   gameStats: (gameId: string) => api.get(`/games/${gameId}/community-stats`),
 };
 
-// Push notifications
+// ── Push notifications ────────────────────────────────────────────────────
 export interface PushPreferences {
   challenge_results: boolean;
   achievement_unlock: boolean;
@@ -219,21 +413,13 @@ export interface PushPreferences {
 }
 
 export const pushApi = {
-  vapidPublicKey: () =>
-    api.get<{ public_key: string; enabled: boolean }>('/push/vapid-public-key'),
+  vapidPublicKey: () => api.get<{ public_key: string; enabled: boolean }>('/push/vapid-public-key'),
   subscribe: (subscription: PushSubscriptionJSON, userAgent?: string) =>
-    api.post<{ id: string }>('/push/subscribe', {
-      subscription,
-      user_agent: userAgent,
-    }),
-  unsubscribe: (endpoint: string) =>
-    api.delete<{ deleted: number }>('/push/subscribe', {
-      data: { endpoint },
-    }),
+    api.post<{ id: string }>('/push/subscribe', { subscription, user_agent: userAgent }),
+  unsubscribe: (endpoint: string) => api.delete<{ deleted: number }>('/push/subscribe', { data: { endpoint } }),
   test: () => api.post<{ sent: number; removed: number }>('/push/test'),
   getPreferences: () => api.get<PushPreferences>('/push/preferences'),
-  updatePreferences: (patch: Partial<PushPreferences>) =>
-    api.patch<PushPreferences>('/push/preferences', patch),
+  updatePreferences: (patch: Partial<PushPreferences>) => api.patch<PushPreferences>('/push/preferences', patch),
 };
 
 export default api;

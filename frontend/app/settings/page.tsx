@@ -13,6 +13,7 @@ import {
 import { pushApi, type PushPreferences } from '@/lib/api';
 import ScrollArea from '@/components/ScrollArea';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { clearTokens } from '@/lib/session';
 
 /* ------------------------------------------------------------------ */
 /*  Shared modal shell                                                  */
@@ -289,7 +290,7 @@ function DeleteAccountModal({
           ? { password }
           : { confirm_username: user?.username ?? '' },
       );
-      localStorage.removeItem('token');
+      clearTokens();
       router.push('/login');
     } catch (err: unknown) {
       const detail =

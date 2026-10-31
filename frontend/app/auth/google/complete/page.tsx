@@ -1,54 +1,47 @@
 'use client';
-import { Suspense, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
+import TileSpinner from '@/components/TileSpinner';
 
-// `useSearchParams()` opts the page out of static prerendering, and
-// Next 14's App Router requires that hook to live inside a Suspense
-// boundary or the prod build fails the CSR-bailout check. We split the
-// inner logic into a child component so the outer page can wrap it.
-
-function GoogleCompleteInner() {
+/**
+ * Final hop of the Google sign-in. The token pair arrives in the URL
+ * fragment (`#access=…&refresh=…&next=/play`), which never reaches any
+ * server log. We store it, scrub the URL from history and move on.
+ */
+export default function GoogleCompletePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { refreshUser } = useAuth();
+  const { adoptTokens } = useAuth();
   const didRun = useRef(false);
 
   useEffect(() => {
     if (didRun.current) return;
     didRun.current = true;
 
-    const token = searchParams.get('token');
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const access = params.get('access');
+    const refresh = params.get('refresh');
+    const nextRaw = params.get('next') || '/play';
+    const next = nextRaw.startsWith('/') && !nextRaw.startsWith('//') ? nextRaw : '/play';
 
-    if (token) {
-      localStorage.setItem('token', token);
-      refreshUser().then((u) => router.push(u?.is_admin ? '/admin' : '/play'));
-    } else {
-      router.push('/login');
+    // Scrub the fragment immediately so a screenshot / history entry
+    // doesn't carry the tokens.
+    window.history.replaceState(null, '', window.location.pathname);
+
+    if (!access || !refresh) {
+      router.replace('/login?error=google');
+      return;
     }
+    adoptTokens({ access_token: access, refresh_token: refresh })
+      .then((u) => router.replace(u?.is_admin ? '/admin' : next))
+      .catch(() => router.replace('/login?error=google'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <SigningInSpinner />;
-}
-
-function SigningInSpinner() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-4">
-      <div
-        className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
-        style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }}
-        aria-hidden="true"
-      />
+      <TileSpinner size="md" label="Signing you in" />
       <p className="font-sans text-sm text-text-secondary">Signing you in…</p>
     </div>
-  );
-}
-
-export default function GoogleCompletePage() {
-  return (
-    <Suspense fallback={<SigningInSpinner />}>
-      <GoogleCompleteInner />
-    </Suspense>
   );
 }

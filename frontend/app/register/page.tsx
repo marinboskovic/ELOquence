@@ -1,16 +1,17 @@
 'use client';
-import { useState, FormEvent } from 'react';
+import { Suspense, useState, FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { AlertCircle } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { springs } from '@/lib/animations';
+import { errorMessage } from '@/lib/api';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
+import { AuthError, AuthField, AuthShell, AuthSubmit, OrDivider, safeNext } from '@/components/auth/AuthShell';
 
-export default function RegisterPage() {
+function RegisterInner() {
   const { register } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = safeNext(searchParams.get('next'));
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -20,173 +21,90 @@ export default function RegisterPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (!/^[A-Za-z0-9_-]{3,30}$/.test(username)) {
+      setError('Username: 3–30 letters, digits, _ or -.');
       return;
     }
     setLoading(true);
     try {
       const u = await register(email, username, password);
-      router.push(u.is_admin ? '/admin' : '/play');
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string | { msg: string }[] } } })
-        ?.response?.data?.detail;
-      if (Array.isArray(detail)) {
-        setError(detail[0]?.msg || 'Registration failed.');
-      } else {
-        setError(detail || 'Registration failed.');
-      }
+      router.push(u.is_admin ? '/admin' : next);
+    } catch (err) {
+      setError(errorMessage(err, 'Registration failed.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-52px)] px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={springs.modal}
-        className="w-full max-w-sm"
-      >
-        {/* Logo */}
-        <div className="flex justify-center mb-8">
+    <AuthShell
+      title="Create Account"
+      footer={
+        <>
+          Already have an account?{' '}
           <Link
-            href="/"
-            className="font-display font-black text-xl text-text-primary tracking-tight transition-opacity duration-150 hover:opacity-70"
-            aria-label="ELOquence home"
+            href={next !== '/play' ? `/login?next=${encodeURIComponent(next)}` : '/login'}
+            className="text-text-secondary hover:text-text-primary font-medium transition-colors duration-150 underline underline-offset-2"
           >
-            ELOquence
+            Sign in
           </Link>
-        </div>
+        </>
+      }
+    >
+      <GoogleSignInButton next={next} />
+      <OrDivider />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <AuthField
+          id="email"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+        />
+        <AuthField
+          id="username"
+          label="Username"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          required
+          minLength={3}
+          maxLength={30}
+          autoComplete="username"
+          placeholder="wordsmith"
+          hint="Shown on leaderboards and your public profile."
+        />
+        <AuthField
+          id="password"
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          minLength={8}
+          autoComplete="new-password"
+          placeholder="At least 8 characters"
+        />
+        <AuthError message={error} />
+        <AuthSubmit loading={loading} loadingLabel="Creating…">
+          Create Account
+        </AuthSubmit>
+      </form>
+    </AuthShell>
+  );
+}
 
-        {/* Card */}
-        <div
-          className="bg-bg-base border border-border-default rounded-card-lg p-8"
-          style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
-        >
-          <h1 className="font-display font-black text-3xl tracking-tight text-text-primary mb-8">
-            Create Account
-          </h1>
-
-          {/* Google */}
-          <GoogleSignInButton onError={(msg) => setError(msg)} />
-
-          {/* Divider */}
-          <div className="my-6 flex items-center gap-3">
-            <div className="flex-1 h-px bg-border-subtle" />
-            <span className="text-xs text-text-secondary">or</span>
-            <div className="flex-1 h-px bg-border-subtle" />
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {/* Email */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="email"
-                className="text-xs font-semibold uppercase tracking-wider text-text-secondary"
-              >
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                placeholder="you@example.com"
-                className="bg-transparent border-2 border-border-default focus:border-tile-correct focus:outline-none rounded-md px-3.5 py-3 text-base text-text-primary placeholder:text-text-tertiary transition-colors duration-150"
-              />
-            </div>
-
-            {/* Username */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="username"
-                className="text-xs font-semibold uppercase tracking-wider text-text-secondary"
-              >
-                Username
-              </label>
-              <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoComplete="username"
-                placeholder="wordmaster99"
-                minLength={3}
-                maxLength={20}
-                className="bg-transparent border-2 border-border-default focus:border-tile-correct focus:outline-none rounded-md px-3.5 py-3 text-base text-text-primary placeholder:text-text-tertiary transition-colors duration-150"
-              />
-            </div>
-
-            {/* Password */}
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="password"
-                className="text-xs font-semibold uppercase tracking-wider text-text-secondary"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                placeholder="Min. 6 characters"
-                className="bg-transparent border-2 border-border-default focus:border-tile-correct focus:outline-none rounded-md px-3.5 py-3 text-base text-text-primary placeholder:text-text-tertiary transition-colors duration-150"
-              />
-            </div>
-
-            {/* Error */}
-            {error && (
-              <motion.p
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.15 }}
-                className="flex items-center gap-2 text-sm mt-1"
-                style={{ color: 'var(--red)' }}
-                role="alert"
-              >
-                <AlertCircle size={14} aria-hidden="true" className="flex-shrink-0" />
-                {error}
-              </motion.p>
-            )}
-
-            {/* Submit */}
-            <motion.button
-              type="submit"
-              disabled={loading}
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-              className="w-full bg-tile-correct text-white font-bold uppercase tracking-wider rounded-md py-3.5 mt-1 text-sm transition-[filter,transform] duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Creating account…
-                </>
-              ) : (
-                'Create Account'
-              )}
-            </motion.button>
-          </form>
-
-          <p className="mt-6 text-center text-sm text-text-secondary">
-            Already have an account?{' '}
-            <Link
-              href="/login"
-              className="text-text-secondary hover:text-text-primary font-medium transition-colors duration-150 underline underline-offset-2"
-            >
-              Sign in
-            </Link>
-          </p>
-        </div>
-      </motion.div>
-    </div>
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterInner />
+    </Suspense>
   );
 }

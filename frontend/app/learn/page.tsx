@@ -17,6 +17,7 @@ import LessonRunner from './_components/challenges/LessonRunner';
 import ScrollArea from '@/components/ScrollArea';
 import { MODULES, TOTAL_LESSONS, findLesson, LESSON_ORDER } from './_lessons';
 import { learnApi } from '@/lib/api';
+import { hasSession } from '@/lib/session';
 
 const STORAGE_KEY = 'eloquence.trainer.progress';
 
@@ -57,7 +58,7 @@ function saveProgress(p: Progress) {
  * baked into the axios interceptor. */
 function isSignedIn(): boolean {
   if (typeof window === 'undefined') return false;
-  return !!localStorage.getItem('token');
+  return hasSession();
 }
 
 /* Per-lesson high-water-mark merge: take the larger count from each side. */

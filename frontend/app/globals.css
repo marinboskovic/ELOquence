@@ -55,6 +55,10 @@
   --dur-med:  180ms;
   --dur-slow: 260ms;
 
+  /* Overlays */
+  --dialog-backdrop: rgba(255, 255, 255, 0.55);
+  --shadow-modal: 0 24px 64px rgba(0,0,0,0.15);
+
   /* Layout */
   --tile-size:  clamp(50px, calc((100dvh - 300px) / 7), 62px);
   --tile-gap:   clamp(4px, 0.65vw, 6px);
@@ -97,6 +101,9 @@
   --cls-blue:   #4e6c8d;
   --cls-orange: #b5793b;
   --cls-red:    #8d4e4e;
+
+  --dialog-backdrop: rgba(0, 0, 0, 0.62);
+  --shadow-modal: 0 24px 64px rgba(0,0,0,0.5);
 
   color-scheme: dark;
 }
@@ -143,16 +150,9 @@ body {
   background-size: 200% 100%;
 }
 
-/* ── React Flow overrides ── */
-.react-flow__controls button {
-  background-color: var(--bg-muted) !important;
-  border-color: var(--border-default) !important;
-  color: var(--text-tertiary) !important;
-  fill: var(--text-tertiary) !important;
-}
-.react-flow__controls button:hover { background-color: var(--bg-elevated) !important; }
-.react-flow__minimap { background-color: var(--bg-base) !important; }
-.react-flow__edge-path { stroke-linecap: round; }
+/* ── Safe areas (iOS standalone PWA) ── */
+.pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
 
 /* ── High-contrast / color-blind palette (orange + sky) ── */
 .colorblind,
