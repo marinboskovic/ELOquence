@@ -1,8 +1,30 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Palette, Zap, Trash2, UserX, AlertTriangle, X, Settings, Shield, Moon, Keyboard, Bell, BellOff } from 'lucide-react';
-import { usersApi } from '@/lib/api';
+import Link from 'next/link';
+import {
+  Palette,
+  Zap,
+  Trash2,
+  UserX,
+  AlertTriangle,
+  Settings,
+  Shield,
+  Moon,
+  Keyboard,
+  Bell,
+  BellOff,
+  KeyRound,
+  Smartphone,
+  Monitor,
+  LogOut,
+  Globe,
+  AtSign,
+  Download,
+  ExternalLink,
+  Check,
+} from 'lucide-react';
+import { usersApi, authApi, errorMessage } from '@/lib/api';
 import { useSettings } from '@/lib/useSettings';
 import {
   getPushState,
@@ -10,49 +32,75 @@ import {
   unsubscribeFromPush,
   type PushState,
 } from '@/lib/push';
-import { pushApi, type PushPreferences } from '@/lib/api';
+import { pushApi, type PushPreferences, type SessionInfo } from '@/lib/api';
 import ScrollArea from '@/components/ScrollArea';
+import Dialog from '@/components/Dialog';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { clearTokens } from '@/lib/session';
+import { getRefreshToken } from '@/lib/session';
 
 /* ------------------------------------------------------------------ */
-/*  Shared modal shell                                                  */
+/*  Shared bits                                                         */
 /* ------------------------------------------------------------------ */
 
-function Modal({
-  open,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const overlayRef = useRef<HTMLDivElement>(null);
+const INPUT_CLS =
+  'w-full px-3.5 py-2.5 text-sm rounded-md bg-transparent border-2 border-border-default text-text-primary placeholder:text-text-ghost focus:border-tile-correct focus:outline-none transition-colors disabled:opacity-40';
 
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+const DANGER_INPUT_CLS =
+  'w-full px-3.5 py-2.5 text-sm rounded-md bg-transparent border-2 border-border-default text-text-primary placeholder:text-text-ghost focus:outline-none transition-colors disabled:opacity-40';
 
-  if (!open) return null;
+const PRIMARY_BTN =
+  'px-4 py-2 text-sm rounded-md font-semibold bg-tile-correct text-white hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2';
 
+const SECONDARY_BTN =
+  'px-4 py-2 text-sm rounded-md font-medium border-2 border-border-default hover:border-border-strong text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
+
+const GHOST_BTN =
+  'px-4 py-2 text-sm rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors disabled:opacity-40';
+
+function ErrorNote({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
+    <p
+      className="text-xs px-3 py-2 rounded-md border"
+      role="alert"
+      style={{
+        color: 'var(--red)',
+        backgroundColor: 'color-mix(in srgb, var(--red) 8%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--red) 20%, transparent)',
       }}
     >
-      <div className="relative w-full max-w-md rounded-2xl bg-[#1d1d21] border border-white/[0.08] shadow-modal p-6">
-        {children}
-      </div>
-    </div>
+      {children}
+    </p>
+  );
+}
+
+function SuccessNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="text-xs px-3 py-2 rounded-md border inline-flex items-center gap-1.5"
+      role="status"
+      style={{
+        color: 'var(--green)',
+        backgroundColor: 'color-mix(in srgb, var(--tile-correct) 10%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--tile-correct) 25%, transparent)',
+      }}
+    >
+      <Check size={12} />
+      {children}
+    </p>
+  );
+}
+
+function Spinner() {
+  return (
+    <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin opacity-70" />
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-2 px-1">
+      {children}
+    </p>
   );
 }
 
@@ -64,18 +112,22 @@ function Toggle({
   checked,
   onChange,
   label,
+  disabled = false,
 }: {
   checked: boolean;
   onChange: () => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
+      type="button"
       onClick={onChange}
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-elevated)] shrink-0 ${
+      disabled={disabled}
+      className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-elevated)] shrink-0 disabled:opacity-50 ${
         checked
           ? 'bg-[var(--green)]'
           : 'bg-[var(--bg-muted)] border border-[var(--border-default)]'
@@ -131,12 +183,7 @@ function DeleteGamesModal({
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      const msg =
-        detail ||
-        (err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-      setError(msg);
+      setError(errorMessage(err, 'Something went wrong. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -145,104 +192,94 @@ function DeleteGamesModal({
   const stepUpReady = hasPassword ? password.length > 0 : confirmUsername.trim().length > 0;
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 p-1 rounded-md text-text-ghost hover:text-text-secondary hover:bg-white/[0.05] transition-colors"
-        aria-label="Close"
-      >
-        <X size={16} />
-      </button>
-
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-9 h-9 rounded-xl bg-[#e74c3c]/15 flex items-center justify-center shrink-0">
-          <Trash2 size={17} className="text-[#e74c3c]" />
-        </div>
-        <h2 className="text-base font-semibold text-text-primary">Delete All Game Data</h2>
-      </div>
-
-      <p className="text-sm text-text-secondary mb-3 leading-relaxed">
-        This will permanently delete{' '}
-        <span className="text-text-primary font-medium">all your past games</span>. Your ELO
-        rating will be preserved.
-      </p>
-
-      <ul className="text-sm text-text-secondary mb-5 space-y-1.5 pl-4 list-disc marker:text-[#e74c3c]/60">
-        <li>All game history erased</li>
-        <li>Win/loss record cleared</li>
-        <li>Streaks reset</li>
-      </ul>
-
-      <label className="flex items-center gap-2.5 mb-4 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={confirmed}
-          onChange={(e) => setConfirmed(e.target.checked)}
-          className="w-4 h-4 rounded accent-[#e74c3c] cursor-pointer"
-        />
-        <span className="text-sm text-text-secondary">
-          I understand this action is{' '}
-          <span className="text-text-primary font-medium">irreversible</span>
-        </span>
-      </label>
-
-      <label className="block mb-4">
-        <span className="block text-xs text-text-secondary mb-1.5">
-          {hasPassword
-            ? 'Re-enter your password to confirm'
-            : `Type your username "${user?.username ?? ''}" to confirm`}
-        </span>
-        {hasPassword ? (
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full px-3 py-2 text-sm rounded-lg bg-white/[0.04] border border-white/[0.10] text-text-primary placeholder:text-text-ghost focus:outline-none focus:border-[#e74c3c]/40"
-          />
-        ) : (
-          <input
-            type="text"
-            autoComplete="off"
-            value={confirmUsername}
-            onChange={(e) => setConfirmUsername(e.target.value)}
-            placeholder={user?.username ?? 'username'}
-            className="w-full px-3 py-2 text-sm rounded-lg bg-white/[0.04] border border-white/[0.10] text-text-primary placeholder:text-text-ghost focus:outline-none focus:border-[#e74c3c]/40"
-          />
-        )}
-      </label>
-
-      {error && (
-        <p className="text-xs text-[#e74c3c] mb-4 px-3 py-2 rounded-lg bg-[#e74c3c]/10 border border-[#e74c3c]/20">
-          {error}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Delete All Game Data"
+      accent="var(--red)"
+      locked={loading}
+      maxWidth="max-w-md"
+    >
+      <div className="p-5 pt-3 flex flex-col gap-4">
+        <p className="text-sm text-text-secondary leading-relaxed">
+          This will permanently delete{' '}
+          <span className="text-text-primary font-medium">all your past games</span>. Your ELO
+          rating will be preserved.
         </p>
-      )}
 
-      <div className="flex gap-2 justify-end">
-        <button
-          onClick={onClose}
-          disabled={loading}
-          className="px-4 py-2 text-sm rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/[0.05] transition-colors disabled:opacity-40"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={!confirmed || !stepUpReady || loading}
-          className="px-4 py-2 text-sm rounded-lg font-medium bg-[#e74c3c] text-white hover:bg-[#c0392b] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {loading ? (
-            <>
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Deleting...
-            </>
+        <ul className="text-sm text-text-secondary space-y-1.5 pl-4 list-disc">
+          <li>All game history erased</li>
+          <li>Win/loss record cleared</li>
+          <li>Streaks reset</li>
+        </ul>
+
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+            className="w-4 h-4 rounded cursor-pointer"
+            style={{ accentColor: 'var(--red)' }}
+          />
+          <span className="text-sm text-text-secondary">
+            I understand this action is{' '}
+            <span className="text-text-primary font-medium">irreversible</span>
+          </span>
+        </label>
+
+        <label className="block">
+          <span className="block text-xs text-text-secondary mb-1.5">
+            {hasPassword
+              ? 'Re-enter your password to confirm'
+              : `Type your username "${user?.username ?? ''}" to confirm`}
+          </span>
+          {hasPassword ? (
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className={DANGER_INPUT_CLS}
+              style={{ borderColor: password ? 'var(--red)' : undefined }}
+            />
           ) : (
-            'Delete All Games'
+            <input
+              type="text"
+              autoComplete="off"
+              value={confirmUsername}
+              onChange={(e) => setConfirmUsername(e.target.value)}
+              placeholder={user?.username ?? 'username'}
+              className={DANGER_INPUT_CLS}
+            />
           )}
-        </button>
+        </label>
+
+        {error && <ErrorNote>{error}</ErrorNote>}
+
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onClose} disabled={loading} className={GHOST_BTN}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={!confirmed || !stepUpReady || loading}
+            className="px-4 py-2 text-sm rounded-md font-medium text-white hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            style={{ backgroundColor: 'var(--red)' }}
+          >
+            {loading ? (
+              <>
+                <Spinner />
+                Deleting...
+              </>
+            ) : (
+              'Delete All Games'
+            )}
+          </button>
+        </div>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -258,13 +295,12 @@ function DeleteAccountModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const hasPassword = user?.has_password !== false;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const [password, setPassword] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) {
@@ -272,8 +308,6 @@ function DeleteAccountModal({
       setError(null);
       setConfirmText('');
       setPassword('');
-    } else {
-      setTimeout(() => inputRef.current?.focus(), 80);
     }
   }, [open]);
 
@@ -290,115 +324,104 @@ function DeleteAccountModal({
           ? { password }
           : { confirm_username: user?.username ?? '' },
       );
-      clearTokens();
+      await logout();
       router.push('/login');
     } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      const msg =
-        detail ||
-        (err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-      setError(msg);
+      setError(errorMessage(err, 'Something went wrong. Please try again.'));
       setLoading(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={onClose}>
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 p-1 rounded-md text-text-ghost hover:text-text-secondary hover:bg-white/[0.05] transition-colors"
-        aria-label="Close"
-      >
-        <X size={16} />
-      </button>
-
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-9 h-9 rounded-xl bg-[#e74c3c]/15 flex items-center justify-center shrink-0">
-          <UserX size={17} className="text-[#e74c3c]" />
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Delete Account"
+      accent="var(--red)"
+      locked={loading}
+      maxWidth="max-w-md"
+    >
+      <div className="p-5 pt-3 flex flex-col gap-4">
+        <div
+          className="flex items-start gap-2.5 px-3 py-2.5 rounded-md border"
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--red) 8%, transparent)',
+            borderColor: 'color-mix(in srgb, var(--red) 20%, transparent)',
+          }}
+        >
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: 'var(--red)' }} />
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--red)' }}>
+            Your account, all game data, ELO history, and achievements will be permanently
+            deleted and <strong>cannot be recovered</strong>.
+          </p>
         </div>
-        <h2 className="text-base font-semibold text-text-primary">Delete Account</h2>
-      </div>
 
-      <div className="flex items-start gap-2.5 mb-4 px-3 py-2.5 rounded-lg bg-[#e74c3c]/10 border border-[#e74c3c]/20">
-        <AlertTriangle size={15} className="text-[#e74c3c] shrink-0 mt-0.5" />
-        <p className="text-xs text-[#e74c3c] leading-relaxed">
-          Your account, all game data, ELO history, and achievements will be permanently
-          deleted and <strong>cannot be recovered</strong>.
+        <p className="text-sm text-text-secondary">
+          Type{' '}
+          <span className="font-mono font-semibold text-text-primary tracking-widest">
+            DELETE
+          </span>{' '}
+          to confirm:
         </p>
-      </div>
 
-      <p className="text-sm text-text-secondary mb-3">
-        Type{' '}
-        <span className="font-mono font-semibold text-text-primary tracking-widest">
-          DELETE
-        </span>{' '}
-        to confirm:
-      </p>
-
-      <input
-        ref={inputRef}
-        type="text"
-        value={confirmText}
-        onChange={(e) => setConfirmText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && canDelete) handleDelete();
-        }}
-        placeholder="DELETE"
-        disabled={loading}
-        className="w-full mb-3 px-3 py-2 text-sm rounded-lg bg-[#25252a] border border-white/[0.08] text-text-primary placeholder:text-text-ghost focus:outline-none focus:border-[#e74c3c]/50 transition-colors disabled:opacity-40 font-mono tracking-wider"
-      />
-
-      {hasPassword && (
-        <label className="block mb-5">
-          <span className="block text-xs text-text-secondary mb-1.5">
-            Re-enter your password to confirm
-          </span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && canDelete) handleDelete();
-            }}
-            disabled={loading}
-            placeholder="Password"
-            className="w-full px-3 py-2 text-sm rounded-lg bg-[#25252a] border border-white/[0.08] text-text-primary placeholder:text-text-ghost focus:outline-none focus:border-[#e74c3c]/50 transition-colors disabled:opacity-40"
-          />
-        </label>
-      )}
-
-      {error && (
-        <p className="text-xs text-[#e74c3c] mb-4 px-3 py-2 rounded-lg bg-[#e74c3c]/10 border border-[#e74c3c]/20">
-          {error}
-        </p>
-      )}
-
-      <div className="flex gap-2 justify-end">
-        <button
-          onClick={onClose}
+        <input
+          data-autofocus
+          type="text"
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && canDelete) handleDelete();
+          }}
+          placeholder="DELETE"
           disabled={loading}
-          className="px-4 py-2 text-sm rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/[0.05] transition-colors disabled:opacity-40"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={!canDelete || loading}
-          className="px-4 py-2 text-sm rounded-lg font-medium bg-[#e74c3c] text-white hover:bg-[#c0392b] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          {loading ? (
-            <>
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Deleting...
-            </>
-          ) : (
-            'Delete My Account'
-          )}
-        </button>
+          className={`${DANGER_INPUT_CLS} font-mono tracking-wider`}
+        />
+
+        {hasPassword && (
+          <label className="block">
+            <span className="block text-xs text-text-secondary mb-1.5">
+              Re-enter your password to confirm
+            </span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && canDelete) handleDelete();
+              }}
+              disabled={loading}
+              placeholder="Password"
+              className={DANGER_INPUT_CLS}
+            />
+          </label>
+        )}
+
+        {error && <ErrorNote>{error}</ErrorNote>}
+
+        <div className="flex gap-2 justify-end">
+          <button type="button" onClick={onClose} disabled={loading} className={GHOST_BTN}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={!canDelete || loading}
+            className="px-4 py-2 text-sm rounded-md font-medium text-white hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+            style={{ backgroundColor: 'var(--red)' }}
+          >
+            {loading ? (
+              <>
+                <Spinner />
+                Deleting...
+              </>
+            ) : (
+              'Delete My Account'
+            )}
+          </button>
+        </div>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -414,11 +437,11 @@ function SettingRow({
 }: {
   icon: React.ReactNode;
   title: string;
-  description: string;
-  children: React.ReactNode;
+  description: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 p-4 rounded-[12px] bg-bg-elevated border border-border-subtle">
+    <div className="flex items-center justify-between gap-4 p-4 rounded-card bg-bg-elevated border border-border-subtle">
       <div className="flex items-center gap-3 min-w-0">
         <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
           {icon}
@@ -557,9 +580,7 @@ function NotificationsSection() {
 
   return (
     <section>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-2 px-1">
-        Notifications
-      </p>
+      <SectionLabel>Notifications</SectionLabel>
       <div className="flex flex-col gap-2">
         <SettingRow
           icon={isSubscribed ? <Bell size={17} /> : <BellOff size={17} />}
@@ -582,7 +603,7 @@ function NotificationsSection() {
         </SettingRow>
 
         {isSubscribed && prefs && (
-          <div className="flex flex-col gap-2 px-4 py-3 rounded-[12px] bg-bg-elevated border border-border-subtle">
+          <div className="flex flex-col gap-2 px-4 py-3 rounded-card bg-bg-elevated border border-border-subtle">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
               Notify me about
             </p>
@@ -603,11 +624,487 @@ function NotificationsSection() {
         )}
 
         {feedback && (
-          <p className="text-xs px-3 py-2 rounded-[8px] bg-bg-muted border border-border-subtle"
-             style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-xs px-3 py-2 rounded-[8px] bg-bg-muted border border-border-subtle text-text-secondary">
             {feedback}
           </p>
         )}
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Security section — password + sessions                             */
+/* ------------------------------------------------------------------ */
+
+function describeUserAgent(ua: string | null): { label: string; mobile: boolean } {
+  if (!ua) return { label: 'Unknown device', mobile: false };
+  const mobile = /Mobile|iPhone|iPad|Android/i.test(ua);
+  let os = '';
+  if (/iPhone|iPad|iPod/i.test(ua)) os = 'iOS';
+  else if (/Android/i.test(ua)) os = 'Android';
+  else if (/Windows/i.test(ua)) os = 'Windows';
+  else if (/Mac OS X|Macintosh/i.test(ua)) os = 'macOS';
+  else if (/CrOS/i.test(ua)) os = 'ChromeOS';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+
+  let browser = '';
+  if (/Edg\//i.test(ua)) browser = 'Edge';
+  else if (/OPR\//i.test(ua)) browser = 'Opera';
+  else if (/SamsungBrowser/i.test(ua)) browser = 'Samsung Internet';
+  else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+  else if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) browser = 'Chrome';
+  else if (/Safari\//i.test(ua) && /Version\//i.test(ua)) browser = 'Safari';
+
+  const label = [browser, os].filter(Boolean).join(' on ') || ua.slice(0, 40);
+  return { label, mobile };
+}
+
+function relativeTime(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const diff = Date.now() - t;
+  const s = Math.max(0, Math.floor(diff / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h !== 1 ? 's' : ''} ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d} day${d !== 1 ? 's' : ''} ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function ChangePasswordForm() {
+  const { user, adoptTokens } = useAuth();
+  const hasPassword = user?.has_password !== false;
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const canSubmit =
+    next.length >= 8 && next === confirm && (!hasPassword || current.length > 0) && !busy;
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setBusy(true);
+    setError('');
+    setSuccess(false);
+    try {
+      const res = await authApi.changePassword(
+        hasPassword ? { current_password: current, new_password: next } : { new_password: next },
+      );
+      await adoptTokens(res.data);
+      setCurrent('');
+      setNext('');
+      setConfirm('');
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'Could not change password.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="p-4 rounded-card bg-bg-elevated border border-border-subtle flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
+          <KeyRound size={17} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-text-primary">
+            {hasPassword ? 'Change password' : 'Set a password'}
+          </p>
+          <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
+            {hasPassword
+              ? 'Other sessions stay signed in; this one is refreshed.'
+              : 'Your account uses Google sign-in. Add a password to also sign in with email.'}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {hasPassword && (
+          <label className="block sm:col-span-2">
+            <span className="block text-xs text-text-secondary mb-1">Current password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              className={INPUT_CLS}
+              disabled={busy}
+            />
+          </label>
+        )}
+        <label className="block">
+          <span className="block text-xs text-text-secondary mb-1">New password</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            className={INPUT_CLS}
+            placeholder="At least 8 characters"
+            disabled={busy}
+          />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-text-secondary mb-1">Confirm new password</span>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className={INPUT_CLS}
+            style={mismatch ? { borderColor: 'var(--red)' } : undefined}
+            aria-invalid={mismatch || undefined}
+            disabled={busy}
+          />
+        </label>
+      </div>
+
+      {mismatch && <ErrorNote>Passwords don&apos;t match.</ErrorNote>}
+      {error && <ErrorNote>{error}</ErrorNote>}
+      {success && <SuccessNote>Password updated.</SuccessNote>}
+
+      <div className="flex justify-end">
+        <button type="submit" disabled={!canSubmit} className={PRIMARY_BTN}>
+          {busy && <Spinner />}
+          {hasPassword ? 'Update password' : 'Set password'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ActiveSessions() {
+  const router = useRouter();
+  const { logout } = useAuth();
+  const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
+  const [error, setError] = useState('');
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [signingOutAll, setSigningOutAll] = useState(false);
+
+  const load = useCallback(() => {
+    authApi
+      .sessions(getRefreshToken())
+      .then((res) => setSessions(res.data))
+      .catch((err) => {
+        setSessions([]);
+        setError(errorMessage(err, 'Could not load sessions.'));
+      });
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const revoke = async (s: SessionInfo) => {
+    setRevoking(s.id);
+    setError('');
+    try {
+      await authApi.revokeSession(s.id);
+      if (s.current) {
+        await logout();
+        router.push('/login');
+        return;
+      }
+      setSessions((prev) => (prev ? prev.filter((x) => x.id !== s.id) : prev));
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'Could not sign out that session.'));
+    } finally {
+      setRevoking(null);
+    }
+  };
+
+  const signOutEverywhere = async () => {
+    setSigningOutAll(true);
+    setError('');
+    try {
+      await authApi.logoutAll();
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'Could not sign out everywhere.'));
+      setSigningOutAll(false);
+      return;
+    }
+    await logout();
+    router.push('/login');
+  };
+
+  return (
+    <div className="rounded-card bg-bg-elevated border border-border-subtle overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-subtle">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
+            <Monitor size={17} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-text-primary">Active sessions</p>
+            <p className="text-xs text-text-secondary mt-0.5">Devices currently signed in to your account.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={signOutEverywhere}
+          disabled={signingOutAll}
+          className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 transition-colors disabled:opacity-40 inline-flex items-center gap-1.5"
+          style={{ borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)', color: 'var(--red)' }}
+        >
+          {signingOutAll ? <Spinner /> : <LogOut size={12} />}
+          <span className="hidden sm:inline">Sign out everywhere</span>
+          <span className="sm:hidden">All</span>
+        </button>
+      </div>
+
+      {error && (
+        <div className="px-4 pt-3">
+          <ErrorNote>{error}</ErrorNote>
+        </div>
+      )}
+
+      {sessions === null ? (
+        <div className="px-4 py-6 text-center text-xs text-text-secondary">Loading sessions…</div>
+      ) : sessions.length === 0 ? (
+        <div className="px-4 py-6 text-center text-xs text-text-secondary">No active sessions found.</div>
+      ) : (
+        <ul className="divide-y divide-border-subtle" role="list">
+          {sessions.map((s) => {
+            const ua = describeUserAgent(s.user_agent);
+            const Icon = ua.mobile ? Smartphone : Monitor;
+            return (
+              <li key={s.id} className="flex items-center gap-3 px-4 py-3">
+                <Icon size={16} className="text-text-secondary shrink-0" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-text-primary truncate">{ua.label}</span>
+                    {s.current && (
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded-pill font-semibold"
+                        style={{
+                          color: 'var(--tile-correct)',
+                          background: 'color-mix(in srgb, var(--tile-correct) 15%, transparent)',
+                        }}
+                      >
+                        This device
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-text-secondary mt-0.5 font-mono tabular-nums truncate">
+                    {s.ip_address ?? 'IP unknown'} · last active {relativeTime(s.last_used_at)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => revoke(s)}
+                  disabled={revoking === s.id || signingOutAll}
+                  className="shrink-0 px-2.5 py-1 text-[11px] rounded-md border-2 border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors disabled:opacity-40"
+                >
+                  {revoking === s.id ? <Spinner /> : 'Sign out'}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SecuritySection() {
+  return (
+    <section>
+      <SectionLabel>Security</SectionLabel>
+      <div className="flex flex-col gap-2">
+        <ChangePasswordForm />
+        <ActiveSessions />
+      </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Privacy section — public profile, username, data export           */
+/* ------------------------------------------------------------------ */
+
+function PrivacySection() {
+  const { user, setUser } = useAuth();
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [nameSuccess, setNameSuccess] = useState(false);
+
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+
+  if (!user) return null;
+  const isPublic = user.profile_public !== false;
+
+  const togglePublic = async () => {
+    if (profileBusy) return;
+    setProfileBusy(true);
+    setProfileError('');
+    const nextValue = !isPublic;
+    try {
+      await usersApi.updateProfile({ profile_public: nextValue });
+      setUser({ ...user, profile_public: nextValue });
+    } catch (err: unknown) {
+      setProfileError(errorMessage(err, 'Could not update profile visibility.'));
+    } finally {
+      setProfileBusy(false);
+    }
+  };
+
+  const startEditName = () => {
+    setNewName(user.username);
+    setNameError('');
+    setEditingName(true);
+  };
+
+  const saveName = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === user.username || nameBusy) return;
+    setNameBusy(true);
+    setNameError('');
+    try {
+      const res = await usersApi.updateProfile({ username: trimmed });
+      const updated = res.data as { username?: string };
+      setUser({ ...user, username: updated.username ?? trimmed });
+      setEditingName(false);
+      setNameSuccess(true);
+      setTimeout(() => setNameSuccess(false), 4000);
+    } catch (err: unknown) {
+      setNameError(errorMessage(err, 'Could not change username.'));
+    } finally {
+      setNameBusy(false);
+    }
+  };
+
+  const downloadData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportError('');
+    try {
+      const res = await usersApi.exportData();
+      const blob = res.data instanceof Blob ? res.data : new Blob([JSON.stringify(res.data)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `eloquence-${user.username}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: unknown) {
+      setExportError(errorMessage(err, 'Could not export your data.'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <section>
+      <SectionLabel>Privacy</SectionLabel>
+      <div className="flex flex-col gap-2">
+        <SettingRow
+          icon={<Globe size={17} />}
+          title="Public profile"
+          description={
+            isPublic ? (
+              <>
+                Anyone can view your stats at{' '}
+                <Link
+                  href={`/u/${encodeURIComponent(user.username)}`}
+                  className="inline-flex items-center gap-0.5 font-medium text-text-primary hover:underline"
+                >
+                  /u/{user.username}
+                  <ExternalLink size={10} />
+                </Link>
+              </>
+            ) : (
+              'Your profile page and leaderboard links are hidden.'
+            )
+          }
+        >
+          <Toggle checked={isPublic} onChange={togglePublic} label="Toggle public profile" disabled={profileBusy} />
+        </SettingRow>
+        {profileError && <ErrorNote>{profileError}</ErrorNote>}
+
+        <div className="p-4 rounded-card bg-bg-elevated border border-border-subtle flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
+                <AtSign size={17} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text-primary">Username</p>
+                <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
+                  Currently <span className="font-semibold text-text-primary">{user.username}</span>. You can change it up to 3 times a day.
+                </p>
+              </div>
+            </div>
+            {!editingName && (
+              <button type="button" onClick={startEditName} className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 border-border-default hover:border-border-strong text-text-primary transition-colors">
+                Change
+              </button>
+            )}
+          </div>
+
+          {editingName && (
+            <form onSubmit={saveName} className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className={INPUT_CLS}
+                maxLength={30}
+                autoComplete="username"
+                autoFocus
+                disabled={nameBusy}
+                aria-label="New username"
+              />
+              <div className="flex gap-2 shrink-0">
+                <button type="button" onClick={() => setEditingName(false)} disabled={nameBusy} className={SECONDARY_BTN}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={nameBusy || !newName.trim() || newName.trim() === user.username}
+                  className={PRIMARY_BTN}
+                >
+                  {nameBusy && <Spinner />}
+                  Save
+                </button>
+              </div>
+            </form>
+          )}
+          {nameError && <ErrorNote>{nameError}</ErrorNote>}
+          {nameSuccess && <SuccessNote>Username updated.</SuccessNote>}
+        </div>
+
+        <SettingRow
+          icon={<Download size={17} />}
+          title="Download my data"
+          description="Export your account, games and history as JSON."
+        >
+          <button type="button" onClick={downloadData} disabled={exporting} className={`${SECONDARY_BTN} shrink-0 text-xs px-3 py-1.5 inline-flex items-center gap-1.5`}>
+            {exporting ? <Spinner /> : <Download size={12} />}
+            Export
+          </button>
+        </SettingRow>
+        {exportError && <ErrorNote>{exportError}</ErrorNote>}
       </div>
     </section>
   );
@@ -623,11 +1120,19 @@ export default function SettingsPage() {
   const [showDeleteGamesModal, setShowDeleteGamesModal] = useState(false);
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [gamesDeletedBanner, setGamesDeletedBanner] = useState(false);
+  const bannerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleGamesDeleted = () => {
     setGamesDeletedBanner(true);
-    setTimeout(() => setGamesDeletedBanner(false), 5000);
+    if (bannerTimeout.current) clearTimeout(bannerTimeout.current);
+    bannerTimeout.current = setTimeout(() => setGamesDeletedBanner(false), 5000);
   };
+
+  useEffect(() => {
+    return () => {
+      if (bannerTimeout.current) clearTimeout(bannerTimeout.current);
+    };
+  }, []);
 
   return (
     <>
@@ -654,21 +1159,19 @@ export default function SettingsPage() {
             <Settings size={18} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-text-primary">Settings</h1>
+            <h1 className="font-display font-black text-xl tracking-tight text-text-primary">Settings</h1>
           </div>
         </div>
 
         <div className="flex flex-col gap-6">
           {/* Game section */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-2 px-1">
-              Game
-            </p>
+            <SectionLabel>Game</SectionLabel>
             <div className="flex flex-col gap-2">
               <SettingRow
                 icon={<Shield size={17} />}
                 title="Hard Mode"
-                description="Any revealed hints must be used in subsequent guesses"
+                description="Any revealed hints must be used in subsequent guesses. Applies to games you start from now on."
               >
                 <Toggle
                   checked={settings.hardMode}
@@ -693,9 +1196,7 @@ export default function SettingsPage() {
 
           {/* Appearance section */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-2 px-1">
-              Appearance
-            </p>
+            <SectionLabel>Appearance</SectionLabel>
             <div className="flex flex-col gap-2">
               <SettingRow
                 icon={<Moon size={17} />}
@@ -716,9 +1217,7 @@ export default function SettingsPage() {
 
           {/* Accessibility section */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-2 px-1">
-              Accessibility
-            </p>
+            <SectionLabel>Accessibility</SectionLabel>
             <div className="flex flex-col gap-2">
               <SettingRow
                 icon={<Palette size={17} />}
@@ -745,28 +1244,28 @@ export default function SettingsPage() {
               </SettingRow>
 
               {settings.highContrast && (
-                <div className="p-4 rounded-[12px] bg-bg-elevated border border-border-subtle">
+                <div className="p-4 rounded-card bg-bg-elevated border border-border-subtle">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-3">
                     Color Preview
                   </p>
                   <div className="flex gap-2">
                     <div
                       className="w-10 h-10 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: '#f5793a' }}
+                      style={{ backgroundColor: 'var(--tile-correct)' }}
                       aria-label="Correct position color: orange"
                     >
                       A
                     </div>
                     <div
                       className="w-10 h-10 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: '#85c0f9' }}
+                      style={{ backgroundColor: 'var(--tile-present)' }}
                       aria-label="Wrong position color: blue"
                     >
                       B
                     </div>
                     <div
                       className="w-10 h-10 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: '#3a3a3c' }}
+                      style={{ backgroundColor: 'var(--tile-absent)' }}
                       aria-label="Not in word color: gray"
                     >
                       C
@@ -780,27 +1279,43 @@ export default function SettingsPage() {
             </div>
           </section>
 
+          {/* Security section */}
+          <SecuritySection />
+
+          {/* Privacy section */}
+          <PrivacySection />
+
           {/* Danger zone section */}
           <section>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-2 px-1">
-              Danger Zone
-            </p>
+            <SectionLabel>Danger Zone</SectionLabel>
 
-            <div className="rounded-[12px] bg-bg-elevated border border-[#e74c3c]/30 overflow-hidden">
+            <div
+              className="rounded-card bg-bg-elevated overflow-hidden border"
+              style={{ borderColor: 'color-mix(in srgb, var(--red) 30%, transparent)' }}
+            >
               {/* Header strip */}
-              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[#e74c3c]/20 bg-[#e74c3c]/[0.05]">
-                <AlertTriangle size={14} className="text-[#e74c3c]" />
-                <span className="text-xs font-semibold text-[#e74c3c]">
+              <div
+                className="flex items-center gap-2.5 px-4 py-3 border-b"
+                style={{
+                  borderColor: 'color-mix(in srgb, var(--red) 20%, transparent)',
+                  backgroundColor: 'color-mix(in srgb, var(--red) 5%, transparent)',
+                }}
+              >
+                <AlertTriangle size={14} style={{ color: 'var(--red)' }} />
+                <span className="text-xs font-semibold" style={{ color: 'var(--red)' }}>
                   Irreversible actions — proceed with caution
                 </span>
               </div>
 
-              <div className="flex flex-col divide-y divide-white/[0.06]">
+              <div className="flex flex-col divide-y divide-border-subtle">
                 {/* Delete All Games */}
                 <div className="flex items-center justify-between px-4 py-4 gap-4">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-[#e74c3c]/10 flex items-center justify-center shrink-0 mt-0.5">
-                      <Trash2 size={14} className="text-[#e74c3c]" />
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--red) 10%, transparent)' }}
+                    >
+                      <Trash2 size={14} style={{ color: 'var(--red)' }} />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-text-primary">Delete All Game Data</p>
@@ -808,15 +1323,17 @@ export default function SettingsPage() {
                         Erase all past games. Your ELO rating will be preserved.
                       </p>
                       {gamesDeletedBanner && (
-                        <p className="text-xs text-[#538d4e] mt-1.5 font-medium">
+                        <p className="text-xs mt-1.5 font-medium" style={{ color: 'var(--green)' }}>
                           All game data deleted. ELO preserved.
                         </p>
                       )}
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowDeleteGamesModal(true)}
-                    className="shrink-0 px-3 py-1.5 text-xs rounded-lg font-medium border border-[#e74c3c]/40 text-[#e74c3c] hover:bg-[#e74c3c]/10 transition-colors"
+                    className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 transition-colors"
+                    style={{ borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)', color: 'var(--red)' }}
                   >
                     Delete Games
                   </button>
@@ -825,8 +1342,11 @@ export default function SettingsPage() {
                 {/* Delete Account */}
                 <div className="flex items-center justify-between px-4 py-4 gap-4">
                   <div className="flex items-start gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-[#e74c3c]/10 flex items-center justify-center shrink-0 mt-0.5">
-                      <UserX size={14} className="text-[#e74c3c]" />
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--red) 10%, transparent)' }}
+                    >
+                      <UserX size={14} style={{ color: 'var(--red)' }} />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-text-primary">Delete Account</p>
@@ -836,8 +1356,14 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setShowDeleteAccountModal(true)}
-                    className="shrink-0 px-3 py-1.5 text-xs rounded-lg font-medium bg-[#e74c3c]/15 border border-[#e74c3c]/40 text-[#e74c3c] hover:bg-[#e74c3c]/25 transition-colors"
+                    className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 transition-colors"
+                    style={{
+                      borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)',
+                      backgroundColor: 'color-mix(in srgb, var(--red) 15%, transparent)',
+                      color: 'var(--red)',
+                    }}
                   >
                     Delete Account
                   </button>

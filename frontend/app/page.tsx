@@ -11,11 +11,19 @@ import TileLoader from '@/components/TileLoader';
 // Data
 // ---------------------------------------------------------------------------
 
-// Light-mode Wordle colors for the animated title tiles
-const TILE_COLORS = ['#6aaa64', '#c9b458', '#787c7e'] as const;
+// Tile colours come from the CSS vars so colour-blind mode / dark mode apply.
+const TILE_COLORS = ['var(--tile-correct)', 'var(--tile-present)', 'var(--tile-absent)'] as const;
 const TITLE_CHARS = 'ELOQUENCE';
 
-function randomizeTitleLetters() {
+type TitleTile = { char: string; color: string };
+
+// Deterministic palette for SSR + first client render (avoids a hydration
+// mismatch from Math.random()). Randomised in an effect after mount.
+function initialTitleLetters(): TitleTile[] {
+  return TITLE_CHARS.split('').map((char) => ({ char, color: 'var(--tile-absent)' }));
+}
+
+function randomizeTitleLetters(): TitleTile[] {
   return TITLE_CHARS.split('').map((char) => ({
     char,
     color: TILE_COLORS[Math.floor(Math.random() * TILE_COLORS.length)],
@@ -62,7 +70,8 @@ function SingleTile({ tile, index, bootDone, onBootComplete }: SingleTileProps) 
         backgroundColor: tile.color,
         letterSpacing: '-0.02em',
         transformStyle: 'preserve-3d',
-        boxShadow: `0 4px 16px ${tile.color}30`,
+        boxShadow: `0 4px 16px color-mix(in srgb, ${tile.color} 20%, transparent)`,
+        transition: 'background-color 300ms ease',
       }}
     >
       {tile.char}
@@ -75,7 +84,7 @@ function SingleTile({ tile, index, bootDone, onBootComplete }: SingleTileProps) 
 // ---------------------------------------------------------------------------
 
 function TitleRow() {
-  const [tiles] = useState(() => randomizeTitleLetters());
+  const [tiles, setTiles] = useState<TitleTile[]>(initialTitleLetters);
   const landedCount = useRef(0);
   const [bootDone, setBootDone] = useState(false);
   const [rowScope, animateRow] = useAnimate();
@@ -86,6 +95,11 @@ function TitleRow() {
       setBootDone(true);
     }
   };
+
+  // Randomise the palette client-side only (see initialTitleLetters).
+  useEffect(() => {
+    setTiles(randomizeTitleLetters());
+  }, []);
 
   useEffect(() => {
     if (!bootDone) return;
@@ -213,6 +227,26 @@ export default function HomePage() {
             Sign In
           </Link>
         </motion.div>
+
+        {/* Opener Lab teaser */}
+        <motion.p
+          variants={{
+            hidden: { opacity: 0, y: 8 },
+            visible: { opacity: 1, y: 0, transition: springs.page },
+          }}
+          className="mt-6 text-sm font-sans"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          No account needed to try the{' '}
+          <Link
+            href="/lab"
+            className="font-semibold underline underline-offset-4 decoration-2 hover:brightness-110"
+            style={{ color: 'var(--tile-correct)' }}
+          >
+            Opener Lab
+          </Link>
+          {' '}— see how any opener splits the word list.
+        </motion.p>
       </motion.div>
     </div>
   );

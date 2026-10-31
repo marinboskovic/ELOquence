@@ -8,8 +8,10 @@ import { useEffect } from 'react';
  * Behavior:
  *  - Only runs in production OR when explicitly enabled via NEXT_PUBLIC_ENABLE_SW=1
  *    in dev (so HMR isn't disrupted by stale cached chunks during development).
- *  - When a new SW is found waiting, asks it to skip waiting so the next
- *    navigation gets the fresh assets.
+ *  - The worker no longer calls skipWaiting() on install. When a new version
+ *    has installed we post {type:'SKIP_WAITING'} to it; once it takes control
+ *    (`controllerchange`) we reload exactly once so the page and its chunks
+ *    come from the same build. No UI — the swap is silent.
  */
 export default function ServiceWorkerRegister() {
   useEffect(() => {
@@ -21,25 +23,46 @@ export default function ServiceWorkerRegister() {
     if (!isProd && !forceEnable) return;
 
     let cancelled = false;
+    let refreshing = false;
+
+    const onControllerChange = () => {
+      // Only reload when a *previous* controller existed (i.e. this is an
+      // update, not the very first install), and never more than once.
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    };
+
+    const activate = (sw: ServiceWorker) => {
+      sw.postMessage({ type: 'SKIP_WAITING' });
+    };
 
     const register = async () => {
       try {
         const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
         if (cancelled) return;
 
-        // If there's already a waiting worker, activate it ASAP.
-        if (reg.waiting) {
-          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        const hadController = Boolean(navigator.serviceWorker.controller);
+        if (hadController) {
+          navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
         }
 
-        // Listen for future updates.
+        // A worker already waiting from a previous visit: apply it now.
+        if (reg.waiting && hadController) {
+          activate(reg.waiting);
+        }
+
+        // Future updates: wait for the new worker to finish installing, then
+        // ask it to take over.
         reg.addEventListener('updatefound', () => {
           const sw = reg.installing;
           if (!sw) return;
           sw.addEventListener('statechange', () => {
             if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-              // A newer worker is ready; quietly take over on the next reload.
-              sw.postMessage({ type: 'SKIP_WAITING' });
+              if (!hadController) {
+                navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+              }
+              activate(sw);
             }
           });
         });
@@ -57,6 +80,7 @@ export default function ServiceWorkerRegister() {
 
     return () => {
       cancelled = true;
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
     };
   }, []);
 

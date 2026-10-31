@@ -30,12 +30,14 @@ function isPlayerRoute(pathname: string): boolean {
 
 const GUEST_NAV_LINKS = [
   { href: '/play', label: 'Play' },
+  { href: '/lab', label: 'Lab' },
   { href: '/leaderboard', label: 'Leaderboard' },
   { href: '/faq', label: 'FAQ' },
 ];
 
 const AUTH_NAV_LINKS = [
   { href: '/play', label: 'Play' },
+  { href: '/lab', label: 'Lab' },
   { href: '/archive', label: 'Archive' },
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/leaderboard', label: 'Leaderboard' },
@@ -66,10 +68,13 @@ export default function Navigation() {
     }
   }, [isAdmin, pathname, router]);
 
-  const handleLogout = () => {
-    logout();
-    router.push('/');
+  const handleLogout = async () => {
     setMobileOpen(false);
+    try {
+      await logout();
+    } finally {
+      router.push('/');
+    }
   };
 
   // Admin users get a stripped shell — no player nav items, no ELO badge.
@@ -117,6 +122,7 @@ export default function Navigation() {
               <Link
                 key={link.href}
                 href={link.href}
+                aria-current={active ? 'page' : undefined}
                 className={clsx(
                   'relative px-3 py-1.5 text-sm transition-colors duration-150',
                   active
@@ -137,20 +143,21 @@ export default function Navigation() {
               {/* ELO rating with tier dot — players only (admins are not players) */}
               {!isAdmin && tier && (
                 <>
-                  <div className="flex items-center gap-1.5">
+                  <Link
+                    href={`/u/${encodeURIComponent(user.username)}`}
+                    className="flex items-center gap-1.5 px-1.5 py-1 -mx-1 rounded-md hover:bg-bg-elevated transition-colors duration-150 no-underline"
+                    aria-label={`ELO rating ${Math.round(user.elo_rating)}, ${tier.name}. View your profile`}
+                    title="Your public profile"
+                  >
                     <span
                       className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                       style={{ backgroundColor: tier.color }}
                       aria-hidden="true"
                     />
-                    <span
-                      className="font-mono text-sm"
-                      style={{ color: tier.color }}
-                      aria-label={`ELO rating ${Math.round(user.elo_rating)}, ${tier.name}`}
-                    >
+                    <span className="font-mono text-sm" style={{ color: tier.color }}>
                       {Math.round(user.elo_rating)}
                     </span>
-                  </div>
+                  </Link>
                   <div className="w-px h-3.5 bg-border-subtle mx-0.5" aria-hidden="true" />
                 </>
               )}
@@ -161,6 +168,7 @@ export default function Navigation() {
               {/* Settings */}
               <Link
                 href="/settings"
+                aria-current={pathname === '/settings' ? 'page' : undefined}
                 className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors duration-150"
                 aria-label="Settings"
               >
@@ -223,6 +231,7 @@ export default function Navigation() {
                     key={link.href}
                     href={link.href}
                     onClick={() => setMobileOpen(false)}
+                    aria-current={active ? 'page' : undefined}
                     className={clsx(
                       'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors duration-150',
                       active
@@ -259,13 +268,15 @@ export default function Navigation() {
                     )}
                     <span className="text-sm text-text-secondary">{user.username}</span>
                     {!isAdmin && tier && (
-                      <span
-                        className="ml-auto font-mono text-sm"
+                      <Link
+                        href={`/u/${encodeURIComponent(user.username)}`}
+                        onClick={() => setMobileOpen(false)}
+                        className="ml-auto font-mono text-sm no-underline"
                         style={{ color: tier.color }}
-                        aria-label={`ELO ${Math.round(user.elo_rating)}`}
+                        aria-label={`ELO ${Math.round(user.elo_rating)}. View your profile`}
                       >
                         {Math.round(user.elo_rating)}
-                      </span>
+                      </Link>
                     )}
                     {isAdmin && (
                       <span
@@ -281,6 +292,7 @@ export default function Navigation() {
                   <Link
                     href="/settings"
                     onClick={() => setMobileOpen(false)}
+                    aria-current={pathname === '/settings' ? 'page' : undefined}
                     className={clsx(
                       'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors duration-150',
                       pathname === '/settings'

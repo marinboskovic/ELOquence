@@ -18,6 +18,23 @@ const ROWS = [
   ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'BACK'],
 ];
 
+const STATE_LABEL: Record<TileState, string> = {
+  correct: 'correct',
+  present: 'present',
+  absent: 'absent',
+  empty: 'unused',
+  tbd: 'unused',
+};
+
+/** True when a keystroke belongs to a text field, not the game. */
+function isTypingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || typeof el.tagName !== 'string') return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  return el.isContentEditable === true;
+}
+
 export default function Keyboard({
   onKey,
   onEnter,
@@ -29,6 +46,7 @@ export default function Keyboard({
     if (disablePhysicalKeyboard) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
       const key = e.key.toUpperCase();
       if (key === 'ENTER') {
         onEnter();
@@ -59,6 +77,13 @@ export default function Keyboard({
     };
   }
 
+  function getAriaLabel(key: string): string {
+    if (key === 'BACK') return 'Backspace';
+    if (key === 'ENTER') return 'Enter';
+    const state = letterStates[key];
+    return `${key}, ${STATE_LABEL[state ?? 'empty']}`;
+  }
+
   return (
     <div className="flex flex-col items-center w-full max-w-[500px]" style={{ gap: '5px' }}>
       {ROWS.map((row, rowIndex) => (
@@ -68,10 +93,15 @@ export default function Keyboard({
             return (
               <motion.button
                 key={key}
+                type="button"
                 whileHover={{ filter: 'brightness(0.92)', y: -1 }}
                 whileTap={{ scale: 0.95 }}
                 transition={{ type: 'spring', damping: 28, stiffness: 800, mass: 0.3 }}
-                onClick={() => {
+                // Keep focus off the on-screen keys so a physical Enter never
+                // "clicks" the last-tapped key in addition to the window handler.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.currentTarget.blur();
                   if (key === 'ENTER') onEnter();
                   else if (key === 'BACK') onBackspace();
                   else onKey(key);
@@ -85,7 +115,7 @@ export default function Keyboard({
                   minWidth: isSpecial ? '54px' : '30px',
                   ...getKeyStyle(key),
                 }}
-                aria-label={key === 'BACK' ? 'Backspace' : key}
+                aria-label={getAriaLabel(key)}
               >
                 {key === 'BACK' ? (
                   <svg

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
   CheckCircle,
@@ -15,9 +15,9 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { Game, patternToTiles } from '@/lib/types';
-import { springs } from '@/lib/animations';
 import { challengesApi } from '@/lib/api';
 import Confetti from './Confetti';
+import Dialog from './Dialog';
 
 interface GameOverModalProps {
   game: Game;
@@ -32,11 +32,21 @@ interface GameOverModalProps {
   challengeCode?: string | null;
 }
 
-const TILE_EMOJI: Record<string, string> = {
-  correct: '🟩',
-  present: '🟨',
-  absent: '⬛',
-};
+/**
+ * Emoji palette for the share grid. Colour-blind mode uses the orange/blue
+ * pair (matching the in-app high-contrast tiles); absent tiles follow the
+ * theme like Wordle (white square on light, black on dark).
+ */
+function tileEmoji(): Record<string, string> {
+  const root = typeof document !== 'undefined' ? document.documentElement : null;
+  const colorblind = !!root?.classList.contains('colorblind');
+  const dark = root?.dataset.theme === 'dark';
+  return {
+    correct: colorblind ? '🟧' : '🟩',
+    present: colorblind ? '🟦' : '🟨',
+    absent: dark ? '⬛' : '⬜',
+  };
+}
 
 type CelebrationTier = 'legendary' | 'impressive' | 'solid' | 'close_call';
 
@@ -162,18 +172,21 @@ export default function GameOverModal({
   const buildShareText = () => {
     const modeLabel = game.mode.charAt(0).toUpperCase() + game.mode.slice(1);
     const header = `ELOquence ${modeLabel} ${won ? game.num_guesses : 'X'}/6${
-      won && game.num_guesses <= 3 ? ' ⭐' : ''
-    }`;
+      game.hard_mode ? '*' : ''
+    }${won && game.num_guesses <= 3 ? ' ⭐' : ''}`;
     const wordElo = game.word_difficulty
       ? `Word ELO: ${Math.round(game.word_difficulty).toLocaleString()}`
       : '';
-    const grid = game.moves
+    const emoji = tileEmoji();
+    const grid = [...(game.moves ?? [])]
+      .sort((a, b) => a.move_number - b.move_number)
       .map((move) => {
         const tiles = patternToTiles(move.pattern);
-        return tiles.map((t) => TILE_EMOJI[t] ?? '⬛').join('');
+        return tiles.map((t) => emoji[t] ?? emoji.absent).join('');
       })
       .join('\n');
-    return [header, wordElo, '', grid, '', 'https://el-oquence.vercel.app']
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return [header, wordElo, '', grid, '', origin]
       .filter((l) => l !== undefined)
       .join('\n')
       .trim();
@@ -181,6 +194,17 @@ export default function GameOverModal({
 
   const handleShare = async () => {
     const text = buildShareText();
+    // Native share sheet on mobile; clipboard everywhere else.
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch (err) {
+        // User dismissed the sheet — nothing to do. Any other failure falls
+        // through to the clipboard.
+        if ((err as { name?: string })?.name === 'AbortError') return;
+      }
+    }
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -213,247 +237,212 @@ export default function GameOverModal({
         }
       />
 
-      <AnimatePresence>
-        {open && (
-          <>
-            {/* Backdrop — light: translucent white blur; dark: dark blur */}
+      <Dialog
+        open={open}
+        onClose={onClose}
+        label={won ? 'Game won' : 'Game over'}
+        maxWidth="max-w-sm"
+        accent={stripeColor}
+        hideClose
+      >
+        <div className="relative p-6 flex flex-col gap-5">
+          {/* Close */}
+          <button
+            onClick={() => onClose?.()}
+            aria-label="Close"
+            className="absolute top-3 right-3 p-1.5 rounded-md transition-colors duration-150"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            <X size={15} />
+          </button>
+
+          {/* Result hero */}
+          <div className="flex flex-col items-center gap-2 text-center">
             <motion.div
-              key="game-over-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 backdrop-blur-sm"
-              style={{ backgroundColor: 'rgba(255,255,255,0.5)' }}
-              aria-hidden="true"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{
+                delay: 0.1,
+                type: 'spring',
+                damping: 12,
+                stiffness: 220,
+              }}
+            >
+              {won ? (
+                <CheckCircle size={38} style={{ color: 'var(--green)' }} strokeWidth={1.8} />
+              ) : (
+                <XCircle size={38} style={{ color: 'var(--red)' }} strokeWidth={1.8} />
+              )}
+            </motion.div>
+
+            <h2
+              className="text-xl font-bold leading-none"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              {won
+                ? (celebrationTier ? WON_MESSAGES[celebrationTier] : 'Solved!')
+                : 'Not this time'}
+            </h2>
+
+            {won ? (
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                Solved in{' '}
+                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {game.num_guesses}/6
+                </span>{' '}
+                {game.num_guesses === 1 ? 'guess' : 'guesses'}
+              </p>
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                The word was{' '}
+                <span className="font-semibold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                  {game.target_word}
+                </span>
+              </p>
+            )}
+          </div>
+
+          {/* Stats pills */}
+          <motion.div
+            variants={pillContainerVariants}
+            initial="hidden"
+            animate="visible"
+            className={`grid gap-2 ${
+              showElo && game.word_difficulty
+                ? 'grid-cols-3'
+                : showElo || game.word_difficulty
+                ? 'grid-cols-2'
+                : 'grid-cols-1'
+            }`}
+          >
+            <StatPill
+              label="Guesses"
+              value={won ? `${game.num_guesses}/6` : 'X/6'}
             />
 
-            {/* Modal centring layer */}
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4"
-              role="dialog"
-              aria-modal="true"
-              aria-label={won ? 'Game won' : 'Game over'}
+            {showElo && (
+              <StatPill
+                label="Rating"
+                value={`${(eloDelta ?? 0) >= 0 ? '+' : ''}${Math.round(eloDelta ?? 0)}`}
+                highlight={(eloDelta ?? 0) >= 0 ? 'win' : 'loss'}
+              />
+            )}
+
+            {game.word_difficulty && (
+              <StatPill
+                label="Word ELO"
+                value={Math.round(game.word_difficulty).toLocaleString()}
+              />
+            )}
+          </motion.div>
+
+          {/* Hint text */}
+          {!isGuest && (
+            <p
+              className="text-[10px] text-center -mt-1"
+              style={{ color: 'var(--text-tertiary)' }}
             >
-              <motion.div
-                key="game-over-card"
-                initial={{ opacity: 0, scale: 0.88, y: 24 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.92, y: 16 }}
-                transition={springs.modal}
-                className="w-full max-w-sm rounded-card-lg overflow-hidden"
-                style={{
-                  backgroundColor: 'var(--bg-base)',
-                  border: '1px solid var(--border-subtle)',
-                  boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* Top colour stripe */}
-                <div className="h-[2px] w-full" style={{ background: stripeColor }} />
+              Challenge a friend to beat your score
+            </p>
+          )}
 
-                <div className="relative p-6 flex flex-col gap-5">
-                  {/* Close */}
-                  <button
-                    onClick={() => onClose?.()}
-                    aria-label="Close"
-                    className="absolute top-3 right-3 p-1.5 rounded-md transition-colors duration-150"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    <X size={15} />
-                  </button>
-
-                  {/* Result hero */}
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <motion.div
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{
-                        delay: 0.1,
-                        type: 'spring',
-                        damping: 12,
-                        stiffness: 220,
-                      }}
-                    >
-                      {won ? (
-                        <CheckCircle size={38} style={{ color: 'var(--green)' }} strokeWidth={1.8} />
-                      ) : (
-                        <XCircle size={38} style={{ color: 'var(--red)' }} strokeWidth={1.8} />
-                      )}
-                    </motion.div>
-
-                    <h2
-                      className="text-xl font-bold leading-none"
-                      style={{ color: 'var(--text-primary)' }}
-                    >
-                      {won
-                        ? (celebrationTier ? WON_MESSAGES[celebrationTier] : 'Solved!')
-                        : 'Not this time'}
-                    </h2>
-
-                    {won ? (
-                      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        Solved in{' '}
-                        <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                          {game.num_guesses}/6
-                        </span>{' '}
-                        {game.num_guesses === 1 ? 'guess' : 'guesses'}
-                      </p>
-                    ) : (
-                      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        The word was{' '}
-                        <span className="font-semibold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
-                          {game.target_word}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Stats pills */}
-                  <motion.div
-                    variants={pillContainerVariants}
-                    initial="hidden"
-                    animate="visible"
-                    className={`grid gap-2 ${
-                      showElo && game.word_difficulty
-                        ? 'grid-cols-3'
-                        : showElo || game.word_difficulty
-                        ? 'grid-cols-2'
-                        : 'grid-cols-1'
-                    }`}
-                  >
-                    <StatPill
-                      label="Guesses"
-                      value={won ? `${game.num_guesses}/6` : 'X/6'}
-                    />
-
-                    {showElo && (
-                      <StatPill
-                        label="Rating"
-                        value={`${(eloDelta ?? 0) >= 0 ? '+' : ''}${Math.round(eloDelta ?? 0)}`}
-                        highlight={(eloDelta ?? 0) >= 0 ? 'win' : 'loss'}
-                      />
-                    )}
-
-                    {game.word_difficulty && (
-                      <StatPill
-                        label="Word ELO"
-                        value={Math.round(game.word_difficulty).toLocaleString()}
-                      />
-                    )}
-                  </motion.div>
-
-                  {/* Hint text */}
-                  {!isGuest && (
-                    <p
-                      className="text-[10px] text-center -mt-1"
-                      style={{ color: 'var(--text-tertiary)' }}
-                    >
-                      Challenge a friend to beat your score
-                    </p>
-                  )}
-
-                  {/* Placement badge */}
-                  {!isGuest && game.is_placement && (
-                    <div
-                      className="text-center px-3 py-2 rounded-[10px]"
-                      style={{
-                        background: 'rgba(201,180,88,0.08)',
-                        border: '1px solid rgba(201,180,88,0.25)',
-                      }}
-                    >
-                      <span className="text-xs font-medium" style={{ color: 'var(--yellow)' }}>
-                        Placement match
-                        {gamesPlayed != null ? ` ${gamesPlayed}/5` : ''} — results
-                        count toward your initial rating
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Actions */}
-                  <div className="flex flex-col gap-2">
-                    {isGuest ? (
-                      <>
-                        {/* Primary */}
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={() => onClose?.()}
-                          className="w-full py-3 rounded-[10px] text-white font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2"
-                          style={{ backgroundColor: 'var(--tile-correct)' }}
-                        >
-                          Admire Puzzle
-                        </motion.button>
-
-                        {/* Secondary row */}
-                        <div className="flex gap-2">
-                          <SecondaryBtn
-                            onClick={handleShare}
-                            icon={<Share2 size={14} />}
-                            label={copied ? 'Copied!' : 'Share'}
-                            successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
-                            success={copied}
-                          />
-                          <SecondaryBtn
-                            onClick={() => router.push('/play')}
-                            icon={<RotateCcw size={14} />}
-                            label="Play Again"
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {/* Primary: Review */}
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={() => router.push(`/review/${game.id}`)}
-                          className="w-full py-3 rounded-[10px] text-white font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2"
-                          style={{ backgroundColor: 'var(--tile-correct)' }}
-                        >
-                          <BarChart2 size={15} />
-                          Review Game
-                        </motion.button>
-
-                        {/* Secondary row */}
-                        <div className="flex gap-2">
-                          <SecondaryBtn
-                            onClick={handleShare}
-                            icon={<Share2 size={14} />}
-                            label={copied ? 'Copied!' : 'Share'}
-                            successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
-                            success={copied}
-                          />
-                          {game.mode === 'challenge' && challengeCode ? (
-                            <SecondaryBtn
-                              onClick={() => router.push(`/challenge/${challengeCode}`)}
-                              icon={<Trophy size={14} />}
-                              label="Results"
-                            />
-                          ) : (
-                            <SecondaryBtn
-                              onClick={handleChallenge}
-                              icon={<Swords size={14} />}
-                              label={challengeCopied ? 'Copied!' : 'Challenge'}
-                              successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
-                              success={challengeCopied}
-                            />
-                          )}
-                          <SecondaryBtn
-                            onClick={() => router.push('/play')}
-                            icon={<ArrowLeft size={14} />}
-                            label="Back"
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
+          {/* Placement badge */}
+          {!isGuest && game.is_placement && (
+            <div
+              className="text-center px-3 py-2 rounded-[10px]"
+              style={{
+                background: 'rgba(201,180,88,0.08)',
+                border: '1px solid rgba(201,180,88,0.25)',
+              }}
+            >
+              <span className="text-xs font-medium" style={{ color: 'var(--yellow)' }}>
+                Placement match
+                {gamesPlayed != null ? ` ${gamesPlayed}/5` : ''} — results
+                count toward your initial rating
+              </span>
             </div>
-          </>
-        )}
-      </AnimatePresence>
+          )}
+
+          {/* Actions */}
+          <div className="flex flex-col gap-2">
+            {isGuest ? (
+              <>
+                {/* Primary */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => onClose?.()}
+                  className="w-full py-3 rounded-[10px] text-white font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2"
+                  style={{ backgroundColor: 'var(--tile-correct)' }}
+                >
+                  Admire Puzzle
+                </motion.button>
+
+                {/* Secondary row */}
+                <div className="flex gap-2">
+                  <SecondaryBtn
+                    onClick={handleShare}
+                    icon={<Share2 size={14} />}
+                    label={copied ? 'Copied!' : 'Share'}
+                    successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
+                    success={copied}
+                  />
+                  <SecondaryBtn
+                    onClick={() => router.push('/play')}
+                    icon={<RotateCcw size={14} />}
+                    label="Play Again"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Primary: Review */}
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => router.push(`/review/${game.id}`)}
+                  className="w-full py-3 rounded-[10px] text-white font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2"
+                  style={{ backgroundColor: 'var(--tile-correct)' }}
+                >
+                  <BarChart2 size={15} />
+                  Review Game
+                </motion.button>
+
+                {/* Secondary row */}
+                <div className="flex gap-2">
+                  <SecondaryBtn
+                    onClick={handleShare}
+                    icon={<Share2 size={14} />}
+                    label={copied ? 'Copied!' : 'Share'}
+                    successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
+                    success={copied}
+                  />
+                  {game.mode === 'challenge' && challengeCode ? (
+                    <SecondaryBtn
+                      onClick={() => router.push(`/challenge/${challengeCode}`)}
+                      icon={<Trophy size={14} />}
+                      label="Results"
+                    />
+                  ) : (
+                    <SecondaryBtn
+                      onClick={handleChallenge}
+                      icon={<Swords size={14} />}
+                      label={challengeCopied ? 'Copied!' : 'Challenge'}
+                      successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
+                      success={challengeCopied}
+                    />
+                  )}
+                  <SecondaryBtn
+                    onClick={() => router.push('/play')}
+                    icon={<ArrowLeft size={14} />}
+                    label="Back"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </Dialog>
     </>
   );
 }

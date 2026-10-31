@@ -3,14 +3,19 @@
  * Strategies (cf. Workbox / PWA lecture slides):
  *   - App shell + immutable static assets  -> Cache-First
  *   - HTML navigations                     -> Network-First, falling back to cache, then offline.html
- *   - GET /api/words/* + /leaderboard      -> Stale-While-Revalidate (safe, cheap re-fetches)
- *   - All other /api/*                     -> Network-Only (rated state must be authoritative)
+ *   - Google Fonts                         -> Stale-While-Revalidate
+ *   - API calls are cross-origin (NEXT_PUBLIC_API_URL) and are never intercepted,
+ *     so rated state is always authoritative.
+ *
+ * Updates: a new worker installs but does NOT activate by itself. The page
+ * (<ServiceWorkerRegister>) posts {type:'SKIP_WAITING'} when it is ready and
+ * reloads once on `controllerchange`.
  *
  * Bump SW_VERSION on every meaningful change so the new worker installs and the
  * old cache is purged on activate.
  */
 
-const SW_VERSION = 'v5';
+const SW_VERSION = 'v6';
 
 // Next.js dev keeps stable URLs for static chunks (no hash), so an
 // aggressive Cache-First strategy would freeze any code change forever
@@ -24,7 +29,7 @@ const IS_DEV_HOST = (() => {
 })();
 const STATIC_CACHE = `eloquence-static-${SW_VERSION}`;
 const RUNTIME_CACHE = `eloquence-runtime-${SW_VERSION}`;
-const SWR_CACHE = `eloquence-swr-${SW_VERSION}`;
+const SWR_CACHE = `eloquence-swr-${SW_VERSION}`; // fonts only
 const ALL_CACHES = [STATIC_CACHE, RUNTIME_CACHE, SWR_CACHE];
 
 const APP_SHELL = [
@@ -34,11 +39,6 @@ const APP_SHELL = [
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png',
-];
-
-const SWR_PATHS = [
-  '/api/words/',
-  '/api/leaderboard',
 ];
 
 // ---------- install ----------------------------------------------------------
@@ -54,8 +54,8 @@ self.addEventListener('install', (event) => {
       ),
     ),
   );
-  // Activate immediately on first install so users get offline support without a reload.
-  self.skipWaiting();
+  // No skipWaiting() here: the page decides when to apply an update (see the
+  // 'message' handler below) so a reload never swaps chunks mid-session.
 });
 
 // ---------- activate ---------------------------------------------------------
@@ -76,10 +76,6 @@ self.addEventListener('activate', (event) => {
 
 function isSameOrigin(url) {
   return new URL(url).origin === self.location.origin;
-}
-
-function isSwrPath(pathname) {
-  return SWR_PATHS.some((p) => pathname.startsWith(p));
 }
 
 function isImmutableAsset(url) {
@@ -178,16 +174,7 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // 1. Whitelisted GET API endpoints -> SWR
-  if (url.pathname.startsWith('/api/')) {
-    if (isSwrPath(url.pathname)) {
-      event.respondWith(staleWhileRevalidate(request));
-    }
-    // Anything else under /api/ is network-only (default browser behavior).
-    return;
-  }
-
-  // 2. Immutable static assets (Next.js hashed) -> Cache-First in prod,
+  // 1. Immutable static assets (Next.js hashed) -> Cache-First in prod,
   //    Network-First on dev hosts (because dev chunk URLs aren't hashed,
   //    so a Cache-First entry would shadow every subsequent code change
   //    until the next SW version bump).
@@ -196,7 +183,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. HTML navigations -> Network-First with offline.html fallback
+  // 2. HTML navigations -> Network-First with offline.html fallback
   if (isHtmlRequest(request)) {
     event.respondWith(networkFirst(request, '/offline.html'));
     return;
@@ -207,8 +194,8 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ---------- messages ---------------------------------------------------------
-// Lets the page trigger an immediate activation when a new SW is waiting
-// (used by <ServiceWorkerRegister> when the user opts in to update).
+// Lets the page trigger activation of a waiting worker
+// (sent by <ServiceWorkerRegister> once a new version has installed).
 
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
@@ -257,9 +244,24 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Only ever navigate to same-origin URLs: the payload comes from the push
+// service and must not be able to open arbitrary external pages.
+function resolveNotificationUrl(raw) {
+  try {
+    const u = new URL(raw || '/', self.location.origin);
+    if (u.origin !== self.location.origin) return null;
+    return u;
+  } catch {
+    return null;
+  }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
+  const target = resolveNotificationUrl(event.notification.data && event.notification.data.url);
+  if (!target) return;
+  const targetHref = target.href;
+  const targetPathAndSearch = target.pathname + target.search;
 
   event.waitUntil(
     self.clients
@@ -269,18 +271,20 @@ self.addEventListener('notificationclick', (event) => {
         for (const client of windowClients) {
           try {
             const url = new URL(client.url);
-            if (url.origin === self.location.origin) {
-              if (url.pathname !== targetUrl && 'navigate' in client) {
-                return client.navigate(targetUrl).then((c) => c && c.focus());
-              }
+            if (url.origin !== self.location.origin) continue;
+            if (url.pathname + url.search === targetPathAndSearch) {
               return client.focus();
             }
+            if ('navigate' in client) {
+              return client.navigate(targetHref).then((c) => (c ? c.focus() : undefined));
+            }
+            return client.focus();
           } catch {
             // ignore malformed client URLs
           }
         }
         // Otherwise open a new tab on the target route.
-        return self.clients.openWindow(targetUrl);
+        return self.clients.openWindow(targetHref);
       }),
   );
 });

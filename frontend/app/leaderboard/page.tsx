@@ -2,9 +2,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type { Variants } from 'framer-motion';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronLeft, ChevronRight, CalendarDays, Users } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { leaderboardApi } from '@/lib/api';
+import { leaderboardApi, type SeasonBoard, type SeasonEntry } from '@/lib/api';
 import { getRatingTier } from '@/lib/types';
 import { springs, stagger } from '@/lib/animations';
 import clsx from 'clsx';
@@ -85,15 +86,16 @@ function PodiumCard({ entry, isCurrentUser }: { entry: LeaderboardEntry; isCurre
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <TierDot elo={Math.round(entry.elo_rating)} />
-          <span
+          <Link
+            href={`/u/${encodeURIComponent(entry.username)}`}
             title={entry.username}
             className={clsx(
-              'font-display font-bold text-sm truncate',
+              'font-display font-bold text-sm truncate hover:underline',
               isCurrentUser ? 'text-tile-correct' : 'text-text-primary'
             )}
           >
             {entry.username}
-          </span>
+          </Link>
           {isCurrentUser && (
             <span className="font-sans text-[10px] text-text-ghost shrink-0">(you)</span>
           )}
@@ -211,8 +213,237 @@ function OpenersPanel() {
   );
 }
 
+
+// ─── Season tab ───────────────────────────────────────────────────────────────
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function EloGain({ gain }: { gain: number }) {
+  const rounded = Math.round(gain);
+  const color =
+    rounded > 0 ? 'var(--tile-correct)' : rounded < 0 ? 'var(--red)' : 'var(--text-secondary)';
+  const text = rounded > 0 ? `+${rounded}` : rounded < 0 ? `−${Math.abs(rounded)}` : '0';
+  return (
+    <span className="font-mono text-sm font-bold tabular-nums" style={{ color }}>
+      {text}
+    </span>
+  );
+}
+
+function SeasonRow({
+  entry,
+  isMe,
+  pinned = false,
+}: {
+  entry: SeasonEntry;
+  isMe: boolean;
+  pinned?: boolean;
+}) {
+  return (
+    <div
+      className={clsx(
+        'flex items-center gap-3 px-4 py-3 border-b border-border-subtle last:border-0 transition-colors duration-150',
+        isMe ? 'bg-bg-elevated border-l-4 border-l-tile-correct' : 'hover:bg-bg-elevated/50',
+        pinned && 'border-t border-t-border-default'
+      )}
+    >
+      <div className="w-7 flex items-center justify-end shrink-0">
+        {entry.rank != null ? (
+          <RankBadge rank={entry.rank} />
+        ) : (
+          <span className="font-display text-sm font-bold text-text-ghost">—</span>
+        )}
+      </div>
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        <TierDot elo={Math.round(entry.elo_rating)} />
+        <Link
+          href={`/u/${encodeURIComponent(entry.username)}`}
+          title={entry.username}
+          className={clsx(
+            'font-sans text-sm font-semibold truncate hover:underline',
+            isMe ? 'text-tile-correct' : 'text-text-primary'
+          )}
+        >
+          {entry.username}
+        </Link>
+        {isMe && (
+          <span className="font-sans text-[10px] text-text-ghost font-normal shrink-0">(you)</span>
+        )}
+      </div>
+      <span className="w-12 text-right shrink-0">
+        <EloGain gain={entry.elo_gain} />
+      </span>
+      <span className="font-mono text-xs text-text-secondary w-12 text-right shrink-0 tabular-nums">
+        {entry.games}
+      </span>
+      <span className="font-mono text-xs text-text-secondary w-10 text-right shrink-0 tabular-nums">
+        {entry.wins}
+      </span>
+      <span className="font-mono text-xs text-text-secondary w-12 text-right shrink-0 tabular-nums hidden sm:inline">
+        {entry.peak_elo != null ? Math.round(entry.peak_elo) : '—'}
+      </span>
+    </div>
+  );
+}
+
+function SeasonPanel({ currentUserId }: { currentUserId: string | null }) {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1); // 1–12
+  const [board, setBoard] = useState<SeasonBoard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    leaderboardApi
+      .season({ year, month })
+      .then((res) => {
+        if (!cancelled) setBoard(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBoard(null);
+          setError('Could not load this season.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [year, month]);
+
+  const prevMonth = () => {
+    if (month === 1) {
+      setYear((y) => y - 1);
+      setMonth(12);
+    } else {
+      setMonth((m) => m - 1);
+    }
+  };
+  const nextMonth = () => {
+    if (isCurrentMonth) return;
+    if (month === 12) {
+      setYear((y) => y + 1);
+      setMonth(1);
+    } else {
+      setMonth((m) => m + 1);
+    }
+  };
+
+  const entries = board?.entries ?? [];
+  const me = board?.me ?? null;
+  const meInList = !!me && entries.some((e) => e.user_id === me.user_id);
+  const showPinnedMe = !!me && !meInList;
+  const title = `${MONTH_NAMES[month - 1]} ${year}`;
+
+  const navBtn =
+    'p-1.5 rounded-md border-2 border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ ...springs.slide, delay: 0.1 }}
+      className="flex flex-col gap-3"
+    >
+      {/* Season header + month navigation */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <CalendarDays size={14} className="text-text-ghost shrink-0" />
+          <h2 className="font-display font-bold text-base text-text-primary truncate">{title}</h2>
+          {board && (
+            <span className="font-sans text-xs text-text-secondary whitespace-nowrap hidden sm:inline">
+              {board.season.is_current
+                ? ` · ${board.season.days_left} day${board.season.days_left !== 1 ? 's' : ''} left`
+                : ' · ended'}
+              {' · '}
+              <Users size={10} className="inline -mt-0.5" /> {board.total_players.toLocaleString()} player
+              {board.total_players !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={prevMonth}
+            className={navBtn}
+            style={{ outlineColor: 'var(--tile-correct)' }}
+            aria-label="Previous month"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={nextMonth}
+            disabled={isCurrentMonth}
+            className={navBtn}
+            style={{ outlineColor: 'var(--tile-correct)' }}
+            aria-label="Next month"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      </div>
+      {board && (
+        <p className="font-sans text-xs text-text-secondary -mt-1 sm:hidden">
+          {board.season.is_current
+            ? `${board.season.days_left} day${board.season.days_left !== 1 ? 's' : ''} left`
+            : 'Season ended'}
+          {' · '}
+          {board.total_players.toLocaleString()} player{board.total_players !== 1 ? 's' : ''}
+        </p>
+      )}
+
+      <div className="bg-bg-base border border-border-default rounded-card-lg overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle">
+          <span className="w-7 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">#</span>
+          <span className="flex-1 font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider">Player</span>
+          <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Gained</span>
+          <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Games</span>
+          <span className="w-10 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Wins</span>
+          <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0 hidden sm:inline">Peak</span>
+        </div>
+        <div className="overflow-y-auto" style={{ maxHeight: 'max(280px, calc(100dvh - 440px))', scrollbarGutter: 'stable' }}>
+          {loading ? (
+            <div>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonRow key={i} index={i} />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="py-12 text-center font-sans text-sm" style={{ color: 'var(--red)' }}>{error}</div>
+          ) : entries.length === 0 ? (
+            <div className="py-12 text-center font-sans text-sm text-text-secondary">
+              No rated games this month yet.
+            </div>
+          ) : (
+            entries.map((e) => (
+              <SeasonRow key={e.user_id} entry={e} isMe={!!currentUserId && e.user_id === currentUserId} />
+            ))
+          )}
+        </div>
+        {!loading && showPinnedMe && me && (
+          <SeasonRow entry={me} isMe pinned />
+        )}
+      </div>
+      <p className="font-sans text-[11px] text-text-ghost px-1">
+        Ranked by ELO gained from rated games played this month. Peak = highest rating reached in the season.
+      </p>
+    </motion.div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
-type LeaderboardTab = 'players' | 'openers';
+type LeaderboardTab = 'players' | 'season' | 'openers';
 
 export default function LeaderboardPage() {
   const { user } = useAuth();
@@ -277,15 +508,16 @@ export default function LeaderboardPage() {
         {/* Username + tier dot */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <TierDot elo={Math.round(entry.elo_rating)} />
-          <span
+          <Link
+            href={`/u/${encodeURIComponent(entry.username)}`}
             title={entry.username}
             className={clsx(
-              'font-sans text-sm font-semibold truncate',
+              'font-sans text-sm font-semibold truncate hover:underline',
               isCurrentUser ? 'text-tile-correct' : 'text-text-primary'
             )}
           >
             {entry.username}
-          </span>
+          </Link>
           {isCurrentUser && (
             <span className="font-sans text-[10px] text-text-ghost font-normal shrink-0">
               (you)
@@ -334,6 +566,8 @@ export default function LeaderboardPage() {
       >
         {tab === 'players'
           ? 'Top players ranked by ELO rating'
+          : tab === 'season'
+          ? 'Who climbed the most this month'
           : 'Most-played opening words across all completed games'}
       </motion.p>
 
@@ -344,7 +578,7 @@ export default function LeaderboardPage() {
         transition={{ ...springs.slide, delay: 0.09 }}
         className="flex gap-1 mb-5 border-b border-border-subtle"
       >
-        {(['players', 'openers'] as const).map((t) => (
+        {(['players', 'season', 'openers'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -355,12 +589,13 @@ export default function LeaderboardPage() {
                 : 'border-transparent text-text-secondary hover:text-text-primary'
             )}
           >
-            {t === 'players' ? 'Players' : 'Openers'}
+            {t === 'players' ? 'Players' : t === 'season' ? 'Season' : 'Openers'}
           </button>
         ))}
       </motion.div>
 
       {tab === 'openers' && <OpenersPanel />}
+      {tab === 'season' && <SeasonPanel currentUserId={user?.id ?? null} />}
 
       {/* Top-3 podium — accent-bordered cards. The grid uses exactly as many
           columns as there are podium entries (1–3) so a lone #1 or top-2 gets a

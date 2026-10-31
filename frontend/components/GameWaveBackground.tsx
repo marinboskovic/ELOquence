@@ -93,13 +93,11 @@ function accentColor(pattern: number, correct: RGB, present: RGB, isDark: boolea
 
 export default function GameWaveBackground({ patterns, status, triggerKey, lastPattern }: GameWaveBackgroundProps) {
   const [reducedMotion, setReducedMotion] = useState(false);
-  // Read the active theme synchronously on first render so light-mode users
-  // never get a one-frame dark-palette flash (dark uses `screen` blend, which
-  // reads much brighter). Defaults to light when the DOM isn't available yet.
-  const [isDark, setIsDark] = useState(
-    () => typeof document !== 'undefined'
-      && document.documentElement.getAttribute('data-theme') === 'dark',
-  );
+  // Theme is read in an effect (not a lazy initializer) so the server and the
+  // first client render agree — reading `document` during render caused a
+  // hydration mismatch. The effect below syncs it on mount and keeps it live
+  // via a MutationObserver; the blobs fade in via `transition` anyway.
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -117,7 +115,11 @@ export default function GameWaveBackground({ patterns, status, triggerKey, lastP
     return () => obs.disconnect();
   }, []);
 
+  // `patterns` is a deliberate dependency: it re-reads the CSS vars on every
+  // move so a colour-blind / theme toggle mid-game is picked up.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const correct = useMemo(() => cssRgb('--tile-correct', '#538d4e'), [patterns]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const present = useMemo(() => cssRgb('--tile-present', '#b59f3b'), [patterns]);
   const [topC, blC, brC] = useMemo(() => blobColors(patterns, status, correct, present, isDark), [patterns, status, correct, present, isDark]);
   const accC = useMemo(() => lastPattern !== null ? accentColor(lastPattern, correct, present, isDark) : null, [lastPattern, correct, present, isDark]);

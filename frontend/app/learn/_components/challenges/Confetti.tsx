@@ -1,11 +1,15 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 
 /* Tiny particle burst for correct-answer feedback. No external dep — just
  * 14 absolutely-positioned divs animating outward + fading. Rendered as a
  * one-shot when a challenge resolves correctly.
+ *
+ * Honours reduced motion: both the OS preference
+ * (`prefers-reduced-motion: reduce`) and the app setting (`.reduce-motion`
+ * on <html>). When either is on, nothing is rendered.
  */
 
 const COLORS = [
@@ -15,7 +19,41 @@ const COLORS = [
   '#ffffff',
 ];
 
+function readReducedMotion(): boolean {
+  if (typeof window === 'undefined') return false;
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cls = document.documentElement.classList.contains('reduce-motion');
+  return mq || cls;
+}
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const update = () => setReduced(readReducedMotion());
+    update();
+
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    mq.addEventListener('change', update);
+
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => {
+      mq.removeEventListener('change', update);
+      observer.disconnect();
+    };
+  }, []);
+
+  return reduced;
+}
+
 export default function Confetti({ trigger }: { trigger: number }) {
+  const reduced = useReducedMotion();
+
   // `trigger` is just a counter — bumping it remounts the burst.
   const pieces = useMemo(() => {
     return Array.from({ length: 14 }, (_, i) => {
@@ -32,6 +70,8 @@ export default function Confetti({ trigger }: { trigger: number }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trigger]);
+
+  if (reduced || trigger === 0) return null;
 
   return (
     <div

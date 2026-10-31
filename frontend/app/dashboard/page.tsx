@@ -20,14 +20,17 @@ import {
   FlaskConical,
   Gamepad2,
   Users,
+  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { gamesApi, usersApi, challengesApi } from '@/lib/api';
-import { Game, getRatingTier, RATING_TIERS, EloHistoryEntry } from '@/lib/types';
+import { Game, getRatingTier, RATING_TIERS, EloHistoryEntry, Classification } from '@/lib/types';
 import { springs, stagger, easings } from '@/lib/animations';
 import EloSparkline from '@/components/EloSparkline';
 import GuessDistribution from '@/components/GuessDistribution';
 import InstallPrompt from '@/components/InstallPrompt';
+import NemesisWords, { type NemesisWord } from '@/components/dashboard/NemesisWords';
+import PaceHabits, { type PaceStats, type FavouriteOpener } from '@/components/dashboard/PaceHabits';
 import clsx from 'clsx';
 
 // ─── Mode icon map (Lucide, no emoji) ─────────────────────────────────────────
@@ -76,6 +79,10 @@ interface UserStats {
    *  | 'all'. Computed server-side, so — unlike the capped recent-games list
    *  below — it is not limited to the 20 games the dashboard fetches. */
   mode_stats?: Record<string, ModeStat>;
+  nemesis_words?: NemesisWord[];
+  pace?: PaceStats;
+  favourite_opener?: FavouriteOpener | null;
+  classification_mix?: Partial<Record<Classification, number>>;
   [key: string]: unknown;
 }
 
@@ -238,7 +245,7 @@ export default function DashboardPage() {
   // ── Loading state ────────────────────────────────────────────────────────
   if (loading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
+      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
         <TileLoader size={20} />
       </div>
     );
@@ -399,6 +406,13 @@ export default function DashboardPage() {
             <p className="font-display text-3xl font-black text-text-primary tracking-tight">
               {user.username}
             </p>
+            <Link
+              href={`/u/${encodeURIComponent(user.username)}`}
+              className="inline-flex items-center gap-1 w-fit font-sans text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 rounded"
+            >
+              <ExternalLink size={11} />
+              View public profile
+            </Link>
           </div>
 
           {/* Right: streak pills */}
@@ -586,6 +600,18 @@ export default function DashboardPage() {
           <GuessDistribution distribution={guessDistribution} losses={lossCount} />
         )}
       </motion.section>
+
+      {/* ── NEMESIS + PACE ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <NemesisWords words={userStats?.nemesis_words} loading={loadingStats} delay={0.28} />
+        <PaceHabits
+          pace={userStats?.pace}
+          favouriteOpener={userStats?.favourite_opener}
+          classificationMix={userStats?.classification_mix}
+          loading={loadingStats}
+          delay={0.3}
+        />
+      </div>
 
       {/* ── RECENT GAMES ───────────────────────────────────────────────── */}
       <motion.section {...fadeUp(0.3)} aria-label="Recent games">

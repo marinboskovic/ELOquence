@@ -6,6 +6,7 @@ import Navigation from '@/components/Navigation';
 import AnnouncementBanner from '@/components/AnnouncementBanner';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import InstallCapture from '@/components/InstallCapture';
+import MotionProvider from '@/components/MotionProvider';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
@@ -29,8 +30,11 @@ const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://el-oquence.vercel.app';
+
 export const metadata: Metadata = {
-  title: 'ELOquence',
+  metadataBase: new URL(SITE_URL),
+  title: { default: 'ELOquence', template: '%s · ELOquence' },
   description:
     'Competitive Wordle with information-theory analysis, ELO ratings, and deep move breakdowns.',
   applicationName: 'ELOquence',
@@ -65,7 +69,6 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: 'cover',
 };
 
@@ -81,16 +84,19 @@ export default function RootLayout({
           (function(){
             if(localStorage.getItem('eloquence_colorblind')==='true')document.documentElement.classList.add('colorblind');
             if(localStorage.getItem('eloquence_reduced_motion')==='true')document.documentElement.classList.add('reduce-motion');
-            if(localStorage.getItem('eloquence_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');
+            var t=localStorage.getItem('eloquence_theme');
+            if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.setAttribute('data-theme','dark');
             if(localStorage.getItem('eloquence_keyboard_only')==='true')document.documentElement.setAttribute('data-keyboard-only','true');
           })();
         `}} />
-        <AuthProvider>
-          <Navigation />
-          <AnnouncementBanner />
-          <main className="relative z-10">{children}</main>
-          <InstallCapture />
-        </AuthProvider>
+        <MotionProvider>
+          <AuthProvider>
+            <Navigation />
+            <AnnouncementBanner />
+            <main className="relative z-10">{children}</main>
+            <InstallCapture />
+          </AuthProvider>
+        </MotionProvider>
         <ServiceWorkerRegister />
         <Analytics />
         <SpeedInsights />

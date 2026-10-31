@@ -6,13 +6,26 @@
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui", "browser"],
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "launch_handler": {
+    "client_mode": [
+      "focus-existing",
+      "auto"
+    ]
+  },
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#6aaa64",
   "lang": "en-US",
   "dir": "ltr",
-  "categories": ["games", "education", "entertainment"],
+  "categories": [
+    "games",
+    "education"
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -39,21 +52,48 @@
       "short_name": "Daily",
       "description": "Play today's competitive puzzle",
       "url": "/play?mode=daily&source=shortcut",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Practice",
       "short_name": "Practice",
       "description": "Unlimited unrated practice games",
       "url": "/play?mode=practice&source=shortcut",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Opener Lab",
+      "short_name": "Lab",
+      "description": "Analyse any Wordle opener",
+      "url": "/lab?source=shortcut",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Leaderboard",
       "short_name": "Ranks",
       "description": "Global ELO rankings",
       "url": "/leaderboard?source=shortcut",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

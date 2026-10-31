@@ -1,10 +1,6 @@
 import Archive from '@/components/Archive';
 
-export const metadata = {
-  title: 'Archive — ELOquence',
-  description: 'Replay any past daily Wordle puzzle.',
-};
-
+// Metadata lives in ./layout.tsx (title template appends "· ELOquence").
 export default function ArchivePage() {
   return <Archive />;
 }

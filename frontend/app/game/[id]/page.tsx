@@ -1,20 +1,20 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Timer, ArrowLeft, AlertTriangle } from 'lucide-react';
 import GameBoard from '@/components/GameBoard';
 import Keyboard from '@/components/Keyboard';
 import GameOverModal from '@/components/GameOverModal';
 import Toast from '@/components/Toast';
 import TileSpinner from '@/components/TileSpinner';
+import Dialog from '@/components/Dialog';
 import AchievementToast, { ACHIEVEMENT_META } from '@/components/AchievementToast';
 import GameWaveBackground from '@/components/GameWaveBackground';
-import { gamesApi, dailyApi, challengesApi } from '@/lib/api';
+import { gamesApi, dailyApi, challengesApi, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useAbandonOnExit } from '@/lib/hooks/useAbandonOnExit';
 import { Game, GameStatus, TileState, patternToTiles } from '@/lib/types';
-import { springs } from '@/lib/animations';
 import { useSettings } from '@/lib/useSettings';
 
 /** Local date string (YYYY-MM-DD) matching the server's TZ. */
@@ -25,6 +25,21 @@ function localDateStr(): string {
 
 // Flip animation: 5 tiles × 0.15s stagger + 0.5s each tile = ~1.25s total
 const FLIP_ANIMATION_MS = 5 * 150 + 500 + 150;
+
+const TILE_WORD: Record<TileState, string> = {
+  correct: 'correct',
+  present: 'present',
+  absent: 'absent',
+  empty: 'empty',
+  tbd: 'pending',
+};
+
+/** Spoken description of a revealed row for the live region. */
+function describeRow(rowIndex: number, guess: string, pattern: number): string {
+  const tiles = patternToTiles(pattern);
+  const parts = guess.split('').map((ch, i) => `${ch} ${TILE_WORD[tiles[i]]}`);
+  return `Row ${rowIndex + 1}: ${parts.join(', ')}`;
+}
 
 export default function GamePage() {
   const { id } = useParams<{ id: string }>();
@@ -63,16 +78,29 @@ export default function GamePage() {
   const [waveTrigger, setWaveTrigger] = useState(0);
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
+  // Screen-reader announcements (revealed rows + final result).
+  const [announcement, setAnnouncement] = useState('');
 
   // Timer
   const [elapsed, setElapsed] = useState(0);
   const startTimeRef = useRef(Date.now());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((msg: string, duration = 2000) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToastMsg(msg);
     setToastVisible(true);
-    setTimeout(() => setToastVisible(false), duration);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastVisible(false);
+      toastTimeoutRef.current = null;
+    }, duration);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
   }, []);
 
   // Load existing game state on mount
@@ -82,6 +110,15 @@ export default function GamePage() {
 
     const loadGame = (g: Game) => {
       setGame(g);
+      // Resume: measure elapsed time from the game's real start, not from
+      // when this page happened to mount.
+      if (g.created_at && (g.moves?.length ?? 0) > 0) {
+        const started = new Date(g.created_at).getTime();
+        if (!Number.isNaN(started) && started < Date.now()) {
+          startTimeRef.current = started;
+          setElapsed(Math.floor((Date.now() - started) / 1000));
+        }
+      }
       if (g.moves && g.moves.length > 0) {
         const sorted = [...g.moves].sort((a, b) => a.move_number - b.move_number);
         setGuesses(sorted.map((m) => m.guess_word));
@@ -116,7 +153,7 @@ export default function GamePage() {
       .mine()
       .then((res) => {
         if (cancelled) return;
-        const match = (res.data as { code: string; target_word: string }[]).find(
+        const match = (res.data as { code: string; target_word: string | null }[]).find(
           (c) => c.target_word === game.target_word,
         );
         if (match) setChallengeCode(match.code);
@@ -155,6 +192,10 @@ export default function GamePage() {
   // In-app back-button shows confirmation for every mode except practice,
   // since even daily merits a soft "are you sure" against a stray tap.
   const shouldConfirmBack = isInProgress && game?.mode !== 'practice';
+  // Hard mode is a property of the game (fixed at creation and enforced
+  // server-side), not of the live setting — toggling the setting mid-game
+  // must change nothing.
+  const hardMode = !!game?.hard_mode;
 
   useAbandonOnExit({
     gameId: id,
@@ -201,8 +242,9 @@ export default function GamePage() {
       return;
     }
 
-    // Hard mode: validate revealed hints are reused
-    if (settings.hardMode && guesses.length > 0) {
+    // Hard mode pre-check (the server is the authority; this just gives
+    // instant feedback): revealed hints must be reused.
+    if (hardMode && guesses.length > 0) {
       for (let gi = 0; gi < guesses.length; gi++) {
         const prevGuess = guesses[gi];
         const tiles = patternToTiles(patterns[gi]);
@@ -244,8 +286,9 @@ export default function GamePage() {
       const pattern = latestMove?.pattern ?? 0;
 
       const rowIndex = guesses.length;
+      const submitted = currentGuess;
 
-      setGuesses((prev: string[]) => [...prev, currentGuess]);
+      setGuesses((prev: string[]) => [...prev, submitted]);
       setPatterns((prev: number[]) => [...prev, pattern]);
       setCurrentGuess('');
 
@@ -266,6 +309,19 @@ export default function GamePage() {
         const status: GameStatus = updatedGame.status;
         setGame(updatedGame);
         setGameStatus(status);
+
+        // Announce the revealed row (and the outcome) once the flip ends.
+        const rowText = describeRow(rowIndex, submitted, pattern);
+        if (status === 'won') {
+          const n = updatedGame.num_guesses || rowIndex + 1;
+          setAnnouncement(`${rowText}. You won in ${n} ${n === 1 ? 'guess' : 'guesses'}.`);
+        } else if (status === 'lost') {
+          setAnnouncement(
+            `${rowText}. Out of guesses.${updatedGame.target_word ? ` The word was ${updatedGame.target_word}.` : ''}`,
+          );
+        } else {
+          setAnnouncement(rowText);
+        }
 
         if (status !== 'in_progress') {
           if (updatedGame.mode === 'daily') {
@@ -294,17 +350,19 @@ export default function GamePage() {
         setIsSubmitting(false);
       }, FLIP_ANIMATION_MS);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      const msg = detail || 'Something went wrong.';
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const msg = errorMessage(err, 'Something went wrong.');
+      const lower = msg.toLowerCase();
+      const notInList =
+        status === 422 ||
+        lower.includes('not in word list') ||
+        lower.includes('invalid word') ||
+        lower.includes('not a valid');
 
-      if (
-        msg.toLowerCase().includes('not in word list') ||
-        msg.toLowerCase().includes('invalid word') ||
-        msg.toLowerCase().includes('not a valid')
-      ) {
+      if (notInList) {
         setShakeRow(guesses.length);
         setTimeout(() => setShakeRow(-1), 500);
+        showToast(lower.includes('not a valid') || status === 422 ? 'Not in word list' : msg);
       } else {
         showToast(msg);
       }
@@ -318,9 +376,20 @@ export default function GamePage() {
     guesses,
     patterns,
     id,
+    user,
     showToast,
-    settings.hardMode,
+    hardMode,
   ]);
+
+  const handleAbandon = async () => {
+    setAbandoning(true);
+    try {
+      await gamesApi.delete(id);
+    } catch {
+      /* ignore */
+    }
+    router.push('/play');
+  };
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -339,14 +408,20 @@ export default function GamePage() {
 
   if (loadingGame) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
+      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
         <TileSpinner size="lg" label="Loading game" />
       </div>
     );
   }
 
+  const abandonTitle = isRatedComp
+    ? 'Abandon game?'
+    : isChallenge
+    ? 'Leave challenge?'
+    : 'Leave the daily?';
+
   return (
-    <div className="relative z-10 flex flex-col items-center h-[calc(100dvh-56px)] pt-2 pb-2 px-2 select-none">
+    <div className="relative z-10 flex flex-col items-center h-[calc(100dvh-52px)] pt-2 pb-2 px-2 select-none">
       <Toast message={toastMsg} visible={toastVisible} />
       <AchievementToast
         achievements={unlockedAchievements}
@@ -354,10 +429,16 @@ export default function GamePage() {
       />
       <GameWaveBackground patterns={patterns} status={gameStatus} triggerKey={waveTrigger} lastPattern={wavePattern} />
 
+      {/* Screen-reader announcements for revealed rows and the result */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </div>
+
       {/* ── Top bar ── */}
       <div className="w-full max-w-lg flex items-center justify-between px-1 mb-2 shrink-0">
         {/* Back button */}
         <motion.button
+          type="button"
           whileTap={{ scale: 0.92 }}
           onClick={() => {
             if (shouldConfirmBack) {
@@ -366,22 +447,36 @@ export default function GamePage() {
               router.push('/play');
             }
           }}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#9898a0] hover:text-[#ededf0] hover:bg-white/[0.06] transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors"
           aria-label="Back to mode selection"
         >
           <ArrowLeft size={17} />
         </motion.button>
 
-        {/* Mode pill badge */}
-        {modeLabel && (
-          <span className="rounded-full bg-white/[0.06] text-[#9898a0] text-xs px-3 py-1 font-medium tracking-wide">
-            {modeLabel}
-          </span>
-        )}
+        {/* Mode pill badge (+ hard-mode pill) */}
+        <div className="flex items-center gap-1.5">
+          {modeLabel && (
+            <span className="rounded-pill bg-bg-muted text-text-secondary text-xs px-3 py-1 font-medium tracking-wide">
+              {modeLabel}
+            </span>
+          )}
+          {hardMode && (
+            <span
+              className="rounded-pill text-xs px-2.5 py-1 font-semibold tracking-wide"
+              style={{
+                color: 'var(--tile-present)',
+                background: 'color-mix(in srgb, var(--tile-present) 15%, transparent)',
+              }}
+              title="Hard mode: revealed hints must be used"
+            >
+              Hard
+            </span>
+          )}
+        </div>
 
         {/* Timer (competitive only) */}
         {game?.mode === 'competitive' ? (
-          <div className="flex items-center gap-1.5 text-[#9898a0] text-xs font-mono tabular-nums min-w-[44px] justify-end">
+          <div className="flex items-center gap-1.5 text-text-secondary text-xs font-mono tabular-nums min-w-[44px] justify-end">
             <Timer size={13} strokeWidth={1.8} />
             <span>{formatTime(elapsed)}</span>
           </div>
@@ -410,96 +505,73 @@ export default function GamePage() {
           onEnter={handleEnter}
           onBackspace={handleBackspace}
           letterStates={letterStates}
-          disablePhysicalKeyboard={settings.keyboardOnly}
+          // Physical keys are ignored while any dialog is open so typing
+          // never continues behind the modal.
+          disablePhysicalKeyboard={settings.keyboardOnly || showAbandonConfirm || modalOpen}
         />
       </div>
 
-      {/* ── Abandon confirmation modal ── */}
-      <AnimatePresence>
-        {showAbandonConfirm && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-              onClick={() => !abandoning && setShowAbandonConfirm(false)}
-            />
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.88, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.92, y: 12 }}
-                transition={springs.modal}
-                className="w-full max-w-xs bg-[#1d1d21] rounded-2xl border border-white/[0.10] shadow-modal overflow-hidden pointer-events-auto"
-              >
-                {/* Danger stripe */}
-                <div className="h-1 w-full bg-[#e74c3c]" />
-
-                <div className="p-5 flex flex-col gap-4">
-                  <div className="flex flex-col items-center gap-2 text-center">
-                    <div className="w-10 h-10 rounded-full bg-[#e74c3c]/[0.12] flex items-center justify-center">
-                      <AlertTriangle size={20} className="text-[#e74c3c]" />
-                    </div>
-                    <h3 className="text-sm font-bold text-[#ededf0]">
-                      {isRatedComp
-                        ? 'Abandon game?'
-                        : isChallenge
-                        ? 'Leave challenge?'
-                        : 'Leave the daily?'}
-                    </h3>
-                    <p className="text-xs text-[#9898a0] leading-relaxed">
-                      {isRatedComp ? (
-                        <>
-                          This counts as a{' '}
-                          <span className="text-[#e74c3c] font-semibold">loss</span> and you
-                          will lose ELO.
-                        </>
-                      ) : isChallenge ? (
-                        <>
-                          You won&apos;t be able to replay this challenge — the word will be{' '}
-                          <span className="text-[#e74c3c] font-semibold">locked</span> for you.
-                        </>
-                      ) : (
-                        <>
-                          Your current attempt will be marked abandoned. You can come back and
-                          try today&apos;s word again.
-                        </>
-                      )}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowAbandonConfirm(false)}
-                      disabled={abandoning}
-                      className="flex-1 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.09] text-[#ededf0] font-medium text-xs transition-colors border border-white/[0.08] disabled:opacity-50"
-                    >
-                      Keep playing
-                    </button>
-                    <button
-                      onClick={async () => {
-                        setAbandoning(true);
-                        try {
-                          await gamesApi.delete(id);
-                        } catch {
-                          /* ignore */
-                        }
-                        router.push('/play');
-                      }}
-                      disabled={abandoning}
-                      className="flex-1 py-2.5 rounded-xl bg-[#e74c3c] hover:bg-[#c0392b] text-white font-medium text-xs transition-colors disabled:opacity-60"
-                    >
-                      {abandoning ? 'Leaving...' : isRatedComp ? 'Abandon' : 'Leave'}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
+      {/* ── Abandon confirmation ── */}
+      <Dialog
+        open={showAbandonConfirm}
+        onClose={() => setShowAbandonConfirm(false)}
+        title={abandonTitle}
+        accent="var(--red)"
+        locked={abandoning}
+        maxWidth="max-w-xs"
+        hideClose
+      >
+        <div className="p-5 flex flex-col gap-4">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ background: 'color-mix(in srgb, var(--red) 12%, transparent)' }}
+            >
+              <AlertTriangle size={20} style={{ color: 'var(--red)' }} />
             </div>
-          </>
-        )}
-      </AnimatePresence>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              {isRatedComp ? (
+                <>
+                  This counts as a{' '}
+                  <span className="font-semibold" style={{ color: 'var(--red)' }}>loss</span> and you
+                  will lose ELO.
+                </>
+              ) : isChallenge ? (
+                <>
+                  You won&apos;t be able to replay this challenge — the word will be{' '}
+                  <span className="font-semibold" style={{ color: 'var(--red)' }}>locked</span> for you.
+                </>
+              ) : (
+                <>
+                  Your current attempt will be marked abandoned. You can come back and
+                  try today&apos;s word again.
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              data-autofocus
+              onClick={() => setShowAbandonConfirm(false)}
+              disabled={abandoning}
+              className="flex-1 py-2.5 rounded-md border-2 border-border-default hover:border-border-strong text-text-primary font-medium text-xs transition-colors disabled:opacity-50"
+            >
+              Keep playing
+            </button>
+            <button
+              type="button"
+              onClick={handleAbandon}
+              disabled={abandoning}
+              className="flex-1 py-2.5 rounded-md text-white font-medium text-xs transition-[filter] hover:brightness-110 disabled:opacity-60"
+              style={{ backgroundColor: 'var(--red)' }}
+            >
+              {abandoning ? 'Leaving...' : isRatedComp ? 'Abandon' : 'Leave'}
+            </button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* ── Game over modal ── */}
       {game && (

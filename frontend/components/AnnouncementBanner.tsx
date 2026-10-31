@@ -10,29 +10,45 @@ interface ActiveAnnouncement {
   type?: 'info' | 'warning' | 'error';
 }
 
-const SESSION_KEY = 'eloquence_announcements_dismissed';
+// Dismissed announcement ids for this browser session (JSON string[]), so a
+// new announcement still shows after an older one was dismissed.
+const SESSION_KEY = 'eloquence_announcements_dismissed_ids';
+
+function readDismissedIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeDismissedIds(ids: string[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(ids));
+  } catch {
+    /* storage unavailable — dismissal just won't persist */
+  }
+}
 
 export default function AnnouncementBanner() {
   const [announcements, setAnnouncements] = useState<ActiveAnnouncement[]>([]);
   const [index, setIndex] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    // Check sessionStorage dismissal
-    if (typeof window !== 'undefined') {
-      const storedDismissed = sessionStorage.getItem(SESSION_KEY);
-      if (storedDismissed === 'true') {
-        setDismissed(true);
-        return;
-      }
-    }
     announcementsApi
       .active()
       .then((res) => {
         const data: ActiveAnnouncement[] = res.data;
-        if (data && data.length > 0) {
-          setAnnouncements(data);
+        const dismissedIds = new Set(readDismissedIds());
+        const fresh = (data ?? []).filter((a) => !dismissedIds.has(String(a.id)));
+        if (fresh.length > 0) {
+          setAnnouncements(fresh);
+          setIndex(0);
           setVisible(true);
         }
       })
@@ -41,14 +57,23 @@ export default function AnnouncementBanner() {
       });
   }, []);
 
+  // Dismiss only the announcement currently shown; the others stay in rotation.
   const handleDismiss = useCallback(() => {
-    setVisible(false);
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(SESSION_KEY, 'true');
+    const current = announcements[index];
+    if (!current) return;
+    const ids = readDismissedIds();
+    if (!ids.includes(String(current.id))) writeDismissedIds([...ids, String(current.id)]);
+
+    const remaining = announcements.filter((a) => a.id !== current.id);
+    if (remaining.length === 0) {
+      setVisible(false);
+      // Remove from state after exit animation
+      setTimeout(() => setAnnouncements([]), 300);
+      return;
     }
-    // Remove from state after exit animation
-    setTimeout(() => setDismissed(true), 300);
-  }, []);
+    setAnnouncements(remaining);
+    setIndex((i) => Math.min(i, remaining.length - 1));
+  }, [announcements, index]);
 
   const handlePrev = () => {
     setIndex((i) => (i - 1 + announcements.length) % announcements.length);
@@ -58,7 +83,7 @@ export default function AnnouncementBanner() {
     setIndex((i) => (i + 1) % announcements.length);
   };
 
-  if (dismissed || announcements.length === 0) return null;
+  if (announcements.length === 0) return null;
 
   const current = announcements[index];
   const currentText = current?.text ?? '';

@@ -23,6 +23,8 @@ export interface User {
   max_streak: number;
   is_admin: boolean;
   has_password?: boolean;
+  profile_public?: boolean;
+  avatar_url?: string | null;
   created_at: string;
 }
 
@@ -46,6 +48,7 @@ export interface Move {
   constraint_violation_reason: string;
   trap_detected: boolean;
   is_book_move: boolean;
+  created_at?: string;
 }
 
 export interface Game {

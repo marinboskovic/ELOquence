@@ -1558,10 +1558,9 @@ function LockedSection({ title }: { title: string }) {
 /*  Page component                                                      */
 /* ------------------------------------------------------------------ */
 
-export default function LearnPage() {
+export default function FaqPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  void router;
 
   const [query, setQuery] = useState('');
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());

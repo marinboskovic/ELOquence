@@ -1,6 +1,7 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sun,
@@ -14,9 +15,11 @@ import {
   ArrowRight,
   LogIn,
   HelpCircle,
+  Beaker,
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { gamesApi, dailyApi, challengesApi } from '@/lib/api';
+import { gamesApi, dailyApi, challengesApi, errorMessage } from '@/lib/api';
+import { useSettings } from '@/lib/useSettings';
 import { getRatingTier, patternToTiles, TileState } from '@/lib/types';
 import { springs, stagger } from '@/lib/animations';
 import TileLoader from '@/components/TileLoader';
@@ -94,6 +97,7 @@ function MiniTileRow({ pattern }: { pattern: ('correct' | 'present' | 'absent')[
 export default function PlayPage() {
   const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
+  const [settings] = useSettings();
   const [creating, setCreating] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [creatingChallenge, setCreatingChallenge] = useState(false);
@@ -286,19 +290,38 @@ export default function PlayPage() {
         const res = await gamesApi.create({
           mode: modeId,
           word_pool: modeId === 'competitive' ? 'competitive' : 'standard',
+          hard_mode: settings.hardMode,
         });
         gameId = res.data.id;
       }
 
       router.push(`/game/${gameId}`);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail || 'Could not start game. Please try again.';
-      setError(msg);
+      setError(errorMessage(err, 'Could not start game. Please try again.'));
       setCreating(null);
     }
   };
+
+  // PWA shortcuts: `/play?mode=daily|practice|competitive` auto-starts that
+  // mode once auth has resolved. Read from window.location in an effect
+  // (not useSearchParams) to avoid the CSR bailout; fires at most once.
+  const autoStartedRef = useRef(false);
+  const handleModeSelectRef = useRef(handleModeSelect);
+  handleModeSelectRef.current = handleModeSelect;
+  useEffect(() => {
+    if (loading || autoStartedRef.current) return;
+    if (typeof window === 'undefined') return;
+    const mode = new URLSearchParams(window.location.search).get('mode');
+    if (mode !== 'daily' && mode !== 'practice' && mode !== 'competitive') return;
+    autoStartedRef.current = true;
+    // Drop the param so a back-navigation to /play doesn't re-trigger.
+    window.history.replaceState(null, '', '/play');
+    if (mode !== 'daily' && !user) {
+      router.push(`/login?next=${encodeURIComponent(`/play?mode=${mode}`)}`);
+      return;
+    }
+    void handleModeSelectRef.current(mode);
+  }, [loading, user, router]);
 
   const handleCreateChallenge = async () => {
     if (!user || creatingChallenge) return;
@@ -328,7 +351,7 @@ export default function PlayPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
+      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
         <TileLoader size={22} />
       </div>
     );
@@ -443,7 +466,7 @@ export default function PlayPage() {
 
     return (
       <div
-        className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4"
+        className="flex flex-col items-center justify-center min-h-[calc(100dvh-52px)] px-4"
         style={{ paddingTop: '2.5rem', paddingBottom: '5rem' }}
       >
         {/* Page header */}
@@ -613,6 +636,33 @@ export default function PlayPage() {
             ))}
           </motion.div>
 
+          {/* ── Opener Lab (public tool) ── */}
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: 10 },
+              visible: { opacity: 1, y: 0, transition: springs.slide },
+            }}
+          >
+            <Link
+              href="/lab"
+              className="flex items-center gap-3 p-4 rounded-card-lg border border-border-subtle bg-bg-elevated hover:border-border-default hover:bg-bg-base transition-colors group"
+            >
+              <div className="w-9 h-9 rounded-card border border-border-subtle bg-bg-base flex items-center justify-center text-text-secondary shrink-0">
+                <Beaker size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-display font-bold text-sm text-text-primary">Opener Lab</h3>
+                <p className="font-sans text-xs text-text-secondary leading-relaxed">
+                  Test any opener — no account needed.
+                </p>
+              </div>
+              <ArrowRight
+                size={14}
+                className="text-text-ghost group-hover:text-text-secondary transition-colors shrink-0"
+              />
+            </Link>
+          </motion.div>
+
           {/* ── Sign-in nudge ── */}
           <motion.div
             variants={{
@@ -649,7 +699,7 @@ export default function PlayPage() {
 
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4"
+      className="flex flex-col items-center justify-center min-h-[calc(100dvh-52px)] px-4"
       style={{ paddingTop: '2.5rem', paddingBottom: '5rem' }}
     >
       {/* Error */}
@@ -879,6 +929,33 @@ export default function PlayPage() {
               </motion.button>
             );
           })}
+        </motion.div>
+
+        {/* ── Opener Lab (tool, not a mode) ── */}
+        <motion.div
+          variants={{
+            hidden: { opacity: 0, y: 10 },
+            visible: { opacity: 1, y: 0, transition: springs.slide },
+          }}
+        >
+          <Link
+            href="/lab"
+            className="flex items-center gap-3 p-4 rounded-card-lg border border-border-subtle bg-bg-elevated hover:border-border-default hover:bg-bg-base transition-colors group"
+          >
+            <div className="w-9 h-9 rounded-card border border-border-subtle bg-bg-base flex items-center justify-center text-text-secondary shrink-0">
+              <Beaker size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display font-bold text-sm text-text-primary">Opener Lab</h3>
+              <p className="font-sans text-xs text-text-secondary leading-relaxed">
+                Test any opener and explore positions — no stakes.
+              </p>
+            </div>
+            <ArrowRight
+              size={14}
+              className="text-text-ghost group-hover:text-text-secondary transition-colors shrink-0"
+            />
+          </Link>
         </motion.div>
 
         {/* ── Challenge a Friend ── */}

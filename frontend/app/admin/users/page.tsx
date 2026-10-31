@@ -2,12 +2,112 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Search, ShieldCheck, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ShieldCheck, RefreshCw, ChevronLeft, ChevronRight, Ban } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { adminApi } from '@/lib/api';
+import { adminApi, errorMessage } from '@/lib/api';
 import { getRatingTier } from '@/lib/types';
 import AdminNav from '@/components/admin/AdminNav';
+import Dialog from '@/components/Dialog';
+
+/* ------------------------------------------------------------------ */
+/*  Ban dialog + pill (local to this page — components/admin is not   */
+/*  owned by this change)                                              */
+/* ------------------------------------------------------------------ */
+
+function BannedPill({ reason }: { reason?: string | null }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-pill text-[10px] font-semibold font-sans"
+      style={{
+        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
+        color: 'var(--red)',
+      }}
+      title={reason ? `Banned: ${reason}` : 'Banned'}
+    >
+      <Ban size={10} />
+      Banned
+    </span>
+  );
+}
+
+function BanDialog({
+  open,
+  username,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  username: string;
+  onClose: () => void;
+  /** Rejects on failure so the dialog stays open. */
+  onConfirm: (reason: string) => Promise<void>;
+}) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setReason('');
+      setBusy(false);
+    }
+  }, [open]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onConfirm(reason.trim());
+    } catch {
+      /* error surfaced by the page */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} title={`Ban ${username}?`} accent="var(--red)" locked={busy} maxWidth="max-w-sm">
+      <form onSubmit={submit} className="p-5 pt-3 flex flex-col gap-4">
+        <p className="font-sans text-sm text-text-secondary leading-relaxed">
+          The user will be signed out everywhere and blocked from signing in. You can lift the ban later.
+        </p>
+        <label className="block">
+          <span className="block text-xs text-text-secondary mb-1.5">Reason (optional, shown to admins)</span>
+          <input
+            data-autofocus
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={200}
+            placeholder="e.g. abusive username"
+            disabled={busy}
+            className="w-full px-3.5 py-2.5 text-sm rounded-md bg-transparent border-2 border-border-default text-text-primary placeholder:text-text-ghost focus:border-tile-correct focus:outline-none transition-colors disabled:opacity-40 font-sans"
+          />
+        </label>
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="px-4 py-2 text-sm rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors disabled:opacity-40 font-sans"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="px-4 py-2 text-sm rounded-md font-medium text-white hover:brightness-110 transition-[filter] disabled:opacity-40 inline-flex items-center gap-2 font-sans"
+            style={{ backgroundColor: 'var(--red)' }}
+          >
+            {busy ? <RefreshCw size={12} className="animate-spin" /> : <Ban size={12} />}
+            Ban user
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  );
+}
 
 interface AdminUser {
   id: string;
@@ -16,6 +116,8 @@ interface AdminUser {
   elo_rating: number;
   games_played: number;
   is_admin: boolean;
+  is_banned?: boolean;
+  banned_reason?: string | null;
   created_at: string;
 }
 
@@ -38,6 +140,7 @@ export default function AdminUsersPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState<string | null>(null);
   const [confirmAdmin, setConfirmAdmin] = useState<string | null>(null);
+  const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const PER_PAGE = 20;
@@ -65,6 +168,9 @@ export default function AdminUsersPage() {
       return;
     }
     fetchUsers(page, search);
+    // `search` is deliberately excluded: typing is debounced in
+    // handleSearchChange, which issues its own fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, router, page, fetchUsers]);
 
   const handleSearchChange = (val: string) => {
@@ -113,11 +219,39 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleBan = async (reason: string) => {
+    if (!banTarget) return;
+    const id = banTarget.id;
+    setActionLoading(id + '-ban');
+    try {
+      await adminApi.banUser(id, reason || undefined);
+      setBanTarget(null);
+      fetchUsers(page, search);
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'Failed to ban user.'));
+      throw err;
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleUnban = async (userId: string) => {
+    setActionLoading(userId + '-ban');
+    try {
+      await adminApi.unbanUser(userId);
+      fetchUsers(page, search);
+    } catch (err: unknown) {
+      setError(errorMessage(err, 'Failed to unban user.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const totalPages = Math.ceil(total / PER_PAGE);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
+      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
         <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
       </div>
     );
@@ -198,9 +332,12 @@ export default function AdminUsersPage() {
                       className="border-b border-border-subtle hover:bg-bg-elevated/50 transition-colors"
                     >
                       <td className="px-4 py-3 font-medium text-text-primary">
-                        <Link href={`/admin/users/${u.id}`} className="hover:underline hover:text-tile-correct transition-colors">
-                          {u.username}
-                        </Link>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link href={`/admin/users/${u.id}`} className="hover:underline hover:text-tile-correct transition-colors">
+                            {u.username}
+                          </Link>
+                          {u.is_banned && <BannedPill reason={u.banned_reason} />}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-text-secondary hidden sm:table-cell truncate max-w-[200px]">
                         {u.email}
@@ -261,6 +398,28 @@ export default function AdminUsersPage() {
                               'Make Admin'
                             )}
                           </button>
+                          <button
+                            onClick={() => (u.is_banned ? handleUnban(u.id) : setBanTarget(u))}
+                            disabled={actionLoading === u.id + '-ban' || u.id === user.id}
+                            title={u.id === user.id ? 'You cannot ban yourself' : undefined}
+                            className="text-[11px] px-2 py-1 rounded-md border-2 transition-colors font-sans bg-transparent disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
+                            style={
+                              u.is_banned
+                                ? { borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }
+                                : { borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)', color: 'var(--red)' }
+                            }
+                          >
+                            {actionLoading === u.id + '-ban' ? (
+                              <RefreshCw size={10} className="animate-spin" />
+                            ) : u.is_banned ? (
+                              'Unban'
+                            ) : (
+                              <>
+                                <Ban size={10} />
+                                Ban
+                              </>
+                            )}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -271,6 +430,13 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      <BanDialog
+        open={!!banTarget}
+        username={banTarget?.username ?? ''}
+        onClose={() => setBanTarget(null)}
+        onConfirm={handleBan}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (

@@ -1,11 +1,15 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 
+export const THEME_OPTIONS = ['system', 'light', 'dark'] as const;
+export type Theme = (typeof THEME_OPTIONS)[number];
+
 export interface Settings {
   hardMode: boolean;
   highContrast: boolean;
   keyboardOnly: boolean;
-  theme: 'light' | 'dark';
+  /** 'system' follows `prefers-color-scheme`; stored as `eloquence_theme`. */
+  theme: Theme;
   reducedMotion: boolean;
 }
 
@@ -17,23 +21,64 @@ const STORAGE_KEYS: Record<keyof Settings, string> = {
   reducedMotion: 'eloquence_reduced_motion',
 };
 
+const DEFAULTS: Settings = {
+  hardMode: false,
+  highContrast: false,
+  keyboardOnly: false,
+  theme: 'system',
+  reducedMotion: false,
+};
+
+const DARK_MQ = '(prefers-color-scheme: dark)';
+
+function parseTheme(raw: string | null): Theme {
+  return raw === 'dark' || raw === 'light' ? raw : 'system';
+}
+
 function readFromStorage(): Settings {
-  if (typeof window === 'undefined') {
-    return {
-      hardMode: false,
-      highContrast: false,
-      keyboardOnly: false,
-      theme: 'light',
-      reducedMotion: false,
-    };
-  }
+  if (typeof window === 'undefined') return DEFAULTS;
   return {
     hardMode: localStorage.getItem(STORAGE_KEYS.hardMode) === 'true',
     highContrast: localStorage.getItem(STORAGE_KEYS.highContrast) === 'true',
     keyboardOnly: localStorage.getItem(STORAGE_KEYS.keyboardOnly) === 'true',
-    theme: (localStorage.getItem(STORAGE_KEYS.theme) as 'light' | 'dark') === 'dark' ? 'dark' : 'light',
+    theme: parseTheme(localStorage.getItem(STORAGE_KEYS.theme)),
     reducedMotion: localStorage.getItem(STORAGE_KEYS.reducedMotion) === 'true',
   };
+}
+
+/** Resolve a theme preference to the concrete scheme to render. */
+export function resolveTheme(theme: Theme): 'light' | 'dark' {
+  if (theme === 'system') {
+    if (typeof window === 'undefined') return 'light';
+    return window.matchMedia(DARK_MQ).matches ? 'dark' : 'light';
+  }
+  return theme;
+}
+
+function setDomTheme(resolved: 'light' | 'dark') {
+  const root = document.documentElement;
+  if (resolved === 'dark') {
+    root.dataset.theme = 'dark';
+  } else {
+    delete root.dataset.theme;
+  }
+}
+
+// Module-level listener so that only one `change` handler is attached no
+// matter how many components mount `useSettings`. Active only in system mode.
+let systemThemeCleanup: (() => void) | null = null;
+
+function watchSystemTheme(enabled: boolean) {
+  if (typeof window === 'undefined') return;
+  if (systemThemeCleanup) {
+    systemThemeCleanup();
+    systemThemeCleanup = null;
+  }
+  if (!enabled) return;
+  const mq = window.matchMedia(DARK_MQ);
+  const handler = (e: MediaQueryListEvent) => setDomTheme(e.matches ? 'dark' : 'light');
+  mq.addEventListener('change', handler);
+  systemThemeCleanup = () => mq.removeEventListener('change', handler);
 }
 
 function applyDomSideEffects(key: keyof Settings, value: boolean | string) {
@@ -41,13 +86,12 @@ function applyDomSideEffects(key: keyof Settings, value: boolean | string) {
   const root = document.documentElement;
 
   switch (key) {
-    case 'theme':
-      if (value === 'dark') {
-        root.dataset.theme = 'dark';
-      } else {
-        delete root.dataset.theme;
-      }
+    case 'theme': {
+      const theme = parseTheme(typeof value === 'string' ? value : null);
+      setDomTheme(resolveTheme(theme));
+      watchSystemTheme(theme === 'system');
       break;
+    }
     case 'highContrast':
       root.classList.toggle('colorblind', value === true);
       if (value === true) {
@@ -70,17 +114,15 @@ function applyDomSideEffects(key: keyof Settings, value: boolean | string) {
 }
 
 export function useSettings(): [Settings, <K extends keyof Settings>(key: K, value: Settings[K]) => void] {
-  const [settings, setSettings] = useState<Settings>(() => ({
-    hardMode: false,
-    highContrast: false,
-    keyboardOnly: false,
-    theme: 'light',
-    reducedMotion: false,
-  }));
+  const [settings, setSettings] = useState<Settings>(DEFAULTS);
 
-  // Read from localStorage on mount (client-only)
+  // Read from localStorage on mount (client-only). The inline bootstrap
+  // script in app/layout.tsx has already applied the DOM attributes, but we
+  // (re)attach the system-theme listener here so OS changes propagate.
   useEffect(() => {
-    setSettings(readFromStorage());
+    const stored = readFromStorage();
+    setSettings(stored);
+    applyDomSideEffects('theme', stored.theme);
   }, []);
 
   // Sync across tabs via storage event
@@ -89,9 +131,8 @@ export function useSettings(): [Settings, <K extends keyof Settings>(key: K, val
       const entry = Object.entries(STORAGE_KEYS).find(([, storageKey]) => storageKey === e.key);
       if (!entry) return;
       const [settingKey] = entry as [keyof Settings, string];
-      setSettings(readFromStorage());
-      // Re-apply DOM side effects for the changed key
       const newSettings = readFromStorage();
+      setSettings(newSettings);
       applyDomSideEffects(settingKey, newSettings[settingKey]);
     };
     window.addEventListener('storage', handleStorage);

@@ -10,18 +10,24 @@ import {
   Crown,
   ExternalLink,
   Users,
+  Play,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { challengesApi } from '@/lib/api';
+import { challengesApi, errorMessage } from '@/lib/api';
 import { springs, stagger } from '@/lib/animations';
+import { patternToTiles } from '@/lib/types';
 import clsx from 'clsx';
 import TileSpinner from '@/components/TileSpinner';
 
 interface ChallengeInfo {
   code: string;
   creator_id: string;
+  creator_username: string | null;
+  is_creator: boolean;
   word_difficulty: number | null;
   already_played: boolean;
+  my_status: string | null;
   game_id: string | null;
 }
 
@@ -33,7 +39,49 @@ interface ChallengeResult {
   accuracy_score: number | null;
   time_seconds: number | null;
   is_creator: boolean;
+  is_me?: boolean;
   completed_at: string | null;
+  patterns?: number[] | null;
+}
+
+interface ChallengeResultsResponse {
+  results: ChallengeResult[];
+  word: string | null;
+  my_status: string | null;
+  my_game_id: string | null;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mini pattern grid (letters never shown — safe to display to all)  */
+/* ------------------------------------------------------------------ */
+
+const TILE_FILL: Record<string, string> = {
+  correct: 'var(--tile-correct)',
+  present: 'var(--tile-present)',
+  absent: 'var(--tile-absent)',
+};
+
+function PatternGrid({ patterns, size = 6 }: { patterns: number[]; size?: number }) {
+  if (!patterns.length) return null;
+  return (
+    <div
+      className="flex flex-col"
+      style={{ gap: 1 }}
+      role="img"
+      aria-label={`${patterns.length}-row guess pattern`}
+    >
+      {patterns.map((p, r) => (
+        <div key={r} className="flex" style={{ gap: 1 }}>
+          {patternToTiles(p).map((t, i) => (
+            <span
+              key={i}
+              style={{ width: size, height: size, borderRadius: 1, backgroundColor: TILE_FILL[t] }}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -260,7 +308,12 @@ function PodiumCell({
           )}
         </div>
 
-        <GuessDots num={entry.num_guesses} status={entry.status} size={place === 1 ? 'md' : 'sm'} />
+        <div className="flex items-end gap-2">
+          <GuessDots num={entry.num_guesses} status={entry.status} size={place === 1 ? 'md' : 'sm'} />
+          {entry.patterns && entry.patterns.length > 0 && (
+            <PatternGrid patterns={entry.patterns} size={place === 1 ? 6 : 5} />
+          )}
+        </div>
 
         {entry.accuracy_score !== null && <AccuracyPill pct={entry.accuracy_score} />}
       </div>
@@ -310,7 +363,7 @@ function Podium({
               key={`${cell.entry.username}-${cell.entry.rank}`}
               entry={cell.entry}
               place={cell.place}
-              isMe={cell.entry.username === myUsername}
+              isMe={cell.entry.is_me ?? cell.entry.username === myUsername}
             />
           );
         })}
@@ -379,6 +432,12 @@ function LeaderboardRow({
         )}
       </div>
 
+      {entry.patterns && entry.patterns.length > 0 && (
+        <div className="shrink-0 hidden sm:block">
+          <PatternGrid patterns={entry.patterns} size={5} />
+        </div>
+      )}
+
       <div className="shrink-0">
         <GuessDots num={entry.num_guesses} status={entry.status} size="sm" />
       </div>
@@ -396,7 +455,7 @@ function LeaderboardRow({
 
 function LoadingSpinner() {
   return (
-    <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
+    <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
       <TileSpinner size="lg" label="Loading challenge" />
     </div>
   );
@@ -414,6 +473,8 @@ export default function ChallengePage() {
   const [challenge, setChallenge] = useState<ChallengeInfo | null>(null);
   const [results, setResults] = useState<ChallengeResult[]>([]);
   const [challengeWord, setChallengeWord] = useState<string | null>(null);
+  const [myStatus, setMyStatus] = useState<string | null>(null);
+  const [myGameId, setMyGameId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
@@ -431,7 +492,8 @@ export default function ChallengePage() {
   useEffect(() => {
     if (!code || authLoading) return;
     if (!user) {
-      router.push('/login');
+      // Keep the viral loop: bounce through login and land back here.
+      router.replace(`/login?next=${encodeURIComponent(`/challenge/${code}`)}`);
       return;
     }
 
@@ -440,15 +502,19 @@ export default function ChallengePage() {
     Promise.all([
       challengesApi.get(code),
       challengesApi.results(code).catch(() => ({
-        data: { results: [], word: null } as { results: ChallengeResult[]; word: string | null },
+        data: { results: [], word: null, my_status: null, my_game_id: null } as ChallengeResultsResponse,
       })),
     ])
       .then(([infoRes, resultsRes]) => {
-        setChallenge(infoRes.data);
-        setResults(resultsRes.data.results || []);
-        setChallengeWord(resultsRes.data.word ?? null);
+        const info = infoRes.data as ChallengeInfo;
+        const r = resultsRes.data as ChallengeResultsResponse;
+        setChallenge(info);
+        setResults(r.results || []);
+        setChallengeWord(r.word ?? null);
+        setMyStatus(r.my_status ?? info.my_status ?? null);
+        setMyGameId(r.my_game_id ?? info.game_id ?? null);
       })
-      .catch(() => setError('Challenge not found'))
+      .catch((err: unknown) => setError(errorMessage(err, 'Challenge not found')))
       .finally(() => setLoading(false));
   }, [code, user, authLoading, router]);
 
@@ -462,12 +528,14 @@ export default function ChallengePage() {
       // "Back to results" link instead of the generic Challenge action.
       router.push(`/game/${res.data.id}?challenge=${encodeURIComponent(code)}`);
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Could not start challenge';
-      setError(msg);
+      setError(errorMessage(err, 'Could not start challenge'));
       setStarting(false);
     }
+  };
+
+  const handleResume = () => {
+    if (!myGameId) return;
+    router.push(`/game/${myGameId}?challenge=${encodeURIComponent(code)}`);
   };
 
   const handleCopyLink = async () => {
@@ -485,7 +553,7 @@ export default function ChallengePage() {
 
   if (error && !challenge) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4">
+      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-52px)] px-4">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -513,12 +581,15 @@ export default function ChallengePage() {
   const finishedResults = results.filter((r) => r.status !== 'in_progress');
   const inProgressResults = results.filter((r) => r.status === 'in_progress');
   const hasResults = finishedResults.length > 0;
-  const showLeaderboard = hasResults && challenge?.already_played;
+  const iAmInProgress = myStatus === 'in_progress' && !!myGameId;
+  const iAmFinished = myStatus === 'won' || myStatus === 'lost' || myStatus === 'abandoned';
+  const showLeaderboard = hasResults && !!challenge?.already_played;
   const remainingRows = finishedResults.slice(3);
   const myUsername = user?.username ?? null;
+  const creatorHandle = challenge?.creator_username ? `@${challenge.creator_username}` : null;
 
   return (
-    <div className="flex flex-col items-center min-h-[calc(100dvh-56px)] px-4 py-8">
+    <div className="flex flex-col items-center min-h-[calc(100dvh-52px)] px-4 py-8">
       <motion.div
         className="w-full max-w-md flex flex-col gap-4"
         initial="hidden"
@@ -558,10 +629,24 @@ export default function ChallengePage() {
                     lineHeight: 1.1,
                   }}
                 >
-                  {challenge?.already_played ? 'Results' : "You've been challenged"}
+                  {iAmFinished
+                    ? 'Results'
+                    : iAmInProgress
+                    ? 'Your attempt is waiting'
+                    : challenge?.is_creator
+                    ? 'Your challenge'
+                    : "You've been challenged"}
                 </h1>
+                {creatorHandle && !challenge?.is_creator && (
+                  <p className="font-sans text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                    Challenge from{' '}
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {creatorHandle}
+                    </span>
+                  </p>
+                )}
               </div>
-              {challengeWord && challenge?.already_played && (
+              {challengeWord && (
                 <span
                   className="text-[11px] px-2.5 py-1 rounded-pill font-mono uppercase tracking-widest border shrink-0"
                   style={{
@@ -618,7 +703,28 @@ export default function ChallengePage() {
               )}
             </div>
 
-            {!challenge?.already_played ? (
+            {challenge?.already_played && !challengeWord && (
+              <p
+                className="flex items-center gap-1.5 text-[11px] font-sans"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                <Lock size={11} />
+                Finish your attempt to reveal the word
+              </p>
+            )}
+
+            {iAmInProgress ? (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleResume}
+                className="w-full py-3 rounded-card text-white font-bold text-sm tracking-wide hover:brightness-110 transition-[filter,transform] flex items-center justify-center gap-2"
+                style={{ backgroundColor: 'var(--tile-correct)' }}
+              >
+                <Play size={16} />
+                Resume
+              </motion.button>
+            ) : !challenge?.already_played ? (
               <motion.button
                 whileHover={{ scale: starting ? 1 : 1.02 }}
                 whileTap={{ scale: starting ? 1 : 0.98 }}
@@ -637,9 +743,9 @@ export default function ChallengePage() {
                 )}
               </motion.button>
             ) : (
-              challenge.game_id && (
+              myGameId && (
                 <button
-                  onClick={() => router.push(`/review/${challenge.game_id}`)}
+                  onClick={() => router.push(`/review/${myGameId}`)}
                   className="w-full py-2.5 rounded-card text-sm font-semibold transition-colors flex items-center justify-center gap-2"
                   style={{
                     backgroundColor: 'var(--bg-elevated)',
@@ -718,7 +824,7 @@ export default function ChallengePage() {
                     >
                       <LeaderboardRow
                         entry={entry}
-                        isMe={entry.username === myUsername}
+                        isMe={entry.is_me ?? entry.username === myUsername}
                         index={idx}
                       />
                     </div>
