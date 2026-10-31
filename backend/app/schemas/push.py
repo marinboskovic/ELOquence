@@ -1,7 +1,38 @@
 """Pydantic schemas for the push-notification endpoints."""
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from urllib.parse import urlparse
+
+from pydantic import BaseModel, Field, field_validator
+
+# Hosts browsers actually use for Web Push. The server POSTs to the endpoint
+# on demand (``/push/test``), so without an allowlist it is an SSRF primitive.
+_PUSH_HOST_SUFFIXES = (
+    "fcm.googleapis.com",
+    "android.googleapis.com",
+    "push.services.mozilla.com",
+    "updates.push.services.mozilla.com",
+    "push.apple.com",
+    "notify.windows.com",
+    "wns.windows.com",
+    "push.opera.com",
+    "pushsvc.ucweb.com",
+    "web.push.samsung.com",
+    "push.yandex.ru",
+)
+
+
+def validate_push_endpoint(url: str) -> str:
+    url = url.strip()
+    if len(url) > 2048:
+        raise ValueError("Endpoint URL too long.")
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or not host:
+        raise ValueError("Push endpoint must be an https URL.")
+    if not any(host == suf or host.endswith("." + suf) for suf in _PUSH_HOST_SUFFIXES):
+        raise ValueError("Push endpoint host is not a known push service.")
+    return url
 
 
 class PushSubscriptionKeys(BaseModel):
@@ -16,6 +47,11 @@ class PushSubscriptionPayload(BaseModel):
     keys: PushSubscriptionKeys
     expirationTime: float | None = None
 
+    @field_validator("endpoint")
+    @classmethod
+    def _endpoint(cls, v: str) -> str:
+        return validate_push_endpoint(v)
+
 
 class PushSubscribeRequest(BaseModel):
     """Body for POST /push/subscribe."""
@@ -25,7 +61,7 @@ class PushSubscribeRequest(BaseModel):
 
 class PushUnsubscribeRequest(BaseModel):
     """Body for DELETE /push/subscribe — identify which subscription."""
-    endpoint: str
+    endpoint: str = Field(max_length=2048)
 
 
 class PushVapidPublicKey(BaseModel):

@@ -7,7 +7,7 @@ try/except so that profile update failures never block the game response.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -118,7 +118,7 @@ async def recalculate_profile(db: AsyncSession, user_id: uuid.UUID) -> None:
     else:
         profile.elo_trend_30d = None
 
-    profile.last_updated = datetime.now(timezone.utc)
+    profile.last_updated = datetime.now(UTC)
     await db.flush()
 
 
@@ -139,6 +139,6 @@ def _linear_slope(values: list[float]) -> float:
     x = list(range(n))
     mean_x = sum(x) / n
     mean_y = sum(values) / n
-    numerator = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, values))
+    numerator = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, values, strict=False))
     denominator = sum((xi - mean_x) ** 2 for xi in x)
     return numerator / denominator if denominator != 0 else 0.0

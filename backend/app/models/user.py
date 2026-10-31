@@ -1,8 +1,8 @@
 """User ORM model."""
 import uuid
+from datetime import date as date_type
 from datetime import datetime
 
-from datetime import date as date_type
 from sqlalchemy import Boolean, Date, DateTime, Float, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -41,8 +41,22 @@ class User(Base):
     max_streak: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_played_date: Mapped[date_type | None] = mapped_column(Date, nullable=True)
 
-    # Roles
+    # Roles / moderation
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    banned_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Privacy
+    profile_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Security. ``token_version`` is embedded in every access token; bumping
+    # it (password change, "log out everywhere", ban) invalidates all tokens
+    # issued before the bump without needing a denylist.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    password_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

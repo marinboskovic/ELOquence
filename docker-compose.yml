@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:16-alpine
@@ -21,16 +19,24 @@ services:
 
   backend:
     build: ./backend
+    # Apply migrations on every start, then serve.
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-eloquence}:${POSTGRES_PASSWORD:-eloquence_dev}@db:5432/${POSTGRES_DB:-eloquence}
       DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-eloquence}:${POSTGRES_PASSWORD:-eloquence_dev}@db:5432/${POSTGRES_DB:-eloquence}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env or shell env}
+      ENV: ${ENV:-development}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID must be set in .env}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET must be set in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:dev@eloquence.local}
       TZ: Europe/Zagreb
     depends_on:
       db:
@@ -45,7 +51,7 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID must be set in .env}
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       WATCHPACK_POLLING: "true"
     depends_on:
       - backend

@@ -1,12 +1,13 @@
 """Users router — per-user ELO history and detailed stats."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -15,7 +16,9 @@ from app.models.elo_history import EloHistory
 from app.models.game import Game
 from app.models.move import Move
 from app.models.user import User
+from app.schemas.user import UpdateProfileRequest, UserResponse
 from app.services.auth import get_current_user, verify_password
+from app.services.rate_limit import rate_limited
 
 
 class _PasswordConfirm(BaseModel):
@@ -71,7 +74,7 @@ async def elo_history(
     Returns:
         List of ELO change events ordered by recorded_at ascending.
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     result = await db.execute(
         select(EloHistory)
         .where(
@@ -201,6 +204,85 @@ async def user_stats(
     )
     best = best_result.first()
 
+    # ── 2.0 additions ───────────────────────────────────────────────────
+    # Nemesis words: the words this player has failed on (most recent first,
+    # grouped so a word lost twice counts twice).
+    nemesis_rows = await db.execute(
+        select(Game.target_word, func.count(), func.max(Game.completed_at), func.max(Game.word_difficulty))
+        .where(Game.user_id == current_user.id, Game.status == "lost")
+        .group_by(Game.target_word)
+        .order_by(func.count().desc(), func.max(Game.completed_at).desc())
+        .limit(8)
+    )
+    nemesis = [
+        {
+            "word": w,
+            "losses": int(c),
+            "last_lost_at": at.isoformat() if at else None,
+            "difficulty": round(float(d)) if d is not None else None,
+        }
+        for w, c, at, d in nemesis_rows.all()
+    ]
+
+    # Pace: server-measured solve times on wins.
+    pace_row = (
+        await db.execute(
+            select(
+                func.avg(Game.time_seconds),
+                func.min(Game.time_seconds),
+                func.count(),
+            ).where(
+                Game.user_id == current_user.id,
+                Game.status == "won",
+                Game.time_seconds.isnot(None),
+            )
+        )
+    ).one()
+    fastest = None
+    if pace_row[1] is not None:
+        fastest_game = (
+            await db.execute(
+                select(Game.target_word, Game.num_guesses, Game.time_seconds, Game.mode)
+                .where(Game.user_id == current_user.id, Game.status == "won", Game.time_seconds == pace_row[1])
+                .limit(1)
+            )
+        ).first()
+        if fastest_game:
+            fastest = {
+                "word": fastest_game[0],
+                "num_guesses": fastest_game[1],
+                "seconds": round(float(fastest_game[2]), 1),
+                "mode": fastest_game[3],
+            }
+
+    # Favourite opener + its personal solve rate
+    opener_row = (
+        await db.execute(
+            select(
+                func.upper(Move.guess_word),
+                func.count(),
+                func.sum(case((Game.status == "won", 1), else_=0)),
+            )
+            .join(Game, Game.id == Move.game_id)
+            .where(Game.user_id == current_user.id, Move.move_number == 1, Game.status.in_(["won", "lost"]))
+            .group_by(func.upper(Move.guess_word))
+            .order_by(func.count().desc())
+            .limit(1)
+        )
+    ).first()
+
+    # Classification mix over all analysed moves (what kind of player you are)
+    cls_rows = (
+        await db.execute(
+            select(Move.classification, func.count())
+            .join(Game, Game.id == Move.game_id)
+            .where(Game.user_id == current_user.id, Move.classification.isnot(None))
+            .group_by(Move.classification)
+        )
+    ).all()
+
+    from app.services.elo import effective_streak
+
     return {
         "guess_distribution": guess_dist,
         "losses": losses,
@@ -208,9 +290,141 @@ async def user_stats(
         "mode_stats": mode_stats,
         "best_accuracy": {"score": best[0], "word": best[1]} if best else None,
         "total_games": current_user.games_played,
-        "current_streak": current_user.current_streak,
+        "current_streak": effective_streak(current_user),
         "longest_streak": current_user.max_streak,
+        "nemesis_words": nemesis,
+        "pace": {
+            "avg_win_seconds": round(float(pace_row[0]), 1) if pace_row[0] is not None else None,
+            "timed_wins": int(pace_row[2] or 0),
+            "fastest_win": fastest,
+        },
+        "favourite_opener": {
+            "word": opener_row[0],
+            "plays": int(opener_row[1]),
+            "solve_rate": round(int(opener_row[2] or 0) / int(opener_row[1]) * 100, 1) if opener_row[1] else 0.0,
+        }
+        if opener_row
+        else None,
+        "classification_mix": {c: int(n) for c, n in cls_rows},
     }
+
+
+@router.patch("/me", response_model=UserResponse)
+async def update_profile(
+    payload: UpdateProfileRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> UserResponse:
+    """Change username and/or profile visibility."""
+    if payload.username is not None and payload.username.lower() != (current_user.username or "").lower():
+        taken = await db.execute(
+            select(User.id).where(func.lower(User.username) == payload.username.lower(), User.id != current_user.id)
+        )
+        if taken.scalar_one_or_none():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="That username is taken.")
+        # Renames are throttled: 3 per day keeps leaderboard identities stable.
+        from app.services.rate_limit import check_rate_limit, too_many
+
+        blocked = check_rate_limit(f"rename:{current_user.id}", 3, 86400)
+        if blocked is not None:
+            raise too_many(blocked, "You can change your username up to 3 times per day.")
+        current_user.username = payload.username
+    elif payload.username is not None:
+        current_user.username = payload.username  # case-only change
+    if payload.profile_public is not None:
+        current_user.profile_public = payload.profile_public
+    await db.flush()
+    from app.services.elo import effective_streak
+
+    data = UserResponse.model_validate(current_user)
+    data.current_streak = effective_streak(current_user)
+    return data
+
+
+@router.get("/me/export", dependencies=[rate_limited("export", 5, 3600, key="user")])
+async def export_my_data(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> JSONResponse:
+    """Download everything we store about you as JSON (GDPR data portability)."""
+    from sqlalchemy.orm import selectinload
+
+    games = (
+        await db.execute(
+            select(Game).options(selectinload(Game.moves)).where(Game.user_id == current_user.id).order_by(Game.created_at.asc())
+        )
+    ).scalars().all()
+    history = (
+        await db.execute(
+            select(EloHistory).where(EloHistory.user_id == current_user.id).order_by(EloHistory.recorded_at.asc())
+        )
+    ).scalars().all()
+    achievements = (
+        await db.execute(select(Achievement).where(Achievement.user_id == current_user.id))
+    ).scalars().all()
+
+    def iso(dt):  # noqa: ANN001
+        return dt.isoformat() if dt else None
+
+    payload = {
+        "exported_at": datetime.now(UTC).isoformat(),
+        "format_version": 1,
+        "account": {
+            "id": str(current_user.id),
+            "email": current_user.email,
+            "username": current_user.username,
+            "created_at": iso(current_user.created_at),
+            "elo_rating": current_user.elo_rating,
+            "games_played": current_user.games_played,
+            "current_streak": current_user.current_streak,
+            "max_streak": current_user.max_streak,
+            "profile_public": current_user.profile_public,
+            "google_linked": current_user.google_id is not None,
+        },
+        "games": [
+            {
+                "id": str(g.id),
+                "mode": g.mode,
+                "status": g.status,
+                "target_word": g.target_word if g.status in ("won", "lost") or g.mode in ("competitive", "practice") else None,
+                "hard_mode": g.hard_mode,
+                "num_guesses": g.num_guesses,
+                "time_seconds": g.time_seconds,
+                "accuracy_score": g.accuracy_score,
+                "luck_factor": g.luck_factor,
+                "elo_before": g.elo_before,
+                "elo_after": g.elo_after,
+                "elo_delta": g.elo_delta,
+                "created_at": iso(g.created_at),
+                "completed_at": iso(g.completed_at),
+                "moves": [
+                    {
+                        "move_number": m.move_number,
+                        "guess": m.guess_word,
+                        "pattern": m.pattern,
+                        "classification": m.classification,
+                        "info_gained": m.info_gained,
+                        "optimal_word": m.optimal_word if g.status != "in_progress" else None,
+                    }
+                    for m in sorted(g.moves, key=lambda m: m.move_number)
+                ],
+            }
+            for g in games
+        ],
+        "elo_history": [
+            {
+                "elo_before": h.elo_before,
+                "elo_after": h.elo_after,
+                "delta": h.delta,
+                "accuracy_score": h.accuracy_score,
+                "recorded_at": iso(h.recorded_at),
+            }
+            for h in history
+        ],
+        "achievements": [{"type": a.achievement_type, "unlocked_at": iso(a.unlocked_at)} for a in achievements],
+    }
+    filename = f"eloquence-export-{current_user.username}.json"
+    return JSONResponse(content=payload, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.delete("/me/games")

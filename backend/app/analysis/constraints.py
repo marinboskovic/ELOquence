@@ -21,7 +21,7 @@ class ConstraintState:
             guess: 5-letter guess word (uppercase).
             pattern: List of 5 tile values — 2=green, 1=yellow, 0=gray.
         """
-        for i, (letter, tile) in enumerate(zip(guess, pattern)):
+        for i, (letter, tile) in enumerate(zip(guess, pattern, strict=False)):
             if tile == 2:  # green
                 self.known_positions[i] = letter
                 self.known_present.add(letter)

@@ -1,4 +1,12 @@
-"""Challenges router — create and play shareable word challenges."""
+"""Challenges router — create and play shareable word challenges.
+
+Every attempt is a ``Game`` with ``mode="challenge"`` linked by
+``Game.challenge_id`` (not by target word — two challenges may share a word).
+
+Word-reveal policy: the target word is returned only to a player whose own
+attempt is finished (won/lost). Creators do not get a free look either —
+they can play their own challenge like everyone else.
+"""
 from __future__ import annotations
 
 import random
@@ -10,14 +18,43 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.challenge import Challenge
 from app.models.game import Game
 from app.models.user import User
 from app.services.auth import get_current_user
+from app.services.rate_limit import rate_limited
 
 router = APIRouter(prefix="/challenges", tags=["challenges"])
+
+_FINISHED = ("won", "lost")
+
+
+async def _load_challenge(db: AsyncSession, code: str) -> Challenge:
+    if len(code) > 16:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found.")
+    c = (await db.execute(select(Challenge).where(Challenge.code == code))).scalar_one_or_none()
+    if c is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found.")
+    return c
+
+
+async def _own_attempt(db: AsyncSession, challenge: Challenge, user: User) -> Game | None:
+    """The user's non-abandoned attempt at this challenge, if any."""
+    rows = (
+        await db.execute(
+            select(Game)
+            .where(
+                Game.user_id == user.id,
+                Game.challenge_id == challenge.id,
+                Game.status != "abandoned",
+            )
+            .order_by(Game.created_at.desc())
+        )
+    ).scalars().all()
+    return rows[0] if rows else None
 
 
 @router.get("/mine")
@@ -25,83 +62,75 @@ async def my_challenges(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[dict]:
-    """Return challenges the authenticated user has participated in.
-
-    Includes challenges the user created plus any whose target_word matches
-    one of the user's challenge-mode games. Useful for re-finding a result
-    page after exiting.
-    """
-    # Challenges the user created
-    created = await db.execute(
-        select(Challenge).where(Challenge.creator_id == current_user.id)
-    )
-    by_code: dict[str, Challenge] = {c.code: c for c in created.scalars().all()}
-
-    # Challenges the user has played as a non-creator: match their challenge
-    # games' target_words to Challenge.target_word.
-    played_games = await db.execute(
-        select(Game.target_word).where(
-            Game.user_id == current_user.id,
-            Game.mode == "challenge",
+    """Challenges the user created or played. The word is included only
+    for challenges where the user's own attempt is finished."""
+    created = (
+        await db.execute(select(Challenge).where(Challenge.creator_id == current_user.id))
+    ).scalars().all()
+    attempts = (
+        await db.execute(
+            select(Game).where(Game.user_id == current_user.id, Game.challenge_id.isnot(None))
         )
-    )
-    target_words = {tw for (tw,) in played_games.all() if tw}
-    if target_words:
-        others = await db.execute(
-            select(Challenge).where(Challenge.target_word.in_(target_words))
+    ).scalars().all()
+    attempt_by_challenge: dict[uuid.UUID, Game] = {}
+    for g in attempts:
+        prev = attempt_by_challenge.get(g.challenge_id)
+        if prev is None or (g.status in _FINISHED and prev.status not in _FINISHED):
+            attempt_by_challenge[g.challenge_id] = g
+
+    by_id: dict[uuid.UUID, Challenge] = {c.id: c for c in created}
+    missing = [cid for cid in attempt_by_challenge if cid not in by_id]
+    if missing:
+        for c in (await db.execute(select(Challenge).where(Challenge.id.in_(missing)))).scalars().all():
+            by_id[c.id] = c
+
+    out = sorted(by_id.values(), key=lambda c: c.created_at or datetime.min, reverse=True)
+    result = []
+    for c in out:
+        attempt = attempt_by_challenge.get(c.id)
+        finished = attempt is not None and attempt.status in _FINISHED
+        result.append(
+            {
+                "code": c.code,
+                "challenge_id": str(c.id),
+                "target_word": c.target_word if finished else None,
+                "word_difficulty": c.word_difficulty,
+                "is_creator": c.creator_id == current_user.id,
+                "my_status": attempt.status if attempt else None,
+                "my_game_id": str(attempt.id) if attempt else None,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
         )
-        for c in others.scalars().all():
-            by_code.setdefault(c.code, c)
-
-    out = sorted(by_code.values(), key=lambda c: c.created_at, reverse=True)
-    return [
-        {
-            "code": c.code,
-            "target_word": c.target_word,
-            "word_difficulty": c.word_difficulty,
-            "is_creator": c.creator_id == current_user.id,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-        }
-        for c in out
-    ]
+    return result
 
 
-@router.post("/create", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/create",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[rate_limited("challenge-create", 20, 3600, key="user")],
+)
 async def create_challenge(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Create a challenge with a randomly selected word.
-
-    Returns a short URL-safe shareable code that other players can use to
-    play the same word.  The word is NOT returned here — only the code and
-    the internal challenge UUID.
-    """
+    """Create a challenge around a random word and return its share code."""
     from app.analysis.engine import ANSWERS
     from app.services.word_difficulty import word_to_elo
 
     if not ANSWERS:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Word lists not loaded.",
-        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Word lists not loaded.")
 
     word = random.choice(ANSWERS).upper()
-    # 11-character URL-safe code (~66 bits of entropy — token_urlsafe(8)
-    # already returns 11 chars; truncating to 8 dropped 19 bits for no gain).
-    code = secrets.token_urlsafe(8)
-    difficulty = word_to_elo(word)
-
+    code = secrets.token_urlsafe(8)  # 11 URL-safe chars, ~64 bits
     challenge = Challenge(
         id=uuid.uuid4(),
         creator_id=current_user.id,
         target_word=word,
-        word_difficulty=difficulty,
+        word_difficulty=word_to_elo(word),
         code=code,
     )
     db.add(challenge)
     await db.flush()
-
     return {"code": code, "challenge_id": str(challenge.id)}
 
 
@@ -111,32 +140,20 @@ async def get_challenge(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Get challenge metadata by shareable code.
-
-    The target word is never returned here (only after completion).
-    The response includes whether the requesting user has already played
-    this challenge, and their game_id if so.
-    """
-    result = await db.execute(select(Challenge).where(Challenge.code == code))
-    c = result.scalar_one_or_none()
-    if not c:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found.")
-
-    existing = await db.execute(
-        select(Game).where(
-            Game.user_id == current_user.id,
-            Game.target_word == c.target_word,
-            Game.mode == "challenge",
-        )
-    )
-    already_played = existing.scalar_one_or_none()
-
+    """Challenge metadata (never the word) + the caller's own attempt state."""
+    c = await _load_challenge(db, code)
+    creator = (await db.execute(select(User.username).where(User.id == c.creator_id))).scalar_one_or_none()
+    attempt = await _own_attempt(db, c, current_user)
     return {
         "code": c.code,
         "creator_id": str(c.creator_id),
+        "creator_username": creator,
+        "is_creator": c.creator_id == current_user.id,
         "word_difficulty": c.word_difficulty,
-        "already_played": already_played is not None,
-        "game_id": str(already_played.id) if already_played else None,
+        "already_played": attempt is not None,
+        "my_status": attempt.status if attempt else None,
+        "game_id": str(attempt.id) if attempt else None,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
     }
 
 
@@ -146,57 +163,44 @@ async def play_challenge(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Start a new game for a challenge.
-
-    Creates a Game record with ``mode="challenge"`` and ``rated=False`` so
-    the player's ELO is not affected.  Returns the initial game state
-    (target_word is hidden while in progress).
-
-    Raises:
-        404: Challenge code not found.
-        409: The authenticated user has already played this challenge.
-    """
+    """Start (or resume) the caller's attempt at a challenge. Unrated."""
     from app.routers.games import _build_game_response
-
     from app.services.game import abandon_game
 
-    result = await db.execute(select(Challenge).where(Challenge.code == code))
-    c = result.scalar_one_or_none()
-    if not c:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found.")
+    c = await _load_challenge(db, code)
 
-    # Clean up any orphaned in-progress challenge games (different word) so
-    # a stale challenge — caused by a tab close before the pagehide beacon
-    # could land — doesn't sit pending forever. Same-word in-progress games
-    # are caught by the constraint check below and reported as 409.
+    # Serialise per (user, challenge) so double-clicks can't open two attempts.
+    from sqlalchemy import text
+
+    from app.services.game import _create_game_lock_key
+
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(:k)"), {"k": _create_game_lock_key(current_user.id, f"challenge:{c.id}")}
+    )
+
+    existing = await _own_attempt(db, c, current_user)
+    if existing is not None:
+        if existing.status == "in_progress":
+            await db.refresh(existing, ["moves"])
+            return _build_game_response(existing).model_dump()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="You have already played this challenge.")
+
+    # Abandon any other in-progress challenge attempt so it doesn't linger.
     stale = await db.execute(
         select(Game).where(
             Game.user_id == current_user.id,
             Game.mode == "challenge",
             Game.status == "in_progress",
-            Game.target_word != c.target_word,
         )
     )
     for stale_game in stale.scalars().all():
         await abandon_game(db, stale_game.id, current_user)
 
-    existing = await db.execute(
-        select(Game).where(
-            Game.user_id == current_user.id,
-            Game.target_word == c.target_word,
-            Game.mode == "challenge",
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="You have already played this challenge.",
-        )
-
     game = Game(
         id=uuid.uuid4(),
         user_id=current_user.id,
         mode="challenge",
+        challenge_id=c.id,
         target_word=c.target_word,
         word_difficulty=c.word_difficulty,
         status="in_progress",
@@ -208,11 +212,7 @@ async def play_challenge(
     )
     db.add(game)
     await db.flush()
-    # Eagerly load the (empty) moves relationship so the Pydantic response
-    # builder can read it without triggering a lazy DB hit inside a sync
-    # context (which causes a MissingGreenlet error).
     await db.refresh(game, ["moves"])
-
     return _build_game_response(game).model_dump()
 
 
@@ -222,53 +222,38 @@ async def challenge_results(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Get all results for a challenge, ranked.
+    """Ranked results. Wins first (fewest guesses, then accuracy, then
+    time), then losses. The word is revealed only when the caller's own
+    attempt is finished."""
+    c = await _load_challenge(db, code)
 
-    Ranking (best -> worst):
-      1. Wins beat losses.
-      2. Among wins: fewest guesses wins.
-      3. Tiebreaker on guess count: higher accuracy wins.
-      4. Final tiebreaker: faster time wins (nulls last).
-      5. Losses are sorted by accuracy desc, time asc.
-
-    Rank is computed server-side and returned on each entry so the client
-    doesn't have to re-derive it. In-progress games are excluded from the
-    ranked list — they don't have a final result to compare yet.
-
-    The target word is only revealed in the response when every player
-    that has a game record has already completed it (no in-progress games
-    remain). This prevents spoilers for ongoing participants.
-    """
-    result = await db.execute(select(Challenge).where(Challenge.code == code))
-    c = result.scalar_one_or_none()
-    if not c:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Challenge not found.")
-
-    games_result = await db.execute(
-        select(Game, User.username)
-        .join(User, Game.user_id == User.id)
-        .where(Game.target_word == c.target_word, Game.mode == "challenge")
+    rows = list(
+        (
+            await db.execute(
+                select(Game, User.username)
+                .join(User, Game.user_id == User.id)
+                .options(selectinload(Game.moves))
+                .where(Game.challenge_id == c.id, Game.status != "abandoned")
+            )
+        ).all()
     )
-    rows = list(games_result.all())
-
-    any_in_progress = any(g.status == "in_progress" for g, _ in rows)
 
     def sort_key(item):
-        game, _username = item
+        game, _ = item
         won = game.status == "won"
-        # Tuple ordering ASC by default — invert metrics we want DESC
-        # by negation. None tiebreakers go last via float('inf').
         return (
-            0 if won else 1,                                # wins first
-            game.num_guesses if won else 6,                 # fewer guesses better (only meaningful on wins)
-            -(game.accuracy_score or 0.0),                  # higher accuracy better
+            0 if won else 1,
+            game.num_guesses if won else 6,
+            -(game.accuracy_score or 0.0),
             game.time_seconds if game.time_seconds is not None else float("inf"),
-            game.completed_at or datetime.max,              # earlier finisher breaks final tie
+            game.completed_at or datetime.max,
         )
 
-    ranked_rows = [(g, u) for g, u in rows if g.status != "in_progress"]
-    ranked_rows.sort(key=sort_key)
+    ranked_rows = sorted([(g, u) for g, u in rows if g.status in _FINISHED], key=sort_key)
     in_progress_rows = [(g, u) for g, u in rows if g.status == "in_progress"]
+
+    my_attempt = next((g for g, _ in rows if g.user_id == current_user.id), None)
+    reveal = my_attempt is not None and my_attempt.status in _FINISHED
 
     entries = []
     for rank, (game, username) in enumerate(ranked_rows, start=1):
@@ -281,7 +266,11 @@ async def challenge_results(
                 "accuracy_score": game.accuracy_score,
                 "time_seconds": game.time_seconds,
                 "is_creator": game.user_id == c.creator_id,
+                "is_me": game.user_id == current_user.id,
                 "completed_at": game.completed_at.isoformat() if game.completed_at else None,
+                # Pattern-only grid (no letters) — safe to show to everyone,
+                # like Wordle's emoji share.
+                "patterns": [m.pattern for m in sorted(game.moves, key=lambda m: m.move_number)] if reveal else None,
             }
         )
     for game, username in in_progress_rows:
@@ -294,12 +283,16 @@ async def challenge_results(
                 "accuracy_score": None,
                 "time_seconds": None,
                 "is_creator": game.user_id == c.creator_id,
+                "is_me": game.user_id == current_user.id,
                 "completed_at": None,
+                "patterns": None,
             }
         )
 
     return {
         "code": c.code,
-        "word": c.target_word if not any_in_progress else None,
+        "word": c.target_word if reveal else None,
+        "my_status": my_attempt.status if my_attempt else None,
+        "my_game_id": str(my_attempt.id) if my_attempt else None,
         "results": entries,
     }

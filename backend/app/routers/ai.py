@@ -1,42 +1,30 @@
 """AI coach router — move explanations, game summaries, and chat.
 
-All endpoints require a valid Bearer token.
-
-Rate limiting for coach chat is enforced with an in-memory dict keyed by
-``(user_id, game_id)``.  The dict is module-level and resets on process
-restart, which is intentional — per-session limits only.
+All endpoints require a valid Bearer token and a *finished* game. Gemini
+calls run in a worker thread so the event loop keeps serving guesses.
 """
 from __future__ import annotations
 
 import asyncio
 import uuid
-from collections import defaultdict
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.game import Game
-from app.models.move import Move
 from app.models.user import User
 from app.services.auth import get_current_user
+from app.services.rate_limit import rate_limited
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
-# ---------------------------------------------------------------------------
-# In-memory rate-limit store
-# (user_id_str, game_id_str) -> {"per_game": int, "daily": int, "date": str}
-# ---------------------------------------------------------------------------
-_chat_usage: dict[tuple[str, str], dict] = defaultdict(
-    lambda: {"per_game": 0, "daily": 0, "date": ""}
-)
-
 _CHAT_LIMIT_PER_GAME = 10
-_CHAT_LIMIT_DAILY = 30
+_CHAT_LIMIT_DAILY = 40
 
 
 # ---------------------------------------------------------------------------
@@ -44,27 +32,18 @@ _CHAT_LIMIT_DAILY = 30
 # ---------------------------------------------------------------------------
 
 class MoveExplainRequest(BaseModel):
-    """Payload for the explain-move endpoint.
+    game_id: uuid.UUID
+    move_number: int = Field(ge=1, le=6)
 
-    Attributes:
-        game_id: UUID string of the game.
-        move_number: 1-based move index to explain.
-    """
 
-    game_id: str
-    move_number: int
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant", "model"]
+    content: str = Field(max_length=1000)
 
 
 class CoachChatRequest(BaseModel):
-    """Payload for the coach-chat endpoint.
-
-    Attributes:
-        message: The player's latest message.
-        history: Prior turns as ``[{"role": "user"|"assistant", "content": "..."}]``.
-    """
-
-    message: str
-    history: list[dict] = []
+    message: str = Field(min_length=1, max_length=1000)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=12)
 
 
 # ---------------------------------------------------------------------------
@@ -105,7 +84,7 @@ def _build_game_context(game: Game, analysis: dict) -> str:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@router.post("/explain-move")
+@router.post("/explain-move", dependencies=[rate_limited("ai-explain", 60, 3600, key="user")])
 async def explain_move_endpoint(
     payload: MoveExplainRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -122,11 +101,10 @@ async def explain_move_endpoint(
     from app.analysis import analyze_game
     from app.services.ai import explain_move
 
-    game_uuid = uuid.UUID(payload.game_id)
     result = await db.execute(
         select(Game)
         .options(selectinload(Game.moves))
-        .where(Game.id == game_uuid, Game.user_id == current_user.id)
+        .where(Game.id == payload.game_id, Game.user_id == current_user.id)
     )
     game = result.scalar_one_or_none()
     if game is None:
@@ -141,7 +119,9 @@ async def explain_move_endpoint(
         {"guess_word": m.guess_word, "pattern": m.pattern, "move_number": m.move_number}
         for m in sorted(game.moves, key=lambda m: m.move_number)
     ]
-    analysis = analyze_game(moves_data, game.target_word)
+    analysis = await asyncio.to_thread(
+        analyze_game, moves_data, game.target_word, competitive=game.mode == "competitive"
+    )
 
     move_result = next(
         (m for m in analysis["moves"] if m["move_number"] == payload.move_number), None
@@ -156,7 +136,7 @@ async def explain_move_endpoint(
     return {"explanation": explanation}
 
 
-@router.post("/game-summary/{game_id}")
+@router.post("/game-summary/{game_id}", dependencies=[rate_limited("ai-summary", 30, 3600, key="user")])
 async def game_summary_endpoint(
     game_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -190,7 +170,9 @@ async def game_summary_endpoint(
         {"guess_word": m.guess_word, "pattern": m.pattern, "move_number": m.move_number}
         for m in sorted(game.moves, key=lambda m: m.move_number)
     ]
-    analysis = analyze_game(moves_data, game.target_word)
+    analysis = await asyncio.to_thread(
+        analyze_game, moves_data, game.target_word, competitive=game.mode == "competitive"
+    )
 
     game_data = {
         "target_word": game.target_word,
@@ -204,7 +186,15 @@ async def game_summary_endpoint(
     return {"summary": summary, "patterns": patterns}
 
 
-@router.post("/coach-chat/{game_id}")
+@router.post(
+    "/coach-chat/{game_id}",
+    dependencies=[
+        rate_limited(
+            "ai-chat-day", _CHAT_LIMIT_DAILY, 86400, key="user",
+            detail=f"Daily coach chat limit reached ({_CHAT_LIMIT_DAILY} messages per day).",
+        )
+    ],
+)
 async def coach_chat_endpoint(
     game_id: uuid.UUID,
     payload: CoachChatRequest,
@@ -213,8 +203,7 @@ async def coach_chat_endpoint(
 ) -> dict:
     """Send a message to the AI coach for a specific game.
 
-    Rate limited to 10 messages per game session and 30 per day (in-memory,
-    resets on server restart).
+    Rate limited to 10 messages per game and 40 per day (in-memory).
 
     Returns:
         ``{"response": "..."}``
@@ -223,30 +212,12 @@ async def coach_chat_endpoint(
     from app.analysis import analyze_game
     from app.services.ai import coach_chat_message
 
-    # ------------------------------------------------------------------
-    # Rate limiting
-    # ------------------------------------------------------------------
-    from datetime import date
+    # Per-game cap on top of the per-day dependency above.
+    from app.services.rate_limit import check_rate_limit, too_many
 
-    today = date.today().isoformat()
-    usage_key = (str(current_user.id), str(game_id))
-    usage = _chat_usage[usage_key]
-
-    # Reset daily counter if it is a new day
-    if usage["date"] != today:
-        usage["daily"] = 0
-        usage["date"] = today
-
-    if usage["per_game"] >= _CHAT_LIMIT_PER_GAME:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Coach chat limit reached for this game ({_CHAT_LIMIT_PER_GAME} messages).",
-        )
-    if usage["daily"] >= _CHAT_LIMIT_DAILY:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily coach chat limit reached ({_CHAT_LIMIT_DAILY} messages per day).",
-        )
+    blocked = check_rate_limit(f"ai-chat-game:{current_user.id}:{game_id}", _CHAT_LIMIT_PER_GAME, 86400)
+    if blocked is not None:
+        raise too_many(blocked, f"Coach chat limit reached for this game ({_CHAT_LIMIT_PER_GAME} messages).")
 
     # ------------------------------------------------------------------
     # Load game + build context
@@ -279,7 +250,9 @@ async def coach_chat_endpoint(
     ]
 
     if moves_data:
-        analysis = analyze_game(moves_data, game.target_word)
+        analysis = await asyncio.to_thread(
+        analyze_game, moves_data, game.target_word, competitive=game.mode == "competitive"
+    )
         game_context = _build_game_context(game, analysis)
     else:
         game_context = f"Target word: {game.target_word}\nNo moves played yet."
@@ -290,13 +263,8 @@ async def coach_chat_endpoint(
     response_text = await asyncio.to_thread(
         coach_chat_message,
         game_context,
-        payload.history,
+        [t.model_dump() for t in payload.history],
         payload.message,
         current_user.elo_rating,
     )
-
-    # Increment usage counters only after a successful call
-    usage["per_game"] += 1
-    usage["daily"] += 1
-
     return {"response": response_text}

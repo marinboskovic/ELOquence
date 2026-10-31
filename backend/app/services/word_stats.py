@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +64,7 @@ async def update_word_stats(
         else:
             stats.avg_accuracy = accuracy_score
 
-    stats.last_updated = datetime.now(timezone.utc)
+    stats.last_updated = datetime.now(UTC)
     await db.flush()
 
 

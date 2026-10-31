@@ -12,6 +12,7 @@ from app.models.move import Move
 from app.models.notification_preferences import NotificationPreferences
 from app.models.player_profile import PlayerProfile
 from app.models.push_subscription import PushSubscription
+from app.models.refresh_session import PasswordResetToken, RefreshSession
 from app.models.user import User
 from app.models.word_stats import WordStats
 
@@ -31,4 +32,6 @@ __all__ = [
     "PushSubscription",
     "NotificationPreferences",
     "AdminAuditLog",
+    "RefreshSession",
+    "PasswordResetToken",
 ]

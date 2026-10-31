@@ -103,14 +103,6 @@ def _ensure_distribution() -> None:
         _pool_size = len(raws)
 
 
-def reset_distribution_cache() -> None:
-    """Drop the cached percentile index. Used by tests."""
-    global _sorted_raws, _pool_size, _STANDARD_ANSWERS
-    _sorted_raws = None
-    _pool_size = 0
-    _STANDARD_ANSWERS = set()
-
-
 def word_to_elo(word: str) -> float:
     """Map a word's heuristic difficulty to an ELO value in [600, 1800].
 

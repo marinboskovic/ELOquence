@@ -42,7 +42,7 @@ class LearnProgress(Base):
         nullable=False,
     )
 
-    user: Mapped["User"] = relationship("User")  # noqa: F821
+    user: Mapped[User] = relationship("User")  # noqa: F821
 
     def __repr__(self) -> str:
         return (

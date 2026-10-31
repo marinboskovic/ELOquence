@@ -1,11 +1,11 @@
 """Daily word router."""
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,11 +16,7 @@ from app.models.user import User
 from app.schemas.game import GameResponse, GuessSubmit
 from app.services.auth import get_current_user
 from app.services.game import create_game, resolve_daily_date
-from app.services.rate_limit import check_rate_limit
-
-
-def _client_ip(request: Request) -> str:
-    return request.client.host if request.client else "unknown"
+from app.services.rate_limit import rate_limited
 
 router = APIRouter(prefix="/daily", tags=["daily"])
 
@@ -49,7 +45,7 @@ async def get_daily_info(
                 Game.user_id == current_user.id,
                 Game.mode == "daily",
                 Game.target_word == today_word,
-                Game.created_at >= datetime.now(timezone.utc) - timedelta(hours=36),
+                Game.created_at >= datetime.now(UTC) - timedelta(hours=36),
                 Game.status != "abandoned",
             )
         )
@@ -66,9 +62,13 @@ async def get_daily_info(
     }
 
 
-@router.post("/guest", response_model=GameResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/guest",
+    response_model=GameResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[rate_limited("daily-guest", 5, 3600, detail="Too many guest games. Please sign in or try again later.")],
+)
 async def start_guest_daily_game(
-    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     local_date: Annotated[str | None, Query()] = None,
 ) -> GameResponse:
@@ -85,18 +85,6 @@ async def start_guest_daily_game(
     """
     from app.routers.games import _build_game_response
     from app.services.game import _get_or_create_daily_word
-
-    blocked_for = check_rate_limit(
-        f"daily-guest:{_client_ip(request)}",
-        max_attempts=5,
-        window_seconds=3600.0,
-    )
-    if blocked_for is not None:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many guest games. Please sign in or try again later.",
-            headers={"Retry-After": str(int(blocked_for) + 1)},
-        )
 
     target_word, difficulty = await _get_or_create_daily_word(db, resolve_daily_date(local_date))
 
@@ -138,7 +126,7 @@ async def get_guest_game(
     return _build_game_response(game)
 
 
-@router.post("/guest/{game_id}/guess")
+@router.post("/guest/{game_id}/guess", dependencies=[rate_limited("daily-guest-guess", 60, 600)])
 async def guest_guess(
     game_id: uuid.UUID,
     payload: GuessSubmit,
@@ -185,10 +173,10 @@ async def guest_guess(
     won = guess == game.target_word
     if won:
         game.status = "won"
-        game.completed_at = datetime.now(timezone.utc)
+        game.completed_at = datetime.now(UTC)
     elif move_number >= 6:
         game.status = "lost"
-        game.completed_at = datetime.now(timezone.utc)
+        game.completed_at = datetime.now(UTC)
 
     # Completion side-effects — without these, guest daily plays never
     # contribute to the community word_stats table or the uniqueness
@@ -239,7 +227,8 @@ async def get_archive_month(
     """
     import calendar
 
-    today = date.today()
+    # Local-date tolerance: a player in UTC+14 may already be on "tomorrow".
+    today = datetime.now(UTC).date() + timedelta(days=1)
     _, days_in_month = calendar.monthrange(year, month)
 
     month_start = date(year, month, 1)
@@ -317,7 +306,16 @@ class ReplayRequest(BaseModel):
     date: str  # 'YYYY-MM-DD'
 
 
-@router.post("/replay", response_model=GameResponse, status_code=status.HTTP_200_OK)
+# First Wordle puzzle (NYT numbering starts 2021-06-19).
+_ARCHIVE_START = date(2021, 6, 19)
+
+
+@router.post(
+    "/replay",
+    response_model=GameResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[rate_limited("daily-replay", 60, 3600, key="user")],
+)
 async def replay_daily(
     payload: ReplayRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -336,33 +334,11 @@ async def replay_daily(
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format. Use YYYY-MM-DD.")
 
-    today = date.today()
+    today = datetime.now(UTC).date() + timedelta(days=1)
     if target_date > today:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot replay a future date.")
-
-    # Check for existing non-abandoned game on that date. When duplicates exist,
-    # keep the one with the MOST moves (preserve progress); tie-break by latest
-    # created_at. Abandon the rest to self-heal the state.
-    existing_result = await db.execute(
-        select(Game)
-        .options(selectinload(Game.moves))
-        .where(
-            Game.user_id == current_user.id,
-            Game.mode == "daily",
-            func.date(Game.created_at) == target_date,
-            Game.status != "abandoned",
-        )
-    )
-    existing_games = list(existing_result.scalars().all())
-    if existing_games:
-        existing_games.sort(key=lambda g: (g.num_guesses, g.created_at), reverse=True)
-        keep = existing_games[0]
-        for older in existing_games[1:]:
-            older.status = "abandoned"
-            older.completed_at = datetime.now(timezone.utc)
-        if len(existing_games) > 1:
-            await db.flush()
-        return _build_game_response(keep)
+    if target_date < _ARCHIVE_START:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The archive starts on 2021-06-19.")
 
     # Look up the DailyWord for that date — lazily create one for past dates so
     # the archive is fully playable even when the daily seed table is sparse.
@@ -372,9 +348,10 @@ async def replay_daily(
         import hashlib
         import random as _random
 
+        from sqlalchemy.exc import IntegrityError
+
         from app.analysis.engine import ANSWERS
         from app.config import settings as _settings
-        from sqlalchemy.exc import IntegrityError
 
         # Deterministic per-date pick — but seeded with a server-side secret
         # so the mapping (date → answer) is not derivable from the source.
@@ -385,12 +362,12 @@ async def replay_daily(
         rng = _random.Random(seed)
         chosen = rng.choice(ANSWERS).upper()
         difficulty = word_to_elo(chosen)
-        dw = DailyWord(word=chosen.lower(), date=target_date, difficulty=difficulty)
-        db.add(dw)
         try:
-            await db.flush()
+            async with db.begin_nested():
+                dw = DailyWord(word=chosen.lower(), date=target_date, difficulty=difficulty)
+                db.add(dw)
+                await db.flush()
         except IntegrityError:
-            await db.rollback()
             dw_result = await db.execute(select(DailyWord).where(DailyWord.date == target_date))
             dw = dw_result.scalar_one_or_none()
             if dw is None:
@@ -398,6 +375,30 @@ async def replay_daily(
 
     target_word = dw.word.upper()
     difficulty = dw.difficulty if dw.difficulty is not None else word_to_elo(target_word)
+
+    # Existing non-abandoned game for that *puzzle word* (not for the day it
+    # was created — a replay started today must not be confused with today's
+    # real daily). Keep the attempt with the most progress; abandon strays.
+    existing_result = await db.execute(
+        select(Game)
+        .options(selectinload(Game.moves))
+        .where(
+            Game.user_id == current_user.id,
+            Game.mode == "daily",
+            Game.target_word == target_word,
+            Game.status != "abandoned",
+        )
+    )
+    existing_games = list(existing_result.scalars().all())
+    if existing_games:
+        existing_games.sort(key=lambda g: (g.num_guesses, g.created_at), reverse=True)
+        keep = existing_games[0]
+        for older in existing_games[1:]:
+            older.status = "abandoned"
+            older.completed_at = datetime.now(UTC)
+        if len(existing_games) > 1:
+            await db.flush()
+        return _build_game_response(keep)
 
     game = Game(
         id=uuid.uuid4(),
@@ -428,8 +429,9 @@ async def start_daily_game(
 
     Daily games are always unrated — only competitive games affect ELO.
     """
-    from app.routers.games import _build_game_response
     from sqlalchemy.orm import selectinload
+
+    from app.routers.games import _build_game_response
 
     today = resolve_daily_date(local_date)
 
@@ -452,7 +454,7 @@ async def start_daily_game(
                 Game.user_id == current_user.id,
                 Game.mode == "daily",
                 Game.target_word == today_word,
-                Game.created_at >= datetime.now(timezone.utc) - timedelta(hours=36),
+                Game.created_at >= datetime.now(UTC) - timedelta(hours=36),
                 Game.status != "abandoned",
             )
         )
@@ -462,7 +464,7 @@ async def start_daily_game(
             keep = existing_games[0]
             for older in existing_games[1:]:
                 older.status = "abandoned"
-                older.completed_at = datetime.now(timezone.utc)
+                older.completed_at = datetime.now(UTC)
             if len(existing_games) > 1:
                 await db.flush()
             return _build_game_response(keep)

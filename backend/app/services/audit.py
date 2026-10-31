@@ -36,7 +36,9 @@ async def record_admin_action(
     ip_address: str | None = None
     if request is not None:
         try:
-            ip_address = request.client.host if request.client else None
+            from app.services.request_meta import client_ip
+
+            ip_address = client_ip(request)
         except Exception:
             ip_address = None
 

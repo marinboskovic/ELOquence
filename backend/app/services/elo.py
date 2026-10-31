@@ -1,7 +1,6 @@
 """ELO calculation and update service."""
-import math
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +24,7 @@ def update_daily_streak(user: User, won: bool, on_date: date | None = None) -> N
     to 0; a win extends or starts a streak. Multiple completions on the same
     day are idempotent.
     """
-    today = on_date or datetime.now(timezone.utc).date()
+    today = on_date or datetime.now(UTC).date()
     if user.last_played_date == today:
         return  # already counted today
     if not won:
@@ -39,6 +38,21 @@ def update_daily_streak(user: User, won: bool, on_date: date | None = None) -> N
         user.current_streak = 1
     user.max_streak = max(user.max_streak, user.current_streak)
     user.last_played_date = today
+
+
+def effective_streak(user: User, today: date | None = None) -> int:
+    """The streak as it stands *today*.
+
+    ``current_streak`` is only written when a daily is completed, so a
+    player who stops playing keeps a stale number in the column. A streak
+    is alive if the last daily was played today or yesterday; otherwise it
+    is 0. Readers (profile, leaderboard, push reminders) use this; the
+    stored value is still the source of truth for extending the streak.
+    """
+    today = today or datetime.now(UTC).date()
+    if user.last_played_date is None or user.current_streak <= 0:
+        return 0
+    return user.current_streak if (today - user.last_played_date).days <= 1 else 0
 
 
 def _time_score(seconds: float | None) -> float:
@@ -210,6 +224,6 @@ async def apply_elo_update(
         elo_after=elo_after,
         delta=elo_after - elo_before,
         accuracy_score=accuracy,
-        recorded_at=datetime.now(timezone.utc),
+        recorded_at=datetime.now(UTC),
     )
     db.add(history_entry)

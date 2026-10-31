@@ -53,7 +53,7 @@ class PushSubscription(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    user: Mapped["User"] = relationship("User")  # noqa: F821
+    user: Mapped[User] = relationship("User")  # noqa: F821
 
     def __repr__(self) -> str:
         return f"<PushSubscription user={self.user_id} endpoint={self.endpoint[:40]}...>"

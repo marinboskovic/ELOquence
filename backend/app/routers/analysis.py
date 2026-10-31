@@ -8,11 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.analysis.patterns import detect_strategic_patterns
 from app.database import get_db
 from app.models.game import Game
-from app.models.move import Move
 from app.models.user import User
-from app.analysis.patterns import detect_strategic_patterns
 from app.schemas.analysis import (
     AnalysisResponse,
     DictionaryInfo,
@@ -22,6 +21,7 @@ from app.schemas.analysis import (
     TopPick,
 )
 from app.services.auth import get_current_user
+from app.services.rate_limit import rate_limited
 from app.services.uniqueness import (
     compute_move_fingerprint,
     compute_opener_rarity,
@@ -31,7 +31,11 @@ from app.services.uniqueness import (
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 
-@router.post("/games/{game_id}/analyze", response_model=AnalysisResponse)
+@router.post(
+    "/games/{game_id}/analyze",
+    response_model=AnalysisResponse,
+    dependencies=[rate_limited("analyze", 60, 600, key="user")],
+)
 async def analyze_game_endpoint(
     game_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -92,8 +96,11 @@ async def analyze_game_endpoint(
         db_move.trap_detected = move_result["trap_detected"]
         db_move.is_book_move = move_result["is_book_move"]
 
-    # Also update summary fields on the game
-    game.accuracy_score = analysis["accuracy_score"]
+    # Also update summary fields on the game. For rated games the accuracy
+    # that fed the ELO calculation is frozen at completion — overwriting it
+    # here would make the stored ELO delta inconsistent with the record.
+    if not game.rated or game.accuracy_score is None:
+        game.accuracy_score = analysis["accuracy_score"]
     game.luck_factor = analysis["luck_factor"]
     game.constraint_violations = analysis["constraint_violations"]
     game.traps_encountered = analysis["traps_encountered"]
@@ -249,3 +256,61 @@ async def analyze_game_endpoint(
             for m in analysis["moves"]
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# Opener Lab (2.0)
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel, Field, field_validator  # noqa: E402
+
+from app.services.auth import get_optional_user  # noqa: E402
+
+
+def _require_word(word: str) -> str:
+    from app.analysis.engine import is_valid_word
+
+    w = word.strip().upper()
+    if len(w) != 5 or not w.isalpha() or not is_valid_word(w):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"'{w}' is not a valid word.")
+    return w
+
+
+@router.get("/lab/opener/{word}", dependencies=[rate_limited("lab", 120, 600)])
+async def lab_opener(
+    word: str,
+    _user: Annotated[User | None, Depends(get_optional_user)],
+) -> dict:
+    """Analyse any legal word as an opening guess (entropy, rank, pattern
+    spread, best openers for comparison). Public — no account needed."""
+    from app.analysis.lab import opener_report
+
+    w = _require_word(word)
+    return await asyncio.to_thread(opener_report, w)
+
+
+class LabPositionRequest(BaseModel):
+    guesses: list[str] = Field(min_length=0, max_length=6)
+    patterns: list[int] = Field(min_length=0, max_length=6)
+
+    @field_validator("patterns")
+    @classmethod
+    def _patterns(cls, v: list[int]) -> list[int]:
+        if any(p < 0 or p > 242 for p in v):
+            raise ValueError("Patterns must be in 0..242.")
+        return v
+
+
+@router.post("/lab/position", dependencies=[rate_limited("lab", 120, 600)])
+async def lab_position(
+    payload: LabPositionRequest,
+    _user: Annotated[User | None, Depends(get_optional_user)],
+) -> dict:
+    """Given a guess/pattern history, return the remaining answers and the
+    engine's best next guesses — the review engine as a sandbox."""
+    from app.analysis.lab import position_report
+
+    if len(payload.guesses) != len(payload.patterns):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="guesses and patterns must have the same length.")
+    guesses = [_require_word(g) for g in payload.guesses]
+    return await asyncio.to_thread(position_report, guesses, payload.patterns)

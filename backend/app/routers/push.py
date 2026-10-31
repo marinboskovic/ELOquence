@@ -23,6 +23,7 @@ from app.schemas.push import (
 )
 from app.services.auth import get_current_user
 from app.services.push import build_payload, send_push_to_subscriptions
+from app.services.rate_limit import rate_limited
 
 router = APIRouter(prefix="/push", tags=["push"])
 
@@ -87,7 +88,7 @@ async def get_vapid_public_key() -> PushVapidPublicKey:
     )
 
 
-@router.post("/subscribe", status_code=status.HTTP_201_CREATED)
+@router.post("/subscribe", status_code=status.HTTP_201_CREATED, dependencies=[rate_limited("push-subscribe", 20, 3600, key="user")])
 async def subscribe(
     payload: PushSubscribeRequest,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -158,7 +159,7 @@ async def unsubscribe(
     return {"deleted": result.rowcount or 0}
 
 
-@router.post("/test", response_model=PushTestResponse)
+@router.post("/test", response_model=PushTestResponse, dependencies=[rate_limited("push-test", 5, 600, key="user")])
 async def send_test_notification(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],

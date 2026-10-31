@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from typing import Awaitable, Callable
 
 from sqlalchemy import distinct, select
@@ -33,6 +33,7 @@ from app.database import AsyncSessionLocal
 from app.models.game import Game
 from app.models.push_subscription import PushSubscription
 from app.models.user import User
+from app.services.elo import effective_streak
 from app.services.push import notify_daily_reminder, notify_streak_warning
 
 _log = logging.getLogger(__name__)
@@ -105,13 +106,14 @@ async def run_streak_warning_job() -> dict:
         user_ids = await _users_with_active_subscription(db)
         for uid in user_ids:
             user = (await db.execute(select(User).where(User.id == uid))).scalar_one_or_none()
-            if user is None or (user.current_streak or 0) < 2:
+            streak = effective_streak(user) if user is not None else 0
+            if user is None or streak < 2:
                 skipped_no_streak += 1
                 continue
             if await _user_played_daily_today(db, uid):
                 skipped_already_played += 1
                 continue
-            await notify_streak_warning(uid, int(user.current_streak))
+            await notify_streak_warning(uid, streak)
             sent += 1
     _log.info(
         "streak_warning: sent=%s skipped_no_streak=%s skipped_already_played=%s",

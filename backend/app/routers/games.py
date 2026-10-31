@@ -7,25 +7,47 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.schemas.game import GameCreate, GameListResponse, GameResponse, GuessSubmit
+from app.schemas.game import GameCreate, GameListResponse, GameResponse, GuessSubmit, MoveResponse
 from app.services.auth import get_current_user
 from app.services.game import abandon_game, create_game, get_game, list_games, submit_guess
+from app.services.rate_limit import rate_limited
 
 router = APIRouter(prefix="/games", tags=["games"])
+
+
+# Per-move engine output is only safe to show once the game is over —
+# while the game is live, `optimal_word` / `remaining_words` /
+# `classification` would be a built-in solver.
+_MOVE_PUBLIC_FIELDS = {"id", "game_id", "move_number", "guess_word", "pattern", "created_at"}
 
 
 def _build_game_response(game) -> GameResponse:
     """Convert a Game ORM object to its API response schema.
 
-    The ``target_word`` field is hidden while the game is in progress.
+    Hides ``target_word`` while the game is in progress AND for abandoned
+    daily / challenge games — those puzzles are still playable (the daily
+    can be retried, the challenge is shared with others), so revealing the
+    word on abandon would be a free peek. Abandoned competitive games count
+    as a loss and may show the word.
     """
     data = GameResponse.model_validate(game)
     if game.status == "in_progress":
         data.target_word = None
+        data.moves = [
+            MoveResponse(**{k: v for k, v in m.model_dump().items() if k in _MOVE_PUBLIC_FIELDS})
+            for m in data.moves
+        ]
+    elif game.status == "abandoned" and game.mode in ("daily", "challenge"):
+        data.target_word = None
     return data
 
 
-@router.post("/", response_model=GameResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=GameResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[rate_limited("game-create", 60, 600, key="user")],
+)
 async def start_game(
     payload: GameCreate,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -36,7 +58,7 @@ async def start_game(
     return _build_game_response(game)
 
 
-@router.post("/{game_id}/guess")
+@router.post("/{game_id}/guess", dependencies=[rate_limited("guess", 120, 60, key="user")])
 async def make_guess(
     game_id: uuid.UUID,
     payload: GuessSubmit,

@@ -84,25 +84,72 @@ def compute_pattern(guess: str, answer: str) -> int:
     return sum(v * (3 ** i) for i, v in enumerate(pattern))
 
 
-def pattern_to_tiles(pattern_int: int) -> list[int]:
-    """Decode a ternary integer back to a list of 5 tile values [0,1,2].
-
-    Args:
-        pattern_int: Ternary-encoded pattern integer.
-
-    Returns:
-        List of 5 integers, each 0 (gray), 1 (yellow), or 2 (green).
-    """
-    tiles: list[int] = []
-    for _ in range(5):
-        tiles.append(pattern_int % 3)
-        pattern_int //= 3
-    return tiles
-
-
 # ---------------------------------------------------------------------------
 # Pattern matrix precomputation
 # ---------------------------------------------------------------------------
+
+def _encode_words(words: list[str]) -> np.ndarray:
+    """Encode uppercase 5-letter words as an ``(n, 5)`` uint8 array of 0..25."""
+    buf = np.frombuffer("".join(words).encode("ascii"), dtype=np.uint8)
+    return (buf - ord("A")).reshape(len(words), 5)
+
+
+def build_pattern_matrix(
+    guesses: list[str], answers: list[str], chunk_size: int = 256
+) -> np.ndarray:
+    """Vectorised equivalent of ``compute_pattern`` over every (guess, answer) pair.
+
+    Returns a ``(len(guesses), len(answers))`` uint8 matrix using the same
+    ternary encoding as :func:`compute_pattern` (green=2, yellow=1, gray=0,
+    ``sum(v * 3**pos)``), including exact Wordle duplicate-letter rules.
+
+    The scalar version needs ~75 M Python-level calls for the full word list
+    (minutes of cold start — on Fly.io the ``.cache`` dir is not persisted,
+    so every deploy paid that). This runs in a few seconds by processing a
+    chunk of guesses at a time against all answers with numpy broadcasting.
+    """
+    g_all = _encode_words(guesses)
+    a_all = _encode_words(answers)
+    n_answers = len(a_all)
+
+    # Per-answer letter histogram, shape (n_answers, 26).
+    answer_counts = np.zeros((n_answers, 26), dtype=np.int8)
+    rows = np.arange(n_answers)
+    for pos in range(5):
+        np.add.at(answer_counts, (rows, a_all[:, pos]), 1)
+
+    weights = (3 ** np.arange(5)).astype(np.uint16)  # pattern = Σ v_pos * 3^pos
+    out = np.zeros((len(g_all), n_answers), dtype=np.uint8)
+    answer_idx = np.arange(n_answers)[None, :]
+
+    for start in range(0, len(g_all), chunk_size):
+        g = g_all[start : start + chunk_size]
+        n = len(g)
+        guess_idx = np.arange(n)[:, None]
+
+        # Greens: (n, n_answers, 5)
+        green = g[:, None, :] == a_all[None, :, :]
+
+        # Remaining letter budget per (guess, answer) = answer histogram minus
+        # the letters already consumed by greens.
+        remaining = np.broadcast_to(answer_counts[None], (n, n_answers, 26)).copy()
+        for pos in range(5):
+            letter_idx = np.broadcast_to(g[:, pos][:, None], (n, n_answers))
+            remaining[guess_idx, answer_idx, letter_idx] -= green[:, :, pos].astype(np.int8)
+
+        values = green.astype(np.uint16) * 2
+        # Yellows: left-to-right, each consumes one unit of the remaining budget.
+        for pos in range(5):
+            letter_idx = np.broadcast_to(g[:, pos][:, None], (n, n_answers))
+            avail = remaining[guess_idx, answer_idx, letter_idx] > 0
+            yellow = avail & ~green[:, :, pos]
+            values[:, :, pos] += yellow.astype(np.uint16)
+            remaining[guess_idx, answer_idx, letter_idx] -= yellow.astype(np.int8)
+
+        out[start : start + n] = (values * weights).sum(axis=2).astype(np.uint8)
+
+    return out
+
 
 def precompute_pattern_matrix() -> None:
     """Build (or reload from cache) the full pattern matrix.
@@ -112,7 +159,7 @@ def precompute_pattern_matrix() -> None:
     standard-mode analysis can simply use that column range.
 
     The matrix is stored as a uint8 numpy array and cached to disk as a .npy
-    file so subsequent startups avoid the O(n²) recomputation.
+    file so subsequent startups avoid the recomputation entirely.
     """
     global PATTERN_MATRIX
 
@@ -124,20 +171,22 @@ def precompute_pattern_matrix() -> None:
 
     expected_shape = (len(ALL_WORDS), len(COMPETITIVE_ANSWERS))
     if cache_path.exists():
-        loaded = np.load(cache_path)
-        if loaded.shape == expected_shape:
-            PATTERN_MATRIX = loaded
-            return
+        try:
+            loaded = np.load(cache_path)
+            if loaded.shape == expected_shape:
+                PATTERN_MATRIX = loaded
+                return
+        except (OSError, ValueError):
+            # Corrupt / truncated cache (e.g. interrupted write) — rebuild.
+            pass
 
-    n_guesses = len(ALL_WORDS)
-    n_answers = len(COMPETITIVE_ANSWERS)
-    matrix = np.zeros((n_guesses, n_answers), dtype=np.uint8)
-    for i, guess in enumerate(ALL_WORDS):
-        for j, answer in enumerate(COMPETITIVE_ANSWERS):
-            matrix[i, j] = compute_pattern(guess, answer)
-
+    matrix = build_pattern_matrix(ALL_WORDS, COMPETITIVE_ANSWERS)
     PATTERN_MATRIX = matrix
-    np.save(cache_path, matrix)
+
+    # Atomic write: never leave a half-written .npy for the next boot to load.
+    tmp_path = cache_path.with_suffix(".npy.tmp")
+    np.save(tmp_path, matrix)
+    tmp_path.replace(cache_path)
 
 
 # ---------------------------------------------------------------------------
@@ -234,26 +283,6 @@ def compute_expected_remaining(guess_idx: int, possible_indices: np.ndarray) -> 
     _, counts = np.unique(patterns, return_counts=True)
     total = len(possible_indices)
     return float(np.sum(counts ** 2) / total)
-
-
-def compute_negnumbins(guess_idx: int, possible_indices: np.ndarray) -> int:
-    """Count the number of distinct (non-empty) pattern buckets produced by a guess.
-
-    More buckets = better discrimination.
-    """
-    if len(possible_indices) == 0:
-        return 0
-    patterns = PATTERN_MATRIX[guess_idx, possible_indices]
-    return int(len(np.unique(patterns)))
-
-
-def compute_minimax(guess_idx: int, possible_indices: np.ndarray) -> int:
-    """Return the worst-case bucket size (minimise for endgame play)."""
-    if len(possible_indices) == 0:
-        return 0
-    patterns = PATTERN_MATRIX[guess_idx, possible_indices]
-    _, counts = np.unique(patterns, return_counts=True)
-    return int(np.max(counts))
 
 
 # ---------------------------------------------------------------------------
@@ -370,7 +399,7 @@ def find_optimal_guess(
         negnumbins, minimax, is_answer, sort_key.
     """
     answer_set = set(possible_indices.tolist())
-    n_answers_total = len(ANSWERS)
+
 
     # Decide which word indices to evaluate
     if n_remaining >= 100:
@@ -621,7 +650,7 @@ def bot_solve_path(
     possible = np.arange(len(answer_pool), dtype=np.int32)
     path: list[str] = []
 
-    for guess, pattern in zip(guesses, patterns):
+    for guess, pattern in zip(guesses, patterns, strict=False):
         bot_pick = bot_best_pick(possible, hard_mode=hard_mode)
         path.append(bot_pick)
         # Narrow the pool using the actual observed pattern
@@ -632,35 +661,3 @@ def bot_solve_path(
             pass  # unknown word — keep pool unchanged
 
     return path
-
-
-def uniqueness_percentile(
-    guesses: list[str],
-    patterns: list[int],
-) -> int:
-    """Estimate "1 in N" uniqueness of the full color-pattern grid.
-
-    Uses a deterministic hash-based proxy.  Real implementation would
-    compare against community game records in the database.
-
-    TODO: Replace with a real DB query counting how many other completed
-    games share the same sequence of (guess, pattern) pairs.  The query
-    would look like:
-        SELECT COUNT(*) FROM games WHERE move_fingerprint = :fp
-    where move_fingerprint is a stable hash of the (guess, pattern) sequence.
-
-    Args:
-        guesses: Ordered player guess words.
-        patterns: Ordered ternary-encoded patterns.
-
-    Returns:
-        N such that the grid is "1 in N" (integer ≥ 1).
-    """
-    # Build a stable fingerprint from the guess+pattern sequence
-    import hashlib
-    fp = "|".join(f"{g}:{p}" for g, p in zip(guesses, patterns))
-    digest = hashlib.sha256(fp.encode()).digest()
-    # Map first 3 bytes to a range [10, 5000]
-    raw = int.from_bytes(digest[:3], "big")  # 0..16777215
-    n = 10 + (raw % 4991)  # 10..5000
-    return n

@@ -32,7 +32,8 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Override the URL from settings (supports env-var injection in Docker)
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
+# `%` must be escaped because ConfigParser interpolates it (passwords with %).
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC.replace("%", "%%"))
 
 
 # ---------------------------------------------------------------------------

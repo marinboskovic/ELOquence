@@ -6,15 +6,21 @@ import hashlib
 import logging
 import random
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
-
 from fastapi import HTTPException, status
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from app.models.daily_word import DailyWord
+from app.models.game import Game
+from app.models.move import Move
+from app.models.user import User
+from app.models.word_stats import WordStats
+from app.services.word_difficulty import word_to_elo
 
 
 def _create_game_lock_key(user_id: uuid.UUID, mode: str) -> int:
@@ -31,12 +37,6 @@ def _create_game_lock_key(user_id: uuid.UUID, mode: str) -> int:
     digest = hashlib.sha256(f"{user_id}:{mode}".encode()).digest()
     return int.from_bytes(digest[:8], "big", signed=False) & 0x7FFFFFFFFFFFFFFF
 
-from app.models.daily_word import DailyWord
-from app.models.game import Game
-from app.models.move import Move
-from app.models.user import User
-from app.models.word_stats import WordStats
-from app.services.word_difficulty import word_to_elo
 
 
 async def _get_word_pool(mode: str, pool_name: str) -> list[str]:
@@ -182,14 +182,26 @@ def resolve_daily_date(local_date: str | None) -> date:
     by at most one calendar day. Unparseable or out-of-range input falls back
     to the UTC date.
     """
-    utc_today = datetime.now(timezone.utc).date()
+    now = datetime.now(UTC)
+    utc_today = now.date()
     if not local_date:
         return utc_today
     try:
         d = date.fromisoformat(local_date)
     except (ValueError, TypeError):
         return utc_today
-    return d if abs((d - utc_today).days) <= 1 else utc_today
+    offset = (d - utc_today).days
+    if offset == 0:
+        return d
+    # "Tomorrow" only exists for someone once UTC+14 has passed midnight
+    # (10:00 UTC); "yesterday" only until UTC-12 passes midnight (12:00 UTC).
+    # Outside those windows no real timezone is on that date, so the claim
+    # is bogus (e.g. fishing for tomorrow's word) and we fall back to UTC.
+    if offset == 1 and now.hour >= 10:
+        return d
+    if offset == -1 and now.hour < 12:
+        return d
+    return utc_today
 
 
 async def _get_or_create_daily_word(
@@ -206,7 +218,7 @@ async def _get_or_create_daily_word(
     """
     from app.analysis.engine import ANSWERS
 
-    today = on_date or datetime.now(timezone.utc).date()
+    today = on_date or datetime.now(UTC).date()
     result = await db.execute(select(DailyWord).where(DailyWord.date == today))
     row = result.scalar_one_or_none()
     if row:
@@ -219,22 +231,47 @@ async def _get_or_create_daily_word(
         word = random.choice(ANSWERS).upper()
 
     difficulty = word_to_elo(word)
-    daily = DailyWord(
-        word=word.lower(),
-        date=today,
-        difficulty=difficulty,
-    )
-    db.add(daily)
+    # SAVEPOINT: if a concurrent request wins the insert race, only this
+    # nested transaction rolls back — the caller's earlier work (stale-game
+    # abandons, advisory lock) stays intact.
     try:
-        await db.flush()
+        async with db.begin_nested():
+            db.add(DailyWord(word=word.lower(), date=today, difficulty=difficulty))
+            await db.flush()
     except IntegrityError:
-        # Another request already inserted today's word — use it
-        await db.rollback()
         result = await db.execute(select(DailyWord).where(DailyWord.date == today))
         row = result.scalar_one_or_none()
         if row:
             return row.word.upper(), row.difficulty or word_to_elo(row.word)
     return word, difficulty
+
+
+def hard_mode_violation(guess: str, prior: list[tuple[str, int]]) -> str | None:
+    """Return a human-readable hard-mode violation for *guess*, or ``None``.
+
+    ``prior`` is ``[(guess_word, pattern), ...]`` for the earlier moves.
+    """
+    for prev_guess, p in prior:
+        required: dict[str, int] = {}
+        for pos in range(5):
+            val = (p // (3 ** pos)) % 3  # 2 green, 1 yellow, 0 absent
+            letter = prev_guess[pos]
+            if val == 2 and guess[pos] != letter:
+                return f"Hard mode: {letter} must stay in position {pos + 1}"
+            if val in (1, 2):
+                required[letter] = required.get(letter, 0) + 1
+        for letter, count in required.items():
+            if guess.count(letter) < count:
+                return f"Hard mode: guess must contain {letter}" + (f" ×{count}" if count > 1 else "")
+    return None
+
+
+def _elapsed_seconds(game: Game, now: datetime) -> float | None:
+    """Server-side solve time: creation → completion, clamped to 24h."""
+    if game.created_at is None:
+        return None
+    created = game.created_at if game.created_at.tzinfo else game.created_at.replace(tzinfo=UTC)
+    return round(min(max((now - created).total_seconds(), 0.0), 86400.0), 2)
 
 
 async def create_game(
@@ -256,8 +293,6 @@ async def create_game(
     Returns:
         Newly created Game ORM object.
     """
-    from app.analysis.engine import ANSWERS
-
     pool = await _get_word_pool(mode, word_pool)
 
     # Transaction-scoped advisory lock keyed on (user_id, mode). Forces
@@ -298,7 +333,7 @@ async def create_game(
         # long ago doesn't block today's daily. A 36h window safely covers the
         # current local day for any timezone without a brittle UTC-vs-local
         # date comparison.
-        recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
+        recent_cutoff = datetime.now(UTC) - timedelta(hours=36)
         existing = await db.execute(
             select(Game).where(
                 Game.user_id == user.id,
@@ -365,7 +400,7 @@ async def submit_guess(
     Returns:
         (updated Game, new Move) tuple.
     """
-    from app.analysis.engine import ALL_WORDS, compute_pattern, is_valid_word
+    from app.analysis.engine import compute_pattern, is_valid_word
     from app.services.elo import apply_elo_update, update_daily_streak
 
     # Validate word before touching the DB to avoid poisoning the session
@@ -405,27 +440,13 @@ async def submit_guess(
             detail=f"Game is already {game.status}.",
         )
 
-    # Hard mode: validate revealed hints are reused in subsequent guesses
+    # Hard mode: every revealed hint must be reused. Greens must stay in
+    # place; the multiset of green+yellow letters from each prior guess must
+    # be contained in the new guess (so a double yellow "E" demands two E's).
     if game.hard_mode and game.moves:
-        sorted_moves = sorted(game.moves, key=lambda m: m.move_number)
-        for prev_move in sorted_moves:
-            prev_guess = prev_move.guess_word
-            p = prev_move.pattern
-            # Decode ternary pattern: digit i = (p // 3**i) % 3
-            # 2 = correct (green), 1 = present (yellow), 0 = absent
-            for pos in range(5):
-                val = (p // (3 ** pos)) % 3
-                letter = prev_guess[pos]
-                if val == 2 and guess[pos] != letter:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Hard mode: must reuse {letter}",
-                    )
-                if val == 1 and letter not in guess:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Hard mode: must reuse {letter}",
-                    )
+        violation = hard_mode_violation(guess, [(m.guess_word, m.pattern) for m in game.moves])
+        if violation:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=violation)
 
     pattern = compute_pattern(guess, game.target_word)
     move_number = game.num_guesses + 1
@@ -488,10 +509,12 @@ async def submit_guess(
 
     if won:
         game.status = "won"
-        game.completed_at = datetime.now(timezone.utc)
+        game.completed_at = datetime.now(UTC)
     elif move_number >= 6:
         game.status = "lost"
-        game.completed_at = datetime.now(timezone.utc)
+        game.completed_at = datetime.now(UTC)
+    if game.completed_at is not None and game.time_seconds is None:
+        game.time_seconds = _elapsed_seconds(game, game.completed_at)
 
     # Stamp the grid fingerprint on completion so the uniqueness analytic
     # can count how many other players solved this same (target, guesses).
@@ -682,10 +705,13 @@ async def abandon_game(
     """
     from app.services.elo import apply_elo_update
 
+    # FOR UPDATE: a DELETE racing the final /guess must not overwrite a
+    # just-won game with "abandoned" (and apply the ELO penalty twice).
     result = await db.execute(
         select(Game)
         .options(selectinload(Game.moves))
         .where(Game.id == game_id, Game.user_id == user.id)
+        .with_for_update()
     )
     game = result.scalar_one_or_none()
     if game is None:
@@ -696,7 +722,8 @@ async def abandon_game(
             detail=f"Cannot abandon a game with status '{game.status}'.",
         )
     game.status = "abandoned"
-    game.completed_at = datetime.now(timezone.utc)
+    game.completed_at = datetime.now(UTC)
+    game.time_seconds = _elapsed_seconds(game, game.completed_at)
 
     # Rated games: count as a loss with 0 accuracy (X/6 equivalent)
     if game.rated:

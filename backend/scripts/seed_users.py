@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import random
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from passlib.context import CryptContext
@@ -22,7 +22,7 @@ from passlib.context import CryptContext
 
 NUM_USERS = 30
 GAMES_PER_USER = (8, 35)       # random range of games each user has played
-DEFAULT_PASSWORD = "password1"  # all faux users share this password
+DEFAULT_PASSWORD = "password1"  # all faux users share this password — DEV ONLY (see _guard)
 
 # Skill profiles — determines win rate and guess distribution
 PROFILES = [
@@ -183,7 +183,7 @@ async def seed():
 
             # Create user
             created_days_ago = random.randint(5, 60)
-            user_created = datetime.now(timezone.utc) - timedelta(days=created_days_ago)
+            user_created = datetime.now(UTC) - timedelta(days=created_days_ago)
 
             await session.execute(
                 text("""
@@ -221,7 +221,7 @@ async def seed():
                 game_time_offset = created_days_ago - int(
                     (g_idx / max(num_games - 1, 1)) * (created_days_ago - 1)
                 )
-                game_created = datetime.now(timezone.utc) - timedelta(
+                game_created = datetime.now(UTC) - timedelta(
                     days=game_time_offset,
                     hours=random.randint(0, 12),
                     minutes=random.randint(0, 59),
@@ -365,7 +365,7 @@ async def seed():
 
             # Nudge final ELO toward target range
             # (the simulation drifts randomly, so we adjust)
-            elo_adjust = target_elo - current_elo
+            _elo_adjust = target_elo - current_elo
             current_elo = round(target_elo + rand_between(-50, 50))
             current_elo = max(100, current_elo)
 
@@ -416,4 +416,10 @@ async def seed():
 
 
 if __name__ == "__main__":
+    import os
+    import sys
+
+    # Never seed shared-password accounts into a production database.
+    if os.environ.get("ENV", "development") == "production" and "--i-know-this-is-production" not in sys.argv:
+        sys.exit("Refusing to seed demo users with ENV=production (pass --i-know-this-is-production to override).")
     asyncio.run(seed())

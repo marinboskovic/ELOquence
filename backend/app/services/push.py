@@ -106,14 +106,14 @@ async def send_push_to_subscriptions(
 
     sent_count = 0
     expired_ids: list[Any] = []
-    for sub, (sent, expired) in zip(subs_list, results):
+    for sub, (sent, expired) in zip(subs_list, results, strict=False):
         if sent:
             sent_count += 1
         if expired:
             expired_ids.append(sub.id)
 
     # Touch last_used_at for live subscriptions; prune dead ones.
-    live_ids = [sub.id for sub, (sent, _) in zip(subs_list, results) if sent]
+    live_ids = [sub.id for sub, (sent, _) in zip(subs_list, results, strict=False) if sent]
     if live_ids:
         await db.execute(
             update(PushSubscription)
@@ -169,10 +169,8 @@ async def notify_challenge_completed(game_id) -> None:
     Runs in a fresh DB session — designed to be fired via asyncio.create_task
     so it does NOT block the response that returns the player's result.
 
-    Identifies challenges by ``target_word`` (the same convention the
-    /challenges/{code}/results endpoint uses). In the rare case where two
-    creators independently rolled the same word, both get pinged — they
-    each created a challenge that someone is now playing.
+    The game is linked to its challenge via ``Game.challenge_id``; legacy
+    rows without the link fall back to matching by target word.
     """
     if not settings.push_enabled:
         return
@@ -199,12 +197,16 @@ async def notify_challenge_completed(game_id) -> None:
                 if player:
                     player_username = player.username or "Someone"
 
-            # All challenges for this target_word (existing convention)
-            challenges = (
-                await db.execute(
-                    select(Challenge).where(Challenge.target_word == game.target_word)
-                )
-            ).scalars().all()
+            if game.challenge_id is not None:
+                challenges = (
+                    await db.execute(select(Challenge).where(Challenge.id == game.challenge_id))
+                ).scalars().all()
+            else:  # legacy games created before challenge_id existed
+                challenges = (
+                    await db.execute(
+                        select(Challenge).where(Challenge.target_word == game.target_word)
+                    )
+                ).scalars().all()
 
             # Build per-creator notification list, deduping if a creator
             # somehow appears more than once.

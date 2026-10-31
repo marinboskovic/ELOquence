@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 KNOWN_OPENERS: frozenset[str] = frozenset(
     {
         "SALET", "CRANE", "SLATE", "TRACE", "CRATE", "RAISE", "ARISE",
@@ -33,7 +32,6 @@ def analyze_game(game_moves: list[dict], target_word: str, *, competitive: bool 
     from app.analysis.classifier import classify_move
     from app.analysis.constraints import ConstraintState
     from app.analysis.engine import (
-        ALL_WORDS,
         ANSWERS,
         COMPETITIVE_ANSWERS,
         DICTIONARY_SIZES,
@@ -42,7 +40,6 @@ def analyze_game(game_moves: list[dict], target_word: str, *, competitive: bool 
         STANDARD_MODE_STARTER,
         actual_solutions_after,
         bot_best_pick,
-        bot_solve_path as compute_bot_solve_path,
         compute_entropy,
         compute_expected_remaining,
         compute_luck_score,
@@ -53,6 +50,9 @@ def analyze_game(game_moves: list[dict], target_word: str, *, competitive: bool 
         find_optimal_guess,
         get_remaining_answers,
         get_word_index,
+    )
+    from app.analysis.engine import (
+        bot_solve_path as compute_bot_solve_path,
     )
     from app.analysis.traps import detect_trap
 
@@ -149,7 +149,7 @@ def analyze_game(game_moves: list[dict], target_word: str, *, competitive: bool 
 
             # Build per-bucket word lists
             pattern_to_words: dict[int, list[str]] = {}
-            for idx_pos, pat_val in zip(possible, player_patterns):
+            for idx_pos, pat_val in zip(possible, player_patterns, strict=False):
                 pv = int(pat_val)
                 if pv not in pattern_to_words:
                     pattern_to_words[pv] = []
@@ -164,7 +164,7 @@ def analyze_game(game_moves: list[dict], target_word: str, *, competitive: bool 
                         "is_actual": int(p) == pattern,
                         "words": sorted(pattern_to_words.get(int(p), [])),
                     }
-                    for p, c in zip(unique_patterns, pattern_counts)
+                    for p, c in zip(unique_patterns, pattern_counts, strict=False)
                 ],
                 key=lambda x: -x["count"],
             )
@@ -193,7 +193,7 @@ def analyze_game(game_moves: list[dict], target_word: str, *, competitive: bool 
                 opt_unique, opt_counts = np.unique(opt_patterns, return_counts=True)
 
                 opt_pattern_to_words: dict[int, list[str]] = {}
-                for idx_pos, pat_val in zip(possible, opt_patterns):
+                for idx_pos, pat_val in zip(possible, opt_patterns, strict=False):
                     pv = int(pat_val)
                     if pv not in opt_pattern_to_words:
                         opt_pattern_to_words[pv] = []
@@ -208,7 +208,7 @@ def analyze_game(game_moves: list[dict], target_word: str, *, competitive: bool 
                             "is_actual": int(p) == bot_observed_pattern,
                             "words": sorted(opt_pattern_to_words.get(int(p), [])),
                         }
-                        for p, c in zip(opt_unique, opt_counts)
+                        for p, c in zip(opt_unique, opt_counts, strict=False)
                     ],
                     key=lambda x: -x["count"],
                 )

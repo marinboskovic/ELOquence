@@ -144,6 +144,7 @@ async def check_and_unlock(db: AsyncSession, user: User, game: Game) -> list[str
         .where(
             Game.user_id == user.id,
             Game.is_placement.is_(True),
+            Game.rated.is_(True),  # only rated (competitive) games are placements
             Game.status.in_(["won", "lost"]),
         )
     )

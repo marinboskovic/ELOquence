@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import Date, cast, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
@@ -94,11 +94,14 @@ class AdminUserResponse(BaseModel):
     total_losses: int
     provider: str | None = None
     last_played_date: str | None = None
+    is_banned: bool = False
+    banned_reason: str | None = None
+    banned_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_user(cls, u: User) -> "AdminUserResponse":
+    def from_user(cls, u: User) -> AdminUserResponse:
         return cls(
             id=u.id,
             email=u.email,
@@ -113,8 +116,11 @@ class AdminUserResponse(BaseModel):
             is_admin=u.is_admin,
             total_wins=u.total_wins,
             total_losses=u.total_losses,
-            provider=u.provider,
+            provider=u.provider or ("google" if u.google_id else "password"),
             last_played_date=u.last_played_date.isoformat() if u.last_played_date else None,
+            is_banned=u.is_banned,
+            banned_reason=u.banned_reason,
+            banned_at=u.banned_at,
         )
 
 
@@ -212,7 +218,7 @@ async def get_user_detail(
     elo_history_rows = elo_hist_result.scalars().all()
 
     # Recent games counts (last 30 days)
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    thirty_days_ago = datetime.now(UTC) - timedelta(days=30)
     recent_counts_result = await db.execute(
         select(Game.status, func.count().label("cnt"))
         .where(
@@ -319,6 +325,7 @@ async def toggle_admin(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
     user.is_admin = not user.is_admin
+    user.token_version = int(user.token_version or 0) + 1  # force re-auth with the new role
     await db.flush()
 
     await record_admin_action(
@@ -334,6 +341,65 @@ async def toggle_admin(
     await db.flush()
 
     return {"user_id": str(user_id), "is_admin": user.is_admin}
+
+
+class BanRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=255)
+
+
+@router.post("/users/{user_id}/ban")
+async def ban_user(
+    user_id: uuid.UUID,
+    payload: BanRequest,
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Suspend an account: every session is revoked immediately and the
+    player disappears from leaderboards until unbanned."""
+    if user_id == admin.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot ban yourself.")
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    if user.is_admin:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Demote the admin first.")
+
+    from app.services.auth import revoke_all_sessions
+
+    user.is_banned = True
+    user.banned_reason = payload.reason
+    user.banned_at = datetime.now(UTC)
+    await revoke_all_sessions(db, user)
+    await db.flush()
+    await record_admin_action(
+        db, admin_user_id=admin.id, action="ban_user", target_type="user",
+        target_id=str(user_id), target_label=user.username, payload={"reason": payload.reason}, request=request,
+    )
+    await db.flush()
+    return {"user_id": str(user_id), "is_banned": True}
+
+
+@router.post("/users/{user_id}/unban")
+async def unban_user(
+    user_id: uuid.UUID,
+    request: Request,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+    user.is_banned = False
+    user.banned_reason = None
+    user.banned_at = None
+    await db.flush()
+    await record_admin_action(
+        db, admin_user_id=admin.id, action="unban_user", target_type="user",
+        target_id=str(user_id), target_label=user.username, request=request,
+    )
+    await db.flush()
+    return {"user_id": str(user_id), "is_banned": False}
 
 
 # ---------------------------------------------------------------------------
@@ -396,21 +462,25 @@ async def set_daily_word(
     word = payload.word.lower()
     difficulty = payload.difficulty if payload.difficulty is not None else word_to_elo(word.upper())
 
+    from app.analysis.engine import is_valid_word
+
+    if not is_valid_word(word.upper()):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Word is not in the dictionary.",
+        )
+
     existing_result = await db.execute(
         select(DailyWord).where(DailyWord.date == payload.date)
     )
-    existing = existing_result.scalar_one_or_none()
-    if existing:
-        await db.delete(existing)
-        await db.flush()
-
-    daily = DailyWord(
-        id=uuid.uuid4(),
-        word=word,
-        date=payload.date,
-        difficulty=difficulty,
-    )
-    db.add(daily)
+    daily = existing_result.scalar_one_or_none()
+    if daily:
+        # Update in place: keeps the row id (= puzzle number) stable.
+        daily.word = word
+        daily.difficulty = difficulty
+    else:
+        daily = DailyWord(word=word, date=payload.date, difficulty=difficulty)
+        db.add(daily)
     await db.flush()
 
     await record_admin_action(
@@ -475,7 +545,7 @@ async def analytics(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Return aggregated platform analytics."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
 
@@ -598,7 +668,7 @@ async def analytics_timeseries(
     days: int = Query(default=30, ge=1, le=180),
 ) -> dict:
     """Return per-day timeseries for the last `days` days."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # Build the ordered list of dates (oldest first)
     dates: list[date] = [
         (now - timedelta(days=days - 1 - i)).date() for i in range(days)
@@ -846,7 +916,7 @@ async def update_announcement(
     if payload.active is not None:
         ann.active = payload.active
 
-    ann.updated_at = datetime.now(timezone.utc)
+    ann.updated_at = datetime.now(UTC)
     await db.flush()
 
     await record_admin_action(
@@ -1030,11 +1100,11 @@ async def list_all_games(
     if user_id is not None:
         base_where.append(Game.user_id == user_id)
     if from_date is not None:
-        from_dt = datetime(from_date.year, from_date.month, from_date.day, tzinfo=timezone.utc)
+        from_dt = datetime(from_date.year, from_date.month, from_date.day, tzinfo=UTC)
         base_where.append(Game.created_at >= from_dt)
     if to_date is not None:
         # Inclusive: end of day
-        to_dt = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59, tzinfo=timezone.utc)
+        to_dt = datetime(to_date.year, to_date.month, to_date.day, 23, 59, 59, tzinfo=UTC)
         base_where.append(Game.created_at <= to_dt)
 
     # Join to User for username (LEFT JOIN to handle NULL user_id / guest games)

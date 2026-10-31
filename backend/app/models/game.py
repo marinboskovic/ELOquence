@@ -22,7 +22,13 @@ class Game(Base):
     )
 
     # Game configuration
-    mode: Mapped[str] = mapped_column(String(20), nullable=False)  # daily/competitive/practice
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)  # daily/competitive/practice/challenge
+    # Set for mode="challenge": which challenge this attempt belongs to. Two
+    # challenges can share a word, so matching by target_word (the pre-2.0
+    # approach) merged their results and leaked words — this is the real key.
+    challenge_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("challenges.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     target_word: Mapped[str] = mapped_column(String(5), nullable=False)
     word_difficulty: Mapped[float | None] = mapped_column(Float, nullable=True)
 
