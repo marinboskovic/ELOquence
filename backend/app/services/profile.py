@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -76,15 +76,16 @@ async def recalculate_profile(db: AsyncSession, user_id: uuid.UUID) -> None:
     # ------------------------------------------------------------------
     # Favorite openers — top-5 first words from last 100 games
     # ------------------------------------------------------------------
+    # One grouped query instead of up to 100 round-trips per completion.
     opener_counts: dict[str, int] = {}
-    for game in all_games[:100]:
-        opener_result = await db.execute(
-            select(Move).where(Move.game_id == game.id, Move.move_number == 1)
+    recent_ids = [g.id for g in all_games[:100]]
+    if recent_ids:
+        opener_rows = await db.execute(
+            select(func.upper(Move.guess_word), func.count())
+            .where(Move.game_id.in_(recent_ids), Move.move_number == 1)
+            .group_by(func.upper(Move.guess_word))
         )
-        first_move = opener_result.scalar_one_or_none()
-        if first_move:
-            word = first_move.guess_word.upper()
-            opener_counts[word] = opener_counts.get(word, 0) + 1
+        opener_counts = {word: int(n) for word, n in opener_rows.all()}
 
     profile.favorite_openers = dict(
         sorted(opener_counts.items(), key=lambda x: -x[1])[:5]

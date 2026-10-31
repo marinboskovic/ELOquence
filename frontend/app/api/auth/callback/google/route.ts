@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const resp = await fetch(`${BACKEND_URL}/auth/google/callback?code=${encodeURIComponent(code)}`, {
-      headers: { 'X-Forwarded-For': request.headers.get('x-forwarded-for') ?? '' },
+      cache: 'no-store',
     });
     if (!resp.ok) {
       console.error('Google callback backend error:', resp.status, await resp.text());

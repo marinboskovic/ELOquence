@@ -384,7 +384,9 @@ async def google_login(payload: GoogleLogin, request: Request, db: Annotated[Asy
     return await _token_pair(db, user, request)
 
 
-@router.get("/google/callback", response_model=Token, dependencies=[rate_limited("google-login", 30, 300)])
+# The code exchange is proxied through the Next.js server (Vercel egress IPs),
+# so every user shares a handful of source addresses — keep this one generous.
+@router.get("/google/callback", response_model=Token, dependencies=[rate_limited("google-callback", 200, 300)])
 async def google_callback(
     code: Annotated[str, Query(max_length=1024)],
     request: Request,
