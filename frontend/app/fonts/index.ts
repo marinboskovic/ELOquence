@@ -1,6 +1,7 @@
 /**
- * Self-hosted variable fonts (via @fontsource-variable, bundled from
- * node_modules). Previously these came from Google Fonts through
+ * Self-hosted variable fonts (woff2 files vendored next to this file; they
+ * come from the @fontsource-variable packages, OFL licensed — see the
+ * LICENSE-*.txt files). Previously these came from Google Fonts through
  * `next/font/google`, which made every production build depend on
  * fonts.googleapis.com being reachable at build time and leaked a request
  * fingerprint to Google on each cold build. `next/font/local` gives the same
@@ -10,8 +11,8 @@ import localFont from 'next/font/local';
 
 export const libreFranklin = localFont({
   src: [
-    { path: '../../node_modules/@fontsource-variable/libre-franklin/files/libre-franklin-latin-wght-normal.woff2', style: 'normal' },
-    { path: '../../node_modules/@fontsource-variable/libre-franklin/files/libre-franklin-latin-wght-italic.woff2', style: 'italic' },
+    { path: './libre-franklin-latin-wght-normal.woff2', style: 'normal' },
+    { path: './libre-franklin-latin-wght-italic.woff2', style: 'italic' },
   ],
   weight: '100 900',
   variable: '--font-sans',
@@ -20,7 +21,7 @@ export const libreFranklin = localFont({
 });
 
 export const robotoSlab = localFont({
-  src: [{ path: '../../node_modules/@fontsource-variable/roboto-slab/files/roboto-slab-latin-wght-normal.woff2', style: 'normal' }],
+  src: [{ path: './roboto-slab-latin-wght-normal.woff2', style: 'normal' }],
   weight: '100 900',
   variable: '--font-display',
   display: 'swap',
@@ -28,7 +29,7 @@ export const robotoSlab = localFont({
 });
 
 export const jetbrainsMono = localFont({
-  src: [{ path: '../../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2', style: 'normal' }],
+  src: [{ path: './jetbrains-mono-latin-wght-normal.woff2', style: 'normal' }],
   weight: '100 800',
   variable: '--font-mono',
   display: 'swap',
