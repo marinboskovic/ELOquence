@@ -244,6 +244,7 @@ async def season_leaderboard(
     new player can top the month without a thousand-game history.
     """
     import calendar
+    import math
     from datetime import datetime
 
     now = datetime.now(UTC)
@@ -329,7 +330,8 @@ async def season_leaderboard(
             "starts_at": start.isoformat(),
             "ends_at": end.isoformat(),
             "is_current": is_current,
-            "days_left": max(0, (end - now).days) if is_current else 0,
+            # Calendar days including today (1 on the last day of the month).
+            "days_left": max(1, math.ceil((end - now).total_seconds() / 86400)) if is_current else 0,
         },
         "total_players": total_players,
         "entries": entries,

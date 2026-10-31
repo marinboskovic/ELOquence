@@ -781,8 +781,8 @@ export default function DashboardPage() {
                         {game.time_seconds != null && (
                           <span className="font-sans text-[10px] text-text-ghost flex items-center gap-0.5 tabular-nums font-mono">
                             <Clock size={8} className="shrink-0" />
-                            {Math.floor(game.time_seconds / 60)}:
-                            {String(game.time_seconds % 60).padStart(2, '0')}
+                            {Math.floor(Math.round(game.time_seconds) / 60)}:
+                            {String(Math.round(game.time_seconds) % 60).padStart(2, '0')}
                           </span>
                         )}
                       </div>

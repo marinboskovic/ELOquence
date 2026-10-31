@@ -276,7 +276,11 @@ async def user_stats(
         await db.execute(
             select(Move.classification, func.count())
             .join(Game, Game.id == Move.game_id)
-            .where(Game.user_id == current_user.id, Move.classification.isnot(None))
+            .where(
+                Game.user_id == current_user.id,
+                Game.status.in_(["won", "lost"]),
+                Move.classification.isnot(None),
+            )
             .group_by(Move.classification)
         )
     ).all()

@@ -25,7 +25,7 @@ import {
   Check,
 } from 'lucide-react';
 import { usersApi, authApi, errorMessage } from '@/lib/api';
-import { useSettings } from '@/lib/useSettings';
+import { THEME_OPTIONS, useSettings } from '@/lib/useSettings';
 import {
   getPushState,
   subscribeToPush,
@@ -724,7 +724,7 @@ function ChangePasswordForm() {
           </p>
           <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
             {hasPassword
-              ? 'Other sessions stay signed in; this one is refreshed.'
+              ? 'Every other device is signed out; this one stays signed in.'
               : 'Your account uses Google sign-in. Add a password to also sign in with email.'}
           </p>
         </div>
@@ -1200,14 +1200,32 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-2">
               <SettingRow
                 icon={<Moon size={17} />}
-                title="Dark Theme"
-                description="Switch to OLED dark mode"
+                title="Theme"
+                description="System follows your device; Dark is the OLED palette."
               >
-                <Toggle
-                  checked={settings.theme === 'dark'}
-                  onChange={() => setSetting('theme', settings.theme === 'dark' ? 'light' : 'dark')}
-                  label="Toggle dark theme"
-                />
+                <div
+                  role="radiogroup"
+                  aria-label="Theme"
+                  className="flex shrink-0 rounded-pill bg-bg-muted p-0.5 border border-border-subtle"
+                >
+                  {THEME_OPTIONS.map((opt) => {
+                    const active = settings.theme === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        onClick={() => setSetting('theme', opt)}
+                        className={`px-3 py-1 rounded-pill text-xs font-semibold capitalize transition-colors ${
+                          active ? 'bg-bg-base text-text-primary shadow-card' : 'text-text-secondary hover:text-text-primary'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
               </SettingRow>
             </div>
           </section>

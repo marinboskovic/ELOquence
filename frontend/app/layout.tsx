@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { Libre_Franklin, Roboto_Slab, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/hooks/useAuth';
 import Navigation from '@/components/Navigation';
@@ -10,25 +9,7 @@ import MotionProvider from '@/components/MotionProvider';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
-const libreFranklin = Libre_Franklin({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-  weight: ['400', '500', '600', '700', '900'],
-});
-
-const robotoSlab = Roboto_Slab({
-  subsets: ['latin'],
-  variable: '--font-display',
-  display: 'swap',
-  weight: ['700', '900'],
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  display: 'swap',
-});
+import { jetbrainsMono, libreFranklin, robotoSlab } from './fonts';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://el-oquence.vercel.app';
 
