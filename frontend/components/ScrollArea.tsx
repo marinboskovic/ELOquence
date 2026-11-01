@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-/* Custom scroll container with a soft-fading overlay thumb.
+/* Custom scroll container with an overlay thumb: a 2px ink bar (Atelier).
  *
  * We hide the native browser scrollbar (Chromium doesn't animate
  * `::-webkit-scrollbar-thumb` properties reliably) and render our own
@@ -10,8 +10,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
  * Opacity fades in fast on scroll, out slow on idle, so the bar feels
  * present-when-needed and gone-when-not.
  *
- * The CSS this depends on lives in globals.css under `.hide-native-scrollbar`
- * and `.custom-scroll-thumb`.
+ * The CSS this depends on lives in globals.css under `.hide-native-scrollbar`.
  */
 export default function ScrollArea({
   children,
@@ -82,18 +81,18 @@ export default function ScrollArea({
       </div>
       {thumb && (
         <div
-          className="custom-scroll-thumb"
           style={{
             position: 'absolute',
-            right: 2,
+            right: 0,
             top: thumb.top,
-            width: 5,
+            width: 2,
             height: thumb.height,
-            borderRadius: 3,
+            borderRadius: 0,
+            background: 'var(--border-default)',
             opacity: visible ? 1 : 0,
             transition: visible
-              ? 'opacity 180ms cubic-bezier(0.22, 1, 0.36, 1), top 60ms linear, height 60ms linear'
-              : 'opacity 600ms cubic-bezier(0.22, 1, 0.36, 1)',
+              ? 'opacity var(--dur-fast) var(--ease-out), top 60ms linear, height 60ms linear'
+              : 'opacity var(--dur-slow) var(--ease-out)',
             pointerEvents: 'none',
             willChange: 'opacity, top',
           }}

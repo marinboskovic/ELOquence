@@ -1,30 +1,18 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
-import {
-  Users,
-  FileText,
-  Megaphone,
-  BarChart3,
-  TrendingUp,
-  Target,
-  Calendar,
-  Gamepad2,
-  Activity,
-  Shield,
-  Heart,
-  ClipboardList,
-} from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
+import clsx from 'clsx';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { adminApi } from '@/lib/api';
-import { stagger } from '@/lib/animations';
 import StatCardLg from '@/components/admin/StatCardLg';
 import TimeSeriesChart from '@/components/admin/TimeSeriesChart';
+import TileSpinner from '@/components/TileSpinner';
 import Histogram from '@/components/admin/Histogram';
 import DonutChart from '@/components/admin/DonutChart';
-import AdminNav from '@/components/admin/AdminNav';
+import { CountUp, Label, Reveal, Stat, buttonClass } from '@/components/ui';
+import { AdminLoading, AdminPage, ErrorBand, PanelHead } from './_shared';
 
 interface Analytics {
   total_users: number;
@@ -62,36 +50,54 @@ interface Distributions {
   guesses_to_win: Record<string, number>;
 }
 
-function SmallStatCard({ label, value, icon: Icon, index }: { label: string; value: string | number; icon: React.ElementType; index: number }) {
-  return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 16 },
-        visible: {
-          opacity: 1,
-          y: 0,
-          transition: { type: 'spring', damping: 22, stiffness: 350, delay: index * 0.05 },
-        },
-      }}
-      className="bg-bg-base border border-border-default rounded-card-lg px-4 py-4 flex flex-col gap-3"
-    >
-      <div className="flex items-center gap-2">
-        <Icon size={14} className="text-text-secondary" />
-        <span className="text-xs uppercase tracking-wider text-text-secondary font-semibold font-sans">
-          {label}
-        </span>
-      </div>
-      <span className="font-display text-2xl font-bold text-text-primary tabular-nums">{value}</span>
-    </motion.div>
-  );
-}
-
 type TimeseriesTab = 'games' | 'users' | 'quality';
 
 const RANGE_OPTIONS = [7, 30, 90] as const;
 type Range = typeof RANGE_OPTIONS[number];
 
-export default function AdminPage() {
+/* Chart palette: ink + the two coloured tiles + accent. */
+const INK = 'var(--text-primary)';
+const C_CORRECT = 'var(--tile-correct)';
+const C_PRESENT = 'var(--tile-present)';
+const C_ABSENT = 'var(--tile-absent)';
+const C_ACCENT = 'var(--accent)';
+const C_GREY = 'var(--text-tertiary)';
+
+function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+  label,
+  render,
+}: {
+  options: readonly T[];
+  value: T;
+  onChange: (v: T) => void;
+  label: string;
+  render?: (v: T) => string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex gap-1">
+      {options.map((opt) => {
+        const active = opt === value;
+        return (
+          <button
+            key={String(opt)}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(opt)}
+            className={buttonClass(active ? 'ink' : 'secondary', 'sm')}
+          >
+            {render ? render(opt) : String(opt)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function AdminOverviewPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -133,22 +139,13 @@ export default function AdminPage() {
       .finally(() => setFetching(false));
   }, [user, loading, router]);
 
-  if (loading || fetching) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
-        <div
-          className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }}
-        />
-      </div>
-    );
-  }
+  if (loading || fetching) return <AdminLoading />;
 
   if (!user?.is_admin) return null;
 
   // Sparkline: last 14 days signups
   const last14Signups = timeseries.slice(-14).map((d) => d.signups);
-  const last14DAU = timeseries.slice(-14).map((d) => d.active_users);
+  const last14Games = timeseries.slice(-14).map((d) => d.games_total);
 
   // DAU trend vs 7 days ago
   const dauNow = analytics?.dau ?? 0;
@@ -169,285 +166,191 @@ export default function AdminPage() {
   // Mode distribution for donut
   const modeSegs = distributions
     ? [
-        { key: 'daily', label: 'Daily', value: distributions.mode_distribution.daily, color: 'var(--tile-correct)' },
-        { key: 'competitive', label: 'Competitive', value: distributions.mode_distribution.competitive, color: '#1565c0' },
-        { key: 'practice', label: 'Practice', value: distributions.mode_distribution.practice, color: 'var(--gold)' },
-        { key: 'challenge', label: 'Challenge', value: distributions.mode_distribution.challenge, color: '#9c27b0' },
+        { key: 'daily', label: 'Daily', value: distributions.mode_distribution.daily, color: INK },
+        { key: 'competitive', label: 'Competitive', value: distributions.mode_distribution.competitive, color: C_CORRECT },
+        { key: 'practice', label: 'Practice', value: distributions.mode_distribution.practice, color: C_PRESENT },
+        { key: 'challenge', label: 'Challenge', value: distributions.mode_distribution.challenge, color: C_ACCENT },
       ]
     : [];
 
   const outcomeSegs = distributions
     ? [
-        { key: 'won', label: 'Won', value: distributions.outcome_distribution.won, color: 'var(--tile-correct)' },
-        { key: 'lost', label: 'Lost', value: distributions.outcome_distribution.lost, color: 'var(--red)' },
-        { key: 'abandoned', label: 'Abandoned', value: distributions.outcome_distribution.abandoned, color: 'var(--text-tertiary)' },
-        { key: 'in_progress', label: 'In Progress', value: distributions.outcome_distribution.in_progress, color: 'var(--gold)' },
+        { key: 'won', label: 'Won', value: distributions.outcome_distribution.won, color: C_CORRECT },
+        { key: 'lost', label: 'Lost', value: distributions.outcome_distribution.lost, color: INK },
+        { key: 'abandoned', label: 'Abandoned', value: distributions.outcome_distribution.abandoned, color: C_ABSENT },
+        { key: 'in_progress', label: 'In progress', value: distributions.outcome_distribution.in_progress, color: C_PRESENT },
       ]
     : [];
 
   // Timeseries series defs based on tab
   const tsSeries: Array<{ key: string; label: string; color: string }> = tsTab === 'games'
     ? [
-        { key: 'games_daily', label: 'Daily', color: 'var(--tile-correct)' },
-        { key: 'games_competitive', label: 'Competitive', color: '#1565c0' },
-        { key: 'games_practice', label: 'Practice', color: 'var(--gold)' },
+        { key: 'games_daily', label: 'Daily', color: INK },
+        { key: 'games_competitive', label: 'Competitive', color: C_CORRECT },
+        { key: 'games_practice', label: 'Practice', color: C_PRESENT },
       ]
     : tsTab === 'users'
     ? [
-        { key: 'signups', label: 'New Users', color: 'var(--tile-correct)' },
-        { key: 'active_users', label: 'DAU', color: '#1565c0' },
+        { key: 'signups', label: 'New users', color: C_ACCENT },
+        { key: 'active_users', label: 'DAU', color: INK },
       ]
     : [
-        { key: 'avg_accuracy', label: 'Avg Accuracy', color: 'var(--tile-correct)' },
+        { key: 'avg_accuracy', label: 'Avg accuracy', color: INK },
       ];
 
   const subPages = [
-    { href: '/admin/users', label: 'User Management', description: 'Search, reset ELO, manage admins', icon: Users },
-    { href: '/admin/words', label: 'Daily Words', description: 'Schedule upcoming daily words', icon: FileText },
-    { href: '/admin/announcements', label: 'Announcements', description: 'Post and manage banners', icon: Megaphone },
-    { href: '/admin/games', label: 'Games Browser', description: 'Browse and inspect all games', icon: Gamepad2 },
-    { href: '/admin/audit', label: 'Audit Log', description: 'Admin action history', icon: ClipboardList },
-    { href: '/admin/health', label: 'System Health', description: 'DB status, uptime, version', icon: Heart },
+    { href: '/admin/users', label: 'Users', description: 'Search, reset ELO, manage admins, bans' },
+    { href: '/admin/games', label: 'Games', description: 'Browse and inspect every game' },
+    { href: '/admin/words', label: 'Words', description: 'Schedule upcoming daily words' },
+    { href: '/admin/announcements', label: 'Announcements', description: 'Post and manage banners' },
+    { href: '/admin/audit', label: 'Audit', description: 'Admin action history' },
+    { href: '/admin/health', label: 'Health', description: 'DB status, uptime, version' },
   ];
 
-  const smallStats = analytics
+  const smallStats: Array<{ label: string; value: number | string; count?: boolean }> = analytics
     ? [
-        { label: 'Total Games', value: analytics.total_games.toLocaleString(), icon: Gamepad2 },
-        { label: 'Games This Week', value: analytics.games_this_week.toLocaleString(), icon: Calendar },
-        { label: 'New Users Today', value: (analytics.new_users_today ?? 0).toLocaleString(), icon: Users },
-        { label: 'New Users (Week)', value: (analytics.new_users_week ?? 0).toLocaleString(), icon: TrendingUp },
-        {
-          label: 'Avg Accuracy',
-          value: analytics.avg_accuracy != null ? `${analytics.avg_accuracy.toFixed(1)}%` : '—',
-          icon: Target,
-        },
-        {
-          label: 'Win Rate',
-          value: analytics.win_rate != null ? `${analytics.win_rate.toFixed(1)}%` : '—',
-          icon: Activity,
-        },
-        { label: 'Avg Guesses', value: analytics.avg_guesses != null ? analytics.avg_guesses.toFixed(2) : '—', icon: BarChart3 },
-        { label: 'WAU', value: (analytics.wau ?? 0).toLocaleString(), icon: Users },
+        { label: 'total games', value: analytics.total_games },
+        { label: 'games this week', value: analytics.games_this_week },
+        { label: 'new users today', value: analytics.new_users_today ?? 0 },
+        { label: 'new users · week', value: analytics.new_users_week ?? 0 },
+        { label: 'avg accuracy', value: analytics.avg_accuracy != null ? `${analytics.avg_accuracy.toFixed(1)}%` : '—' },
+        { label: 'win rate', value: analytics.win_rate != null ? `${analytics.win_rate.toFixed(1)}%` : '—' },
+        { label: 'avg guesses', value: analytics.avg_guesses != null ? analytics.avg_guesses.toFixed(2) : '—' },
+        { label: 'wau', value: analytics.wau ?? 0 },
       ]
     : [];
 
+  const month = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
-      >
-        <h1 className="font-display font-black text-3xl text-text-primary mb-1">Admin · Overview</h1>
-        <p className="font-sans text-text-secondary">Platform health and recent activity.</p>
-      </motion.div>
+    <AdminPage eyebrow={`admin · overview · ${month}`} title="Platform">
+      {error && <ErrorBand onDismiss={() => setError('')}>{error}</ErrorBand>}
 
-      {/* Admin sub-nav */}
-      <AdminNav />
-
-      {error && (
-        <div
-          className="mb-6 px-4 py-3 rounded-card border text-sm flex items-center justify-between"
-          style={{ background: 'rgba(231,76,60,0.08)', borderColor: 'rgba(231,76,60,0.25)', color: 'var(--red)' }}
-        >
-          <span>{error}</span>
-          <button className="ml-2 underline text-xs" onClick={() => setError('')}>Dismiss</button>
-        </div>
-      )}
-
-      {/* Large stat cards */}
-      {analytics && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          {[
-            <StatCardLg
-              key="users"
-              label="Total Users"
-              value={analytics.total_users.toLocaleString()}
-              icon={Users}
-              sparkline={last14Signups}
-              trend={signupsTrendVal !== 0 ? { value: Math.abs(signupsTrendVal), direction: signupsTrendVal >= 0 ? 'up' : 'down' } : undefined}
-              accent="green"
-            />,
-            <StatCardLg
-              key="dau"
-              label="Daily Active"
-              value={analytics.dau.toLocaleString()}
-              icon={Activity}
-              sparkline={last14DAU}
-              trend={dauTrendVal !== 0 ? { value: Math.abs(dauTrendVal), direction: dauTrendVal >= 0 ? 'up' : 'down' } : undefined}
-              accent="green"
-            />,
-            <StatCardLg
-              key="today"
-              label="Games Today"
-              value={analytics.games_today.toLocaleString()}
-              icon={Calendar}
-              accent="default"
-            />,
-            <StatCardLg
-              key="active"
-              label="Active Games"
-              value={(analytics.active_games ?? 0).toLocaleString()}
-              icon={Gamepad2}
-              accent="default"
-            />,
-          ].map((card, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ type: 'spring', damping: 22, stiffness: 350, delay: i * 0.06 }}
-            >
-              {card}
-            </motion.div>
-          ))}
-        </div>
-      )}
-
-      {/* Secondary stats grid */}
-      {analytics && (
-        <motion.div
-          variants={{ visible: stagger.fast }}
-          initial="hidden"
-          animate="visible"
-          className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8"
-        >
-          {smallStats.map((s, i) => (
-            <SmallStatCard key={s.label} label={s.label} value={s.value} icon={s.icon} index={i} />
-          ))}
-        </motion.div>
-      )}
-
-      {/* Timeseries chart panel */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.3 }}
-        className="bg-bg-base border border-border-default rounded-card-lg p-5 mb-6"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h2 className="font-display font-bold text-text-primary">Activity (last {tsRange} days)</h2>
-          <div className="flex items-center gap-2">
-            {/* Tab strip */}
-            <div className="flex items-center rounded-md border border-border-default overflow-hidden">
-              {(['games', 'users', 'quality'] as TimeseriesTab[]).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setTsTab(tab)}
-                  className="px-3 py-1 font-sans text-xs capitalize transition-colors"
-                  style={
-                    tsTab === tab
-                      ? { backgroundColor: 'var(--tile-correct)', color: '#fff', fontWeight: 600 }
-                      : { color: 'var(--text-secondary)' }
-                  }
-                >
-                  {tab === 'quality' ? 'Accuracy' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              ))}
+      <div className="flex flex-col gap-12 md:gap-16">
+        {/* ── Headline numbers: 7/5 — DAU as the one ink block, the rest as Stats ── */}
+        {analytics && (
+          <Reveal as="section" className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12">
+            <div className="md:col-span-5 bg-bg-ink text-text-on-ink p-6 md:p-8 flex flex-col justify-between gap-6">
+              <Label className="text-text-on-ink opacity-70">daily active</Label>
+              <div className="font-display text-display-xl tabular leading-none text-text-on-ink">
+                <CountUp value={analytics.dau} />
+              </div>
+              <div className="flex items-end justify-between gap-4">
+                <span className="font-mono text-xs opacity-70 tabular">
+                  {dauTrendVal !== 0
+                    ? `${dauTrendVal >= 0 ? '▲' : '▼'} ${Math.abs(dauTrendVal).toFixed(1)}% vs 7d ago`
+                    : 'flat vs 7d ago'}
+                </span>
+                <span className="font-mono text-xs opacity-70 tabular">{(analytics.wau ?? 0).toLocaleString()} wau</span>
+              </div>
             </div>
-            {/* Range selector */}
-            <div className="flex items-center rounded-md border border-border-default overflow-hidden">
-              {RANGE_OPTIONS.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => {
+            <div className="md:col-span-7 grid grid-cols-2 gap-x-8 gap-y-6 content-start">
+              <StatCardLg
+                label="total users"
+                value={analytics.total_users}
+                sparkline={last14Signups}
+                trend={signupsTrendVal !== 0 ? { value: Math.abs(signupsTrendVal), direction: signupsTrendVal >= 0 ? 'up' : 'down' } : undefined}
+              />
+              <StatCardLg label="games today" value={analytics.games_today} sparkline={last14Games} />
+              <StatCardLg label="active games" value={analytics.active_games ?? 0} />
+              <StatCardLg label="games this week" value={analytics.games_this_week} />
+            </div>
+          </Reveal>
+        )}
+
+        {/* ── Secondary stats: a single hair-ruled row of 8 ── */}
+        {analytics && (
+          <Reveal as="section" delay={0.05} className="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-6">
+            {smallStats.map((s) => (
+              <Stat key={s.label} label={s.label} value={s.value} size="sm" />
+            ))}
+          </Reveal>
+        )}
+
+        {/* ── Activity chart ── */}
+        <Reveal as="section" delay={0.1}>
+          <PanelHead
+            title={`Activity · last ${tsRange} days`}
+            aside={
+              <div className="flex flex-wrap items-center gap-3">
+                <Segmented<TimeseriesTab>
+                  label="Series"
+                  options={['games', 'users', 'quality']}
+                  value={tsTab}
+                  onChange={setTsTab}
+                  render={(t) => (t === 'quality' ? 'Accuracy' : t)}
+                />
+                <Segmented<Range>
+                  label="Range"
+                  options={RANGE_OPTIONS}
+                  value={tsRange}
+                  onChange={(r) => {
                     setTsRange(r);
                     fetchTimeseries(r);
                   }}
-                  className="px-2.5 py-1 font-sans text-xs transition-colors"
-                  style={
-                    tsRange === r
-                      ? { backgroundColor: 'var(--bg-elevated)', color: 'var(--text-primary)', fontWeight: 600 }
-                      : { color: 'var(--text-secondary)' }
-                  }
-                >
-                  {r}d
-                </button>
-              ))}
+                  render={(r) => `${r}d`}
+                />
+              </div>
+            }
+          />
+          {tsLoading ? (
+            <div className="flex items-center justify-center h-[220px]">
+              <TileSpinner size="sm" label="Loading chart" />
             </div>
-          </div>
-        </div>
-        {tsLoading ? (
-          <div className="flex items-center justify-center h-[220px]">
-            <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
-          </div>
-        ) : (
-          <TimeSeriesChart data={timeseries} series={tsSeries} height={220} />
-        )}
-      </motion.div>
-
-      {/* Distributions row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25, duration: 0.3 }}
-          className="bg-bg-base border border-border-default rounded-card-lg p-5"
-        >
-          <h2 className="font-display font-bold text-text-primary mb-4">ELO Distribution</h2>
-          {eloBuckets.length > 0 ? (
-            <Histogram buckets={eloBuckets} height={160} />
           ) : (
-            <div className="flex items-center justify-center h-[160px] text-sm text-text-secondary">No data</div>
+            <TimeSeriesChart data={timeseries} series={tsSeries} height={220} />
           )}
-        </motion.div>
+        </Reveal>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.28, duration: 0.3 }}
-          className="bg-bg-base border border-border-default rounded-card-lg p-5"
-        >
-          <h2 className="font-display font-bold text-text-primary mb-4">Mode Distribution</h2>
-          <DonutChart
-            segments={modeSegs.filter((s) => s.value > 0)}
-            size={140}
-            centerLabel="games"
-            centerValue={modeSegs.reduce((s, seg) => s + seg.value, 0).toLocaleString()}
-            ariaLabel="Games by mode"
-          />
-        </motion.div>
-      </div>
+        {/* ── Distributions: 7/5 ── */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12">
+          <Reveal as="section" delay={0.12} className="md:col-span-7">
+            <PanelHead title="ELO distribution" aside="players per bucket" />
+            <Histogram buckets={eloBuckets} height={200} />
+          </Reveal>
 
-      {/* Outcome breakdown */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.3 }}
-        className="bg-bg-base border border-border-default rounded-card-lg p-5 mb-8"
-      >
-        <h2 className="font-display font-bold text-text-primary mb-4">Game Outcomes</h2>
-        <div className="max-w-xs">
-          <DonutChart
-            segments={outcomeSegs.filter((s) => s.value > 0)}
-            size={140}
-            ariaLabel="Game outcomes"
-          />
+          <Reveal as="section" delay={0.15} className="md:col-span-5">
+            <PanelHead title="Games by mode" />
+            <DonutChart
+              segments={modeSegs.filter((s) => s.value > 0)}
+              size={132}
+              centerLabel="games"
+              centerValue={modeSegs.reduce((s, seg) => s + seg.value, 0).toLocaleString()}
+              ariaLabel="Games by mode"
+            />
+          </Reveal>
         </div>
-      </motion.div>
 
-      {/* Sub-page links — 2×3 grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {subPages.map((page, i) => (
-          <motion.div
-            key={page.href}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.32 + i * 0.05, type: 'spring', damping: 22, stiffness: 350 }}
-          >
-            <Link
-              href={page.href}
-              className="flex flex-col gap-2 bg-bg-base border border-border-default rounded-card-lg px-4 py-4 hover:bg-bg-elevated hover:border-border-strong transition-colors"
-            >
-              <page.icon size={18} className="text-tile-correct" />
-              <span className="font-sans font-semibold text-text-primary text-sm">{page.label}</span>
-              <span className="font-sans text-xs text-text-secondary">{page.description}</span>
-            </Link>
-          </motion.div>
-        ))}
+        {/* ── Outcomes + index: 5/7 ── */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12">
+          <Reveal as="section" delay={0.18} className="md:col-span-5">
+            <PanelHead title="Game outcomes" />
+            <DonutChart segments={outcomeSegs.filter((s) => s.value > 0)} size={132} ariaLabel="Game outcomes" />
+          </Reveal>
+
+          <Reveal as="section" delay={0.2} className="md:col-span-7">
+            <PanelHead title="Index" aside="admin pages" />
+            <ul>
+              {subPages.map((page, i) => (
+                <li key={page.href}>
+                  <Link
+                    href={page.href}
+                    className={clsx(
+                      'group flex items-center gap-4 py-3 border-b border-border-subtle hover:bg-bg-elevated transition-colors',
+                      i === 0 && 'border-t'
+                    )}
+                  >
+                    <span className="font-mono text-[10px] text-text-tertiary tabular w-5">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="font-display font-bold text-text-primary w-36">{page.label}</span>
+                    <span className="text-sm text-text-secondary flex-1 min-w-0 truncate">{page.description}</span>
+                    <ArrowUpRight size={14} className="text-text-tertiary group-hover:text-text-primary transition-colors" aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </div>
       </div>
-    </div>
+    </AdminPage>
   );
 }

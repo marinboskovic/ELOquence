@@ -36,7 +36,7 @@ function writeDismissedIds(ids: string[]): void {
 }
 
 const SQUARE_BTN =
-  'w-7 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-ink hover:text-text-on-ink transition-colors duration-fast';
+  'w-7 h-7 flex items-center justify-center text-text-secondary hover:bg-bg-ink hover:text-text-on-ink transition-colors duration-fast';
 
 /**
  * A thin ochre strip under the nav: mono "notice" label, the message, a

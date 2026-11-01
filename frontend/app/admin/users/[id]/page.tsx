@@ -1,46 +1,35 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
-import {
-  ShieldCheck,
-  RefreshCw,
-  ExternalLink,
-  Gamepad2,
-  Calendar,
-  Trophy,
-  TrendingUp,
-  Ban,
-} from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { adminApi, errorMessage } from '@/lib/api';
-import { getRatingTier, EloHistoryEntry, patternToTiles } from '@/lib/types';
+import { getRatingTier, EloHistoryEntry } from '@/lib/types';
 import EloSparkline from '@/components/EloSparkline';
 import DonutChart from '@/components/admin/DonutChart';
-import AdminNav from '@/components/admin/AdminNav';
 import Dialog from '@/components/Dialog';
+import { Button, Label, Reveal, Stat, Tag } from '@/components/ui';
+import {
+  AdminLoading,
+  AdminPage,
+  EloDelta,
+  EmptyBand,
+  ErrorBand,
+  Field,
+  INPUT,
+  PanelHead,
+  PanelLoading,
+  Pager,
+  StatusTag,
+  TD,
+  TH,
+  TR,
+} from '../../_shared';
 
 /* ------------------------------------------------------------------ */
-/*  Ban dialog + pill (local to this page — components/admin is not   */
-/*  owned by this change)                                              */
+/*  Ban dialog (local to this page)                                    */
 /* ------------------------------------------------------------------ */
-
-function BannedPill({ reason }: { reason?: string | null }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-pill text-[10px] font-semibold font-sans"
-      style={{
-        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
-        color: 'var(--red)',
-      }}
-      title={reason ? `Banned: ${reason}` : 'Banned'}
-    >
-      <Ban size={10} />
-      Banned
-    </span>
-  );
-}
 
 function BanDialog({
   open,
@@ -79,12 +68,11 @@ function BanDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title={`Ban ${username}?`} accent="var(--red)" locked={busy} maxWidth="max-w-sm">
-      <form onSubmit={submit} className="p-5 pt-3 flex flex-col gap-4">
-        <p className="font-sans text-sm text-text-secondary leading-relaxed">
+      <form onSubmit={submit} className="p-5 pt-3 flex flex-col gap-5">
+        <p className="text-sm text-text-secondary leading-relaxed">
           The user will be signed out everywhere and blocked from signing in. You can lift the ban later.
         </p>
-        <label className="block">
-          <span className="block text-xs text-text-secondary mb-1.5">Reason (optional, shown to admins)</span>
+        <Field label="reason · optional, shown to admins">
           <input
             data-autofocus
             type="text"
@@ -93,27 +81,16 @@ function BanDialog({
             maxLength={200}
             placeholder="e.g. abusive username"
             disabled={busy}
-            className="w-full px-3.5 py-2.5 text-sm rounded-md bg-transparent border-2 border-border-default text-text-primary placeholder:text-text-ghost focus:border-tile-correct focus:outline-none transition-colors disabled:opacity-40 font-sans"
+            className={INPUT}
           />
-        </label>
+        </Field>
         <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="px-4 py-2 text-sm rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors disabled:opacity-40 font-sans"
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="px-4 py-2 text-sm rounded-md font-medium text-white hover:brightness-110 transition-[filter] disabled:opacity-40 inline-flex items-center gap-2 font-sans"
-            style={{ backgroundColor: 'var(--red)' }}
-          >
-            {busy ? <RefreshCw size={12} className="animate-spin" /> : <Ban size={12} />}
+          </Button>
+          <Button type="submit" variant="danger" size="sm" loading={busy}>
             Ban user
-          </button>
+          </Button>
         </div>
       </form>
     </Dialog>
@@ -176,72 +153,6 @@ interface GamesResponse {
   total: number;
   page: number;
   per_page: number;
-}
-
-const MODE_ICONS: Record<string, React.ElementType> = {
-  daily: Calendar,
-  competitive: Trophy,
-  practice: Gamepad2,
-  challenge: TrendingUp,
-};
-
-function StatusBadge({ status }: { status: string }) {
-  let bg = 'var(--bg-elevated)';
-  let color = 'var(--text-secondary)';
-  if (status === 'won') { bg = 'rgba(106,170,100,0.12)'; color = 'var(--tile-correct)'; }
-  else if (status === 'lost') { bg = 'rgba(231,76,60,0.10)'; color = 'var(--red)'; }
-  else if (status === 'abandoned') { bg = 'rgba(150,150,150,0.10)'; color = 'var(--text-tertiary)'; }
-  else if (status === 'in_progress') { bg = 'rgba(201,162,39,0.10)'; color = 'var(--gold)'; }
-  return (
-    <span
-      className="inline-flex items-center px-1.5 py-0.5 rounded font-sans text-[10px] font-semibold capitalize"
-      style={{ backgroundColor: bg, color }}
-    >
-      {status.replace('_', ' ')}
-    </span>
-  );
-}
-
-function EloDelta({ delta }: { delta: number | null }) {
-  if (delta === null) return <span className="text-text-tertiary font-mono tabular-nums">—</span>;
-  const color = delta > 0 ? 'var(--tile-correct)' : delta < 0 ? 'var(--red)' : 'var(--text-tertiary)';
-  return (
-    <span className="font-mono tabular-nums font-semibold" style={{ color, fontSize: 12 }}>
-      {delta > 0 ? '+' : ''}{delta}
-    </span>
-  );
-}
-
-function TileMini({ state }: { state: 'correct' | 'present' | 'absent' }) {
-  const colors = { correct: 'var(--tile-correct)', present: 'var(--tile-present)', absent: 'var(--tile-absent)' };
-  return <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 1, backgroundColor: colors[state], flexShrink: 0 }} />;
-}
-
-function WordTiles({ word, pattern }: { word: string; pattern?: number }) {
-  if (!pattern) {
-    return <span className="font-mono font-semibold tracking-widest text-text-primary text-xs uppercase">{word}</span>;
-  }
-  const tiles = patternToTiles(pattern);
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      {word.split('').map((ch, i) => (
-        <span
-          key={i}
-          className="inline-flex items-center justify-center font-mono font-bold uppercase"
-          style={{
-            width: 16,
-            height: 16,
-            fontSize: 9,
-            borderRadius: 2,
-            backgroundColor: tiles[i] === 'correct' ? 'var(--tile-correct)' : tiles[i] === 'present' ? 'var(--tile-present)' : 'var(--tile-absent)',
-            color: '#fff',
-          }}
-        >
-          {ch}
-        </span>
-      ))}
-    </span>
-  );
 }
 
 export default function AdminUserDetailPage() {
@@ -352,16 +263,16 @@ export default function AdminUserDetailPage() {
     }
   };
 
-  if (loading || fetching) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
-        <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
-      </div>
-    );
-  }
+  if (loading || fetching) return <AdminLoading />;
 
   if (!user?.is_admin) return null;
-  if (!detail) return null;
+  if (!detail) {
+    return (
+      <AdminPage eyebrow="admin · users" title="User" crumbs={[['users', '/admin/users']]}>
+        {error ? <ErrorBand>{error}</ErrorBand> : <EmptyBand>User not found.</EmptyBand>}
+      </AdminPage>
+    );
+  }
 
   const { user: u, profile, elo_history, recent_games_count, games_by_mode } = detail;
   const tier = getRatingTier(u.elo_rating);
@@ -380,293 +291,204 @@ export default function AdminUserDetailPage() {
 
   // Mode donut
   const modeSegs = [
-    { key: 'daily', label: 'Daily', value: games_by_mode.daily, color: 'var(--tile-correct)' },
-    { key: 'competitive', label: 'Competitive', value: games_by_mode.competitive, color: '#1565c0' },
-    { key: 'practice', label: 'Practice', value: games_by_mode.practice, color: 'var(--gold)' },
-    { key: 'challenge', label: 'Challenge', value: games_by_mode.challenge, color: '#9c27b0' },
+    { key: 'daily', label: 'Daily', value: games_by_mode.daily, color: 'var(--text-primary)' },
+    { key: 'competitive', label: 'Competitive', value: games_by_mode.competitive, color: 'var(--tile-correct)' },
+    { key: 'practice', label: 'Practice', value: games_by_mode.practice, color: 'var(--tile-present)' },
+    { key: 'challenge', label: 'Challenge', value: games_by_mode.challenge, color: 'var(--accent)' },
   ].filter((s) => s.value > 0);
 
   // Recent outcome donut
   const outcomeSegs = [
     { key: 'won', label: 'Won', value: recent_games_count.won, color: 'var(--tile-correct)' },
-    { key: 'lost', label: 'Lost', value: recent_games_count.lost, color: 'var(--red)' },
-    { key: 'abandoned', label: 'Abandoned', value: recent_games_count.abandoned, color: 'var(--text-tertiary)' },
+    { key: 'lost', label: 'Lost', value: recent_games_count.lost, color: 'var(--text-primary)' },
+    { key: 'abandoned', label: 'Abandoned', value: recent_games_count.abandoned, color: 'var(--tile-absent)' },
   ].filter((s) => s.value > 0);
 
   const totalPages = Math.ceil(gamesTotal / PER_PAGE);
   const isSelf = user.id === u.id;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <Link href="/admin" className="font-sans text-text-secondary hover:text-text-primary text-sm transition-colors">Admin</Link>
-          <span className="text-text-tertiary text-sm">/</span>
-          <Link href="/admin/users" className="font-sans text-text-secondary hover:text-text-primary text-sm transition-colors">Users</Link>
-          <span className="text-text-tertiary text-sm">/</span>
-          <span className="font-sans text-sm text-text-primary">{u.username}</span>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-display font-black text-3xl text-text-primary">{u.username}</h1>
-          {u.provider === 'google' && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans" style={{ background: 'rgba(66,133,244,0.12)', color: '#4285f4' }}>
-              Google
-            </span>
-          )}
-          {u.is_admin && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans" style={{ background: 'rgba(201,162,39,0.12)', color: 'var(--gold)' }}>
-              <ShieldCheck size={10} />
-              Admin
-            </span>
-          )}
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold font-sans" style={{ background: `color-mix(in srgb, ${tier.color} 12%, transparent)`, color: tier.color }}>
-            {tier.name}
-          </span>
-          {u.is_banned && <BannedPill reason={u.banned_reason} />}
-        </div>
-        <p className="font-sans text-text-secondary text-sm mt-1">{u.email}</p>
-        {u.is_banned && u.banned_reason && (
-          <p className="font-sans text-xs mt-1" style={{ color: 'var(--red)' }}>
-            Ban reason: {u.banned_reason}
-          </p>
-        )}
-      </motion.div>
-
-      <AdminNav />
-
-      {error && (
-        <div role="alert" aria-live="assertive" className="mb-4 px-4 py-3 rounded-card border text-sm flex items-center justify-between" style={{ background: 'rgba(231,76,60,0.08)', borderColor: 'rgba(231,76,60,0.25)', color: 'var(--red)' }}>
-          <span>{error}</span>
-          <button className="ml-2 underline text-xs" onClick={() => setError('')}>Dismiss</button>
-        </div>
-      )}
-
-      {/* 3 stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-        {[
-          {
-            label: 'ELO Rating',
-            value: Math.round(u.elo_rating).toLocaleString(),
-            sub: eloDelta30d !== 0 ? `${eloDelta30d > 0 ? '+' : ''}${eloDelta30d} vs 30d ago` : 'No change in 30d',
-            color: eloDelta30d > 0 ? 'var(--tile-correct)' : eloDelta30d < 0 ? 'var(--red)' : 'var(--text-tertiary)',
-          },
-          {
-            label: 'Games Played',
-            value: u.games_played.toLocaleString(),
-            sub: `${(profile?.total_wins ?? 0).toLocaleString()} wins lifetime`,
-            color: 'var(--text-secondary)',
-          },
-          {
-            label: 'Win Rate (30d)',
-            value: recentWinRate === '—' ? '—' : `${recentWinRate}%`,
-            sub: `${totalRecent} games in period`,
-            color: 'var(--text-secondary)',
-          },
-        ].map((card, i) => (
-          <motion.div
-            key={card.label}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 + i * 0.06, type: 'spring', damping: 22, stiffness: 350 }}
-            className="bg-bg-base border border-border-default rounded-card-lg px-4 py-4"
-          >
-            <span className="text-xs uppercase tracking-wider text-text-secondary font-semibold font-sans block mb-2">{card.label}</span>
-            <span className="font-display text-2xl font-bold text-text-primary tabular-nums block mb-1">{card.value}</span>
-            <span className="font-sans text-xs" style={{ color: card.color }}>{card.sub}</span>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* ELO history */}
-      {elo_history.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, duration: 0.3 }} className="bg-bg-base border border-border-default rounded-card-lg p-5 mb-6">
-          <h2 className="font-display font-bold text-text-primary mb-4">Rating history</h2>
-          <EloSparkline data={elo_history} height={180} />
-        </motion.div>
-      )}
-
-      {/* Two side-by-side panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22, duration: 0.3 }} className="bg-bg-base border border-border-default rounded-card-lg p-5">
-          <h2 className="font-display font-bold text-text-primary mb-4">Games by Mode</h2>
-          <DonutChart segments={modeSegs} size={130} ariaLabel="Games by mode" />
-        </motion.div>
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.3 }} className="bg-bg-base border border-border-default rounded-card-lg p-5">
-          <h2 className="font-display font-bold text-text-primary mb-1">Recent Outcomes</h2>
-          <p className="font-sans text-xs text-text-tertiary mb-3">Last 30 days</p>
-          <DonutChart segments={outcomeSegs} size={130} ariaLabel="Recent outcomes" />
-        </motion.div>
-      </div>
-
-      {/* Admin actions */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.3 }} className="bg-bg-base border border-border-default rounded-card-lg p-5 mb-6">
-        <h2 className="font-display font-bold text-text-primary mb-4">Admin Actions</h2>
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={handleResetElo}
-            disabled={actionLoading === 'reset'}
-            className="px-3 py-1.5 rounded-md border-2 font-sans text-sm transition-colors"
-            style={
-              confirmReset
-                ? { borderColor: 'var(--red)', color: 'var(--red)' }
-                : { borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }
-            }
-          >
-            {actionLoading === 'reset' ? (
-              <RefreshCw size={12} className="animate-spin inline" />
-            ) : confirmReset ? (
-              'Confirm Reset ELO?'
-            ) : (
-              'Reset ELO'
-            )}
-          </button>
-
-          <button
-            onClick={handleToggleAdmin}
-            disabled={actionLoading === 'admin' || isSelf}
-            className="px-3 py-1.5 rounded-md border-2 font-sans text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={
-              confirmAdmin
-                ? { borderColor: 'var(--red)', color: 'var(--red)' }
-                : { borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }
-            }
-            title={isSelf ? 'Cannot change your own admin role' : undefined}
-          >
-            {actionLoading === 'admin' ? (
-              <RefreshCw size={12} className="animate-spin inline" />
-            ) : confirmAdmin ? (
-              u.is_admin ? 'Confirm Demote?' : 'Confirm Make Admin?'
-            ) : u.is_admin ? (
-              'Demote Admin'
-            ) : (
-              'Make Admin'
-            )}
-          </button>
-
-          <button
-            onClick={() => (u.is_banned ? handleUnban() : setBanOpen(true))}
-            disabled={actionLoading === 'ban' || isSelf}
-            className="px-3 py-1.5 rounded-md border-2 font-sans text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
-            style={
-              u.is_banned
-                ? { borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }
-                : { borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)', color: 'var(--red)' }
-            }
-            title={isSelf ? 'You cannot ban yourself' : undefined}
-          >
-            {actionLoading === 'ban' ? (
-              <RefreshCw size={12} className="animate-spin inline" />
-            ) : u.is_banned ? (
-              'Unban User'
-            ) : (
-              <>
-                <Ban size={12} />
-                Ban User
-              </>
-            )}
-          </button>
-        </div>
-        {isSelf && (
-          <p className="font-sans text-xs text-text-tertiary mt-2">You cannot change your own admin role.</p>
-        )}
-      </motion.div>
-
-      <BanDialog
-        open={banOpen}
-        username={u.username}
-        onClose={() => setBanOpen(false)}
-        onConfirm={handleBan}
-      />
-
-      {/* Recent games table */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.3 }} className="bg-bg-base border border-border-default rounded-card-lg overflow-hidden mb-6">
-        <div className="px-5 py-3 border-b border-border-default flex items-center justify-between">
-          <h2 className="font-sans font-semibold text-text-primary text-sm">Recent Games</h2>
-          <span className="font-sans text-xs text-text-secondary">{gamesTotal.toLocaleString()} total</span>
-        </div>
-
-        {gamesLoading ? (
-          <div className="flex items-center justify-center py-10">
-            <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
+    <AdminPage
+      eyebrow={`admin · user · joined ${new Date(u.created_at).toLocaleDateString()}`}
+      title={u.username}
+      crumbs={[['users', '/admin/users']]}
+      aside={
+        <div className="flex flex-col md:items-end gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap md:justify-end">
+            {u.is_admin && <Tag tone="ink">admin</Tag>}
+            {u.provider === 'google' && <Tag>google</Tag>}
+            <Tag tone="ochre">{tier.name}</Tag>
+            {u.is_banned && <Tag tone="accent">banned</Tag>}
           </div>
-        ) : games.length === 0 ? (
-          <div className="text-center py-10 text-text-secondary font-sans text-sm">No games found.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm font-sans">
-              <thead>
-                <tr className="border-b-2 border-border-default">
-                  <th className="text-left px-4 py-2 text-xs uppercase tracking-wider text-text-secondary font-semibold">Mode</th>
-                  <th className="text-left px-4 py-2 text-xs uppercase tracking-wider text-text-secondary font-semibold">Word</th>
-                  <th className="text-left px-4 py-2 text-xs uppercase tracking-wider text-text-secondary font-semibold">Status</th>
-                  <th className="text-right px-4 py-2 text-xs uppercase tracking-wider text-text-secondary font-semibold">ELO</th>
-                  <th className="text-right px-4 py-2 text-xs uppercase tracking-wider text-text-secondary font-semibold hidden sm:table-cell">Date</th>
-                  <th className="text-right px-4 py-2 text-xs uppercase tracking-wider text-text-secondary font-semibold"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {games.map((g) => {
-                  const ModeIcon = MODE_ICONS[g.mode] ?? Gamepad2;
-                  return (
-                    <tr key={g.id} className="border-b border-border-subtle hover:bg-bg-elevated/50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <ModeIcon size={12} className="text-text-tertiary" />
-                          <span className="text-text-secondary capitalize text-xs">{g.mode}</span>
-                          {g.is_placement && (
-                            <span className="text-[9px] font-semibold px-1 rounded" style={{ background: 'rgba(201,162,39,0.12)', color: 'var(--gold)' }}>P</span>
-                          )}
-                        </div>
+          <span className="font-mono text-xs text-text-secondary">{u.email}</span>
+          {u.is_banned && u.banned_reason && (
+            <span className="text-xs text-text-secondary">ban reason: {u.banned_reason}</span>
+          )}
+        </div>
+      }
+    >
+      {error && <ErrorBand onDismiss={() => setError('')}>{error}</ErrorBand>}
+
+      <div className="flex flex-col gap-12 md:gap-16">
+        {/* ── Stats 3-up, editorial: rating larger ── */}
+        <Reveal as="section" className="grid grid-cols-2 md:grid-cols-12 gap-x-8 gap-y-6">
+          <Stat
+            className="col-span-2 md:col-span-5"
+            label="elo rating"
+            value={Math.round(u.elo_rating)}
+            size="lg"
+            sub={
+              <span className="font-mono tabular">
+                {eloDelta30d !== 0 ? `${eloDelta30d > 0 ? '+' : ''}${eloDelta30d} vs 30d ago` : 'no change in 30d'}
+                {u.is_placement ? ' · placement' : ''}
+              </span>
+            }
+          />
+          <Stat
+            className="md:col-span-3"
+            label="games played"
+            value={u.games_played}
+            sub={<span className="font-mono tabular">{(profile?.total_wins ?? 0).toLocaleString()} wins lifetime</span>}
+          />
+          <Stat
+            className="md:col-span-2"
+            label="win rate · 30d"
+            value={recentWinRate === '—' ? '—' : `${recentWinRate}%`}
+            sub={<span className="font-mono tabular">{totalRecent} games</span>}
+          />
+          <Stat
+            className="md:col-span-2"
+            label="streak"
+            value={u.current_streak}
+            sub={<span className="font-mono tabular">best {u.max_streak}</span>}
+          />
+        </Reveal>
+
+        {/* ── Rating history ── */}
+        {elo_history.length > 0 && (
+          <Reveal as="section" delay={0.05}>
+            <PanelHead title="Rating history" aside={`${elo_history.length} rated games`} />
+            <EloSparkline data={elo_history} height={180} />
+          </Reveal>
+        )}
+
+        {/* ── Donuts 7/5 ── */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12">
+          <Reveal as="section" delay={0.08} className="md:col-span-7">
+            <PanelHead title="Games by mode" />
+            <DonutChart segments={modeSegs} size={120} ariaLabel="Games by mode" />
+          </Reveal>
+          <Reveal as="section" delay={0.1} className="md:col-span-5">
+            <PanelHead title="Recent outcomes" aside="last 30 days" />
+            <DonutChart segments={outcomeSegs} size={120} ariaLabel="Recent outcomes" />
+          </Reveal>
+        </div>
+
+        {/* ── Admin actions — the one wash band on the page ── */}
+        <Reveal as="section" delay={0.12}>
+          <PanelHead title="Admin actions" aside={isSelf ? 'you cannot change your own role' : undefined} />
+          <div className="bg-wash-accent px-4 md:px-6 py-5 flex flex-wrap gap-3 items-center">
+            <Button
+              type="button"
+              variant={confirmReset ? 'danger' : 'secondary'}
+              size="sm"
+              onClick={handleResetElo}
+              loading={actionLoading === 'reset'}
+            >
+              {confirmReset ? 'Confirm reset ELO?' : 'Reset ELO'}
+            </Button>
+            <Button
+              type="button"
+              variant={confirmAdmin ? 'danger' : 'secondary'}
+              size="sm"
+              onClick={handleToggleAdmin}
+              disabled={isSelf}
+              loading={actionLoading === 'admin'}
+              title={isSelf ? 'Cannot change your own admin role' : undefined}
+            >
+              {confirmAdmin ? (u.is_admin ? 'Confirm demote?' : 'Confirm make admin?') : u.is_admin ? 'Demote admin' : 'Make admin'}
+            </Button>
+            <Button
+              type="button"
+              variant={u.is_banned ? 'secondary' : 'danger'}
+              size="sm"
+              onClick={() => (u.is_banned ? handleUnban() : setBanOpen(true))}
+              disabled={isSelf}
+              loading={actionLoading === 'ban'}
+              title={isSelf ? 'You cannot ban yourself' : undefined}
+            >
+              {u.is_banned ? 'Unban user' : 'Ban user'}
+            </Button>
+          </div>
+        </Reveal>
+
+        <BanDialog
+          open={banOpen}
+          username={u.username}
+          onClose={() => setBanOpen(false)}
+          onConfirm={handleBan}
+        />
+
+        {/* ── Recent games ── */}
+        <Reveal as="section" delay={0.15}>
+          <PanelHead title="Recent games" aside={`${gamesTotal.toLocaleString()} total`} />
+          {gamesLoading ? (
+            <PanelLoading label="Loading games" rows={6} />
+          ) : games.length === 0 ? (
+            <EmptyBand>No games yet.</EmptyBand>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="rule-top">
+                    <th className={TH}><Label>mode</Label></th>
+                    <th className={TH}><Label>word</Label></th>
+                    <th className={TH}><Label>status</Label></th>
+                    <th className={`${TH} text-right`}><Label>elo</Label></th>
+                    <th className={`${TH} text-right hidden sm:table-cell`}><Label>date</Label></th>
+                    <th className={`${TH} text-right`}><span className="sr-only">Open</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {games.map((g) => (
+                    <tr key={g.id} className={TR}>
+                      <td className={TD}>
+                        <span className="font-mono text-xs uppercase tracking-[0.12em] text-text-secondary">{g.mode}</span>
+                        {g.is_placement && <span className="ml-1.5 font-mono text-[10px] text-text-tertiary" title="Placement">P</span>}
+                        {g.hard_mode && <span className="ml-1.5 font-mono text-[10px] text-text-tertiary" title="Hard mode">H</span>}
                       </td>
-                      <td className="px-4 py-3">
-                        <span className="font-mono font-semibold tracking-widest text-text-primary text-xs uppercase">{g.target_word}</span>
+                      <td className={TD}>
+                        <span className="font-display font-black uppercase tracking-[0.08em] text-text-primary">{g.target_word}</span>
                       </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={g.status} />
+                      <td className={TD}>
+                        <StatusTag status={g.status} />
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className={`${TD} text-right`}>
                         <EloDelta delta={g.elo_delta} />
                       </td>
-                      <td className="px-4 py-3 text-right text-text-tertiary text-xs hidden sm:table-cell">
+                      <td className={`${TD} text-right font-mono text-xs tabular text-text-tertiary hidden sm:table-cell`}>
                         {new Date(g.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <Link href={`/admin/games/${g.id}`} className="text-text-tertiary hover:text-text-primary transition-colors">
-                          <ExternalLink size={12} />
+                      <td className={`${TD} text-right`}>
+                        <Link href={`/admin/games/${g.id}`} className="inline-flex text-text-tertiary hover:text-text-primary transition-colors" aria-label="Open game">
+                          <ArrowUpRight size={14} />
                         </Link>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </motion.div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-text-secondary font-sans">
-          <span>Page {gamesPage} of {totalPages}</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { const p = Math.max(1, gamesPage - 1); setGamesPage(p); fetchGames(p); }}
-              disabled={gamesPage === 1}
-              className="px-3 py-1.5 rounded-md border-2 border-border-default hover:border-border-strong disabled:opacity-40 transition-colors"
-            >
-              Prev
-            </button>
-            <button
-              onClick={() => { const p = Math.min(totalPages, gamesPage + 1); setGamesPage(p); fetchGames(p); }}
-              disabled={gamesPage === totalPages}
-              className="px-3 py-1.5 rounded-md border-2 border-border-default hover:border-border-strong disabled:opacity-40 transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+          <Pager
+            page={gamesPage}
+            totalPages={totalPages}
+            onPrev={() => { const p = Math.max(1, gamesPage - 1); setGamesPage(p); fetchGames(p); }}
+            onNext={() => { const p = Math.min(totalPages, gamesPage + 1); setGamesPage(p); fetchGames(p); }}
+          />
+        </Reveal>
+      </div>
+    </AdminPage>
   );
 }

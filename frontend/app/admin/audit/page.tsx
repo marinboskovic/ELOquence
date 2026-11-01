@@ -2,21 +2,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
-import {
-  RefreshCw,
-  ShieldCheck,
-  FileText,
-  Megaphone,
-  Bell,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-} from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import clsx from 'clsx';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { adminApi } from '@/lib/api';
-import AdminNav from '@/components/admin/AdminNav';
+import { Label, Reveal } from '@/components/ui';
+import { AdminLoading, AdminPage, EmptyBand, ErrorBand, Field, PanelLoading, Pager, SELECT, TD, TH } from '../_shared';
 
 interface AuditEntry {
   id: string;
@@ -58,31 +49,17 @@ const ACTION_OPTIONS = [
 
 const ACTION_LABELS: Record<string, string> = {
   reset_elo: 'Reset ELO',
-  toggle_admin: 'Toggle Admin',
-  set_daily_word: 'Set Daily Word',
-  delete_daily_word: 'Delete Daily Word',
-  create_announcement: 'Post Announcement',
-  update_announcement: 'Update Announcement',
-  delete_announcement: 'Delete Announcement',
-  trigger_notification: 'Trigger Notification',
+  toggle_admin: 'Toggle admin',
+  set_daily_word: 'Set daily word',
+  delete_daily_word: 'Delete daily word',
+  create_announcement: 'Post announcement',
+  update_announcement: 'Update announcement',
+  delete_announcement: 'Delete announcement',
+  trigger_notification: 'Trigger notification',
 };
 
 function actionVerb(action: string): string {
   return ACTION_LABELS[action] ?? action;
-}
-
-function ActionIcon({ action }: { action: string }) {
-  const size = 14;
-  const style = { flexShrink: 0 as const, color: 'var(--text-tertiary)' };
-  if (action === 'reset_elo') return <RefreshCw size={size} style={style} />;
-  if (action === 'toggle_admin') return <ShieldCheck size={size} style={style} />;
-  if (action === 'set_daily_word') return <FileText size={size} style={style} />;
-  if (action === 'delete_daily_word') return <Trash2 size={size} style={style} />;
-  if (action === 'create_announcement') return <Megaphone size={size} style={style} />;
-  if (action === 'update_announcement') return <Megaphone size={size} style={style} />;
-  if (action === 'delete_announcement') return <Trash2 size={size} style={style} />;
-  if (action === 'trigger_notification') return <Bell size={size} style={style} />;
-  return <FileText size={size} style={style} />;
 }
 
 function relativeTime(iso: string): string {
@@ -163,113 +140,103 @@ export default function AdminAuditPage() {
 
   const totalPages = Math.ceil(total / PER_PAGE);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
-        <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
-      </div>
-    );
-  }
+  if (loading) return <AdminLoading />;
 
   if (!user?.is_admin) return null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="mb-6">
-        <div className="flex items-center gap-2 mb-1">
-          <Link href="/admin" className="font-sans text-text-secondary hover:text-text-primary text-sm transition-colors">Admin</Link>
-          <span className="text-text-tertiary text-sm">/</span>
-          <span className="font-sans text-sm text-text-primary">Audit Log</span>
+    <AdminPage
+      eyebrow={`admin · audit log · ${total.toLocaleString()} entries`}
+      title="Audit"
+      aside={
+        <div className="grid grid-cols-2 gap-4 w-full md:w-80">
+          <Field label="action">
+            <select
+              value={actionFilter}
+              onChange={(e) => {
+                setActionFilter(e.target.value);
+                setPage(1);
+                fetchEntries(1, e.target.value, adminFilter);
+              }}
+              className={SELECT}
+            >
+              {ACTION_OPTIONS.map((a) => (
+                <option key={a} value={a}>{a ? actionVerb(a) : 'All actions'}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="admin">
+            <select
+              value={adminFilter}
+              onChange={(e) => {
+                setAdminFilter(e.target.value);
+                setPage(1);
+                fetchEntries(1, actionFilter, e.target.value);
+              }}
+              className={SELECT}
+            >
+              <option value="">All admins</option>
+              {admins.map((a) => (
+                <option key={a.id} value={a.id}>{a.username}</option>
+              ))}
+            </select>
+          </Field>
         </div>
-        <h1 className="font-display font-black text-3xl text-text-primary">Admin · Audit Log</h1>
-        <p className="font-sans text-text-secondary mt-0.5">{total.toLocaleString()} entries</p>
-      </motion.div>
+      }
+    >
+      {error && <ErrorBand onDismiss={() => setError('')}>{error}</ErrorBand>}
 
-      <AdminNav />
-
-      {error && (
-        <div className="mb-4 px-4 py-3 rounded-card border text-sm flex items-center justify-between" style={{ background: 'rgba(231,76,60,0.08)', borderColor: 'rgba(231,76,60,0.25)', color: 'var(--red)' }}>
-          <span>{error}</span>
-          <button className="ml-2 underline text-xs" onClick={() => setError('')}>Dismiss</button>
-        </div>
-      )}
-
-      {/* Filter bar */}
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="min-w-[180px]">
-          <label className="block text-xs uppercase tracking-wider text-text-secondary font-semibold font-sans mb-1">Action</label>
-          <select
-            value={actionFilter}
-            onChange={(e) => {
-              setActionFilter(e.target.value);
-              setPage(1);
-              fetchEntries(1, e.target.value, adminFilter);
-            }}
-            className="w-full bg-bg-base border-2 border-border-default rounded-md px-2 py-1.5 font-sans text-sm text-text-primary outline-none focus:border-tile-correct transition-colors"
-          >
-            {ACTION_OPTIONS.map((a) => (
-              <option key={a} value={a}>{a ? actionVerb(a) : 'All Actions'}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="min-w-[180px]">
-          <label className="block text-xs uppercase tracking-wider text-text-secondary font-semibold font-sans mb-1">Admin</label>
-          <select
-            value={adminFilter}
-            onChange={(e) => {
-              setAdminFilter(e.target.value);
-              setPage(1);
-              fetchEntries(1, actionFilter, e.target.value);
-            }}
-            className="w-full bg-bg-base border-2 border-border-default rounded-md px-2 py-1.5 font-sans text-sm text-text-primary outline-none focus:border-tile-correct transition-colors"
-          >
-            <option value="">All Admins</option>
-            {admins.map((a) => (
-              <option key={a.id} value={a.id}>{a.username}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Entries list */}
-      <div className="bg-bg-base border border-border-default rounded-card-lg overflow-hidden">
+      <Reveal as="section">
         {fetching ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
-          </div>
+          <PanelLoading label="Loading audit log" rows={10} />
         ) : entries.length === 0 ? (
-          <div className="text-center py-16 text-text-secondary font-sans text-sm">No audit entries found.</div>
+          <EmptyBand>No audit entries match.</EmptyBand>
         ) : (
-          <ul className="divide-y divide-border-subtle">
-            {entries.map((entry) => {
-              const hasPayload = entry.payload && Object.keys(entry.payload).length > 0;
-              const expanded = expandedPayloads.has(entry.id);
-              return (
-                <li key={entry.id} className="px-5 py-3 hover:bg-bg-elevated/40 transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex-shrink-0">
-                      <ActionIcon action={entry.action} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <p className="font-sans text-sm text-text-primary">
-                        <span className="font-semibold">{entry.admin_username}</span>
-                        <span className="text-text-secondary"> {actionVerb(entry.action)}</span>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="rule-top">
+                <th className={`${TH} w-28 hidden sm:table-cell`}><Label>when</Label></th>
+                <th className={TH}><Label>entry</Label></th>
+                <th className={`${TH} text-right hidden md:table-cell`}><Label>ip</Label></th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry) => {
+                const hasPayload = entry.payload && Object.keys(entry.payload).length > 0;
+                const expanded = expandedPayloads.has(entry.id);
+                return (
+                  <tr key={entry.id} className="border-b border-border-subtle hover:bg-bg-elevated transition-colors align-top">
+                    <td className={`${TD} hidden sm:table-cell`}>
+                      <span className="font-mono text-xs text-text-tertiary tabular" title={new Date(entry.created_at).toLocaleString()}>
+                        {relativeTime(entry.created_at)}
+                      </span>
+                    </td>
+                    <td className={TD}>
+                      <p className="text-text-primary">
+                        <span className="font-display font-bold">{entry.admin_username}</span>
+                        <span className="text-text-secondary"> {actionVerb(entry.action).toLowerCase()}</span>
                         {entry.target_label && (
-                          <span className="text-text-tertiary"> — on {entry.target_label}</span>
+                          <span className="text-text-secondary">
+                            {' '}· <span className="font-mono text-xs text-text-primary">{entry.target_label}</span>
+                          </span>
                         )}
                       </p>
+                      <span className="sm:hidden font-mono text-[11px] text-text-tertiary tabular" title={new Date(entry.created_at).toLocaleString()}>
+                        {relativeTime(entry.created_at)}
+                      </span>
                       {hasPayload && (
                         <button
+                          type="button"
                           onClick={() => togglePayload(entry.id)}
-                          className="flex items-center gap-1 mt-1 font-sans text-xs text-text-tertiary hover:text-text-secondary transition-colors"
+                          aria-expanded={expanded}
+                          className="flex items-center gap-1 mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-text-tertiary hover:text-text-primary transition-colors"
                         >
                           <ChevronDown
-                            size={10}
-                            style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+                            size={11}
+                            className={clsx('transition-transform duration-fast', expanded && 'rotate-180')}
+                            aria-hidden="true"
                           />
-                          {expanded ? 'Hide' : 'Show'} payload
+                          {expanded ? 'hide' : 'show'} payload
                         </button>
                       )}
                       <AnimatePresence>
@@ -281,64 +248,30 @@ export default function AdminAuditPage() {
                             transition={{ duration: 0.2 }}
                             className="overflow-hidden"
                           >
-                            <pre
-                              className="mt-2 rounded-md p-3 text-text-secondary overflow-x-auto"
-                              style={{
-                                fontSize: 11,
-                                backgroundColor: 'var(--bg-elevated)',
-                                border: '1px solid var(--border-subtle)',
-                                fontFamily: 'var(--font-mono, monospace)',
-                              }}
-                            >
+                            <pre className="mt-2 p-3 bg-bg-muted font-mono text-[11px] leading-relaxed text-text-secondary overflow-x-auto">
                               {JSON.stringify(entry.payload, null, 2)}
                             </pre>
                           </motion.div>
                         )}
                       </AnimatePresence>
-                    </div>
-
-                    <div className="flex-shrink-0 text-right">
-                      <span
-                        className="font-sans text-text-tertiary"
-                        style={{ fontSize: 11 }}
-                        title={new Date(entry.created_at).toLocaleString()}
-                      >
-                        {relativeTime(entry.created_at)}
-                      </span>
-                      {entry.ip_address && (
-                        <p className="font-mono text-text-tertiary" style={{ fontSize: 9, marginTop: 2 }}>{entry.ip_address}</p>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                    </td>
+                    <td className={`${TD} text-right hidden md:table-cell`}>
+                      {entry.ip_address && <span className="font-mono text-xs text-text-tertiary tabular">{entry.ip_address}</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
-      </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="mt-4 flex items-center justify-between text-sm text-text-secondary font-sans">
-          <span>Page {page} of {totalPages}</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { const p = Math.max(1, page - 1); setPage(p); fetchEntries(p, actionFilter, adminFilter); }}
-              disabled={page === 1}
-              className="p-1.5 rounded-md border-2 border-border-default hover:border-border-strong disabled:opacity-40 transition-colors"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              onClick={() => { const p = Math.min(totalPages, page + 1); setPage(p); fetchEntries(p, actionFilter, adminFilter); }}
-              disabled={page === totalPages}
-              className="p-1.5 rounded-md border-2 border-border-default hover:border-border-strong disabled:opacity-40 transition-colors"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+        <Pager
+          page={page}
+          totalPages={totalPages}
+          onPrev={() => { const p = Math.max(1, page - 1); setPage(p); fetchEntries(p, actionFilter, adminFilter); }}
+          onNext={() => { const p = Math.min(totalPages, page + 1); setPage(p); fetchEntries(p, actionFilter, adminFilter); }}
+        />
+      </Reveal>
+    </AdminPage>
   );
 }

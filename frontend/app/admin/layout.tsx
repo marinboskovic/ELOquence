@@ -32,7 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading || !user || !user.is_admin) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
+      <div className="flex items-center justify-center min-h-page">
         <TileSpinner size="md" label="Loading" />
       </div>
     );

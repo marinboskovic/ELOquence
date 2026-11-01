@@ -23,12 +23,20 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { springs } from '@/lib/animations';
+import { Button, Label, MiniTiles, Reveal, SplitWords, Tag } from '@/components/ui';
 import clsx from 'clsx';
 
 /* ------------------------------------------------------------------ */
 /*  Shared primitives (carried over)                                    */
 /* ------------------------------------------------------------------ */
+
+type FaqTileColor = 'green' | 'yellow' | 'gray' | 'empty';
+const FAQ_STATE: Record<FaqTileColor, 'correct' | 'present' | 'absent' | 'empty'> = {
+  green: 'correct',
+  yellow: 'present',
+  gray: 'absent',
+  empty: 'empty',
+};
 
 function Tile({
   letter,
@@ -36,30 +44,10 @@ function Tile({
   size = 'md',
 }: {
   letter: string;
-  color: 'green' | 'yellow' | 'gray' | 'empty';
+  color: FaqTileColor;
   size?: 'sm' | 'md';
 }) {
-  const bgStyle: React.CSSProperties =
-    color === 'green'
-      ? { backgroundColor: 'var(--tile-correct)' }
-      : color === 'yellow'
-        ? { backgroundColor: 'var(--tile-present)' }
-        : color === 'empty'
-          ? { backgroundColor: 'transparent', border: '2px solid var(--tile-empty-border)' }
-          : { backgroundColor: 'var(--tile-absent)' };
-
-  const s = size === 'sm' ? 'w-7 h-7 text-xs' : 'w-8 h-8 text-sm';
-  return (
-    <span
-      className={clsx(
-        'inline-flex items-center justify-center rounded-tile font-bold text-white',
-        s,
-      )}
-      style={bgStyle}
-    >
-      {letter}
-    </span>
-  );
+  return <MiniTiles word={letter} states={[FAQ_STATE[color]]} size={size === 'sm' ? 28 : 32} className="align-middle" />;
 }
 
 function TileRow({
@@ -67,38 +55,41 @@ function TileRow({
   pattern,
 }: {
   word: string;
-  pattern: ('green' | 'yellow' | 'gray' | 'empty')[];
+  pattern: FaqTileColor[];
 }) {
-  return (
-    <div className="flex gap-1">
-      {word.split('').map((ch, i) => (
-        <Tile key={i} letter={ch} color={pattern[i] as 'green' | 'yellow' | 'gray' | 'empty'} size="sm" />
-      ))}
-    </div>
-  );
+  return <MiniTiles word={word} states={pattern.map((c) => FAQ_STATE[c])} size={28} gap={4} />;
 }
 
-function ClassBadge({ label, color }: { label: string; color: string }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1 font-sans text-xs font-semibold px-2 py-0.5 rounded-pill"
-      style={{ backgroundColor: `color-mix(in srgb, ${color} 20%, transparent)`, color }}
-    >
-      {label}
-    </span>
-  );
+/** Classification tag — tone follows the label; the legacy `color` prop is ignored. */
+function classTone(label: string): 'green' | 'ochre' | 'accent' | 'neutral' {
+  const l = label.toLowerCase();
+  if (l === 'brilliant' || l === 'best' || l === 'good') return 'green';
+  if (l === 'okay' || l === 'inaccuracy') return 'ochre';
+  if (l === 'mistake' || l === 'blunder' || l === 'miss') return 'accent';
+  return 'neutral';
+}
+function classVar(label: string): string {
+  const l = label.toLowerCase();
+  if (l === 'brilliant') return 'var(--cls-blue)';
+  if (l === 'best' || l === 'good') return 'var(--tile-correct)';
+  if (l === 'okay' || l === 'inaccuracy') return 'var(--tile-present)';
+  if (l === 'mistake') return 'var(--cls-orange)';
+  if (l === 'blunder' || l === 'miss') return 'var(--cls-red)';
+  return 'var(--text-tertiary)';
+}
+
+function ClassBadge({ label }: { label: string; color?: string }) {
+  return <Tag tone={classTone(label)} className="align-middle">{label}</Tag>;
 }
 
 function EfficiencyBar({ pct, color }: { pct: number; color: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 rounded-pill bg-bg-muted overflow-hidden">
-        <div
-          className="h-full rounded-pill transition-all"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        />
+      <div className="flex-1 relative h-[2px]">
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" aria-hidden="true" />
+        <div className="absolute inset-y-0 left-0" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
-      <span className="font-mono text-[10px] text-text-ghost w-8 text-right">
+      <span className="font-mono text-[10px] tabular text-text-tertiary w-8 text-right">
         {pct}%
       </span>
     </div>
@@ -117,19 +108,20 @@ function MiniSparkline() {
     return `${x},${y}`;
   });
   return (
-    <svg width={w} height={h} className="block">
+    <svg width={w} height={h} className="block" aria-hidden="true">
       <polyline
         points={coords.join(' ')}
         fill="none"
-        stroke="var(--tile-correct)"
+        stroke="var(--text-primary)"
         strokeWidth={1.5}
         strokeLinejoin="round"
       />
-      <circle
-        cx={w}
-        cy={parseFloat(coords[coords.length - 1].split(',')[1])}
-        r={2.5}
-        fill="var(--tile-correct)"
+      <rect
+        x={w - 3}
+        y={parseFloat(coords[coords.length - 1].split(',')[1]) - 3}
+        width={6}
+        height={6}
+        fill="var(--accent)"
       />
     </svg>
   );
@@ -137,7 +129,7 @@ function MiniSparkline() {
 
 function InnerCard({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={clsx('p-3 rounded-card bg-bg-elevated border border-border-subtle', className)}>
+    <div className={clsx('rule-hair pt-3 pb-3', className)}>
       {children}
     </div>
   );
@@ -359,20 +351,12 @@ const SECTIONS: SectionDef[] = [
                 },
                 {
                   label: 'Opener',
-                  color: '#c9a227',
+                  color: 'var(--yellow)',
                   desc: 'How rare was your first guess? Most players open with CRANE, SLATE or SALET, so anything else pushes your rarity up. Not better or worse — just how off-piste you started.',
                 },
               ].map((s) => (
                 <InnerCard key={s.label} className="flex gap-3 items-start">
-                  <span
-                    className="font-sans text-[10px] font-bold px-1.5 py-0.5 rounded-pill shrink-0 mt-0.5"
-                    style={{
-                      backgroundColor: `color-mix(in srgb, ${s.color} 18%, transparent)`,
-                      color: s.color,
-                    }}
-                  >
-                    {s.label}
-                  </span>
+                  <Tag className="shrink-0 mt-0.5">{s.label}</Tag>
                   <p className="font-sans text-xs text-text-secondary leading-relaxed">{s.desc}</p>
                 </InnerCard>
               ))}
@@ -402,7 +386,7 @@ const SECTIONS: SectionDef[] = [
               <p className="font-sans text-xs text-text-secondary leading-relaxed">
                 <span className="font-semibold text-text-primary">Note:</span> Skill is computed
                 only on moves where a meaningful choice existed. If only one valid guess remains,
-                the move is marked <ClassBadge label="Forced" color="#565758" /> and skipped — you
+                the move is marked <ClassBadge label="Forced" color="var(--text-tertiary)" /> and skipped — you
                 get no credit and no penalty.
               </p>
             </InnerCard>
@@ -473,7 +457,7 @@ const SECTIONS: SectionDef[] = [
               </p>
               <div className="flex items-center gap-3">
                 <TileRow word="SALET" pattern={['gray', 'yellow', 'gray', 'yellow', 'gray']} />
-                <ClassBadge label="Best" color="#538d4e" />
+                <ClassBadge label="Best" color="var(--tile-correct)" />
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-sans text-xs mt-1">
                 <div className="flex justify-between">
@@ -502,30 +486,25 @@ const SECTIONS: SectionDef[] = [
             </p>
             <div className="space-y-1.5">
               {[
-                { label: 'Brilliant', color: '#1565c0', pct: '> 100%', w: 100, note: 'You beat the bot.' },
-                { label: 'Best', color: '#538d4e', pct: '95–100%', w: 97, note: 'Matched the optimal pick.' },
-                { label: 'Good', color: '#6aaa64', pct: '85–95%', w: 90, note: 'Very close to optimal.' },
-                { label: 'Okay', color: '#2e9688', pct: '70–85%', w: 77, note: 'Solid, minor room to improve.' },
-                { label: 'Inaccuracy', color: '#b59f3b', pct: '50–70%', w: 60, note: 'Noticeably suboptimal.' },
-                { label: 'Mistake', color: '#e67e22', pct: '30–50%', w: 40, note: 'A meaningful miss.' },
-                { label: 'Blunder', color: '#e74c3c', pct: '< 30%', w: 20, note: 'Significant information left on the table.' },
-                { label: 'Miss', color: '#e74c3c', pct: '—', w: 10, note: 'Violated a known constraint.' },
-                { label: 'Forced', color: '#565758', pct: '—', w: 5, note: 'Only one valid guess remained. No credit, no penalty.' },
+                { label: 'Brilliant', color: 'var(--cls-blue)', pct: '> 100%', w: 100, note: 'You beat the bot.' },
+                { label: 'Best', color: 'var(--tile-correct)', pct: '95–100%', w: 97, note: 'Matched the optimal pick.' },
+                { label: 'Good', color: 'var(--green-light)', pct: '85–95%', w: 90, note: 'Very close to optimal.' },
+                { label: 'Okay', color: 'var(--tile-present)', pct: '70–85%', w: 77, note: 'Solid, minor room to improve.' },
+                { label: 'Inaccuracy', color: 'var(--yellow)', pct: '50–70%', w: 60, note: 'Noticeably suboptimal.' },
+                { label: 'Mistake', color: 'var(--cls-orange)', pct: '30–50%', w: 40, note: 'A meaningful miss.' },
+                { label: 'Blunder', color: 'var(--cls-red)', pct: '< 30%', w: 20, note: 'Significant information left on the table.' },
+                { label: 'Miss', color: 'var(--cls-red)', pct: '—', w: 10, note: 'Violated a known constraint.' },
+                { label: 'Forced', color: 'var(--text-tertiary)', pct: '—', w: 5, note: 'Only one valid guess remained. No credit, no penalty.' },
               ].map((c) => (
                 <div key={c.label} className="flex items-center gap-2">
-                  <span
-                    className="font-sans text-[10px] w-20 text-right font-semibold shrink-0"
-                    style={{ color: c.color }}
-                  >
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] w-20 text-right shrink-0 text-text-secondary">
                     {c.label}
                   </span>
-                  <div className="flex-1 h-2 rounded-pill bg-bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-pill"
-                      style={{ width: `${c.w}%`, backgroundColor: c.color, opacity: 0.75 }}
-                    />
+                  <div className="flex-1 relative h-[2px]">
+                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" aria-hidden="true" />
+                    <div className="absolute inset-y-0 left-0" style={{ width: `${c.w}%`, backgroundColor: classVar(c.label) }} />
                   </div>
-                  <span className="font-mono text-[9px] text-text-ghost w-14 shrink-0">{c.pct}</span>
+                  <span className="font-mono text-[9px] tabular text-text-tertiary w-14 shrink-0">{c.pct}</span>
                 </div>
               ))}
             </div>
@@ -701,7 +680,7 @@ const SECTIONS: SectionDef[] = [
             In hard mode, the bot re-solves the game under the same constraints you faced. It only
             recommends guesses that honor all known green and yellow letters. The efficiency
             calculations and classifications are identical — they just apply to a smaller set of
-            valid options. A <ClassBadge label="Brilliant" color="#1565c0" /> guess in hard mode is
+            valid options. A <ClassBadge label="Brilliant" color="var(--cls-blue)" /> guess in hard mode is
             rarer and arguably more impressive, because the room for creative plays is narrower.
           </p>
         ),
@@ -860,20 +839,14 @@ const SECTIONS: SectionDef[] = [
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
               Violations come in two flavors.
             </p>
-            <div
-              className="p-3 rounded-card space-y-2"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--red) 8%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--red) 20%, transparent)',
-              }}
-            >
+            <div className="p-4 space-y-2 bg-wash-accent">
               <p className="font-sans text-xs font-semibold" style={{ color: 'var(--red)' }}>
                 Hard violation
               </p>
               <p className="font-sans text-xs text-text-secondary leading-relaxed">
                 You used a gray letter again, or put a yellow letter in the exact position it
                 already appeared. This is never strategically correct — it throws away guaranteed
-                information. Marked with a <ClassBadge label="Miss" color="#9c27b0" /> badge.
+                information. Marked with a <ClassBadge label="Miss" color="var(--cls-red)" /> badge.
               </p>
             </div>
             <InnerCard className="space-y-2">
@@ -960,7 +933,7 @@ const SECTIONS: SectionDef[] = [
                 { n: '3', name: 'Summary', desc: 'How unique your game was versus the community, your projected ELO change (rated games), and links back to play or share.' },
               ].map((tab) => (
                 <InnerCard key={tab.n} className="flex gap-2.5">
-                  <span className="font-mono text-[10px] text-text-ghost bg-bg-muted w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="font-mono text-[10px] text-text-ghost bg-bg-muted w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
                     {tab.n}
                   </span>
                   <div>
@@ -1042,7 +1015,7 @@ const SECTIONS: SectionDef[] = [
                 { keys: 'End', action: 'Jump to the final summary' },
               ].map((s) => (
                 <InnerCard key={s.keys} className="flex items-center justify-between py-2">
-                  <span className="font-mono text-xs text-text-primary bg-bg-muted px-2 py-0.5 rounded-key">
+                  <span className="font-mono text-xs text-text-primary bg-bg-muted px-2 py-0.5">
                     {s.keys}
                   </span>
                   <span className="font-sans text-xs text-text-secondary">{s.action}</span>
@@ -1098,7 +1071,7 @@ const SECTIONS: SectionDef[] = [
               ].map((q) => (
                 <span
                   key={q}
-                  className="font-sans text-xs px-2.5 py-1.5 rounded-card bg-bg-elevated border border-border-subtle text-text-secondary"
+                  className="font-mono text-[11px] uppercase tracking-[0.12em] px-2.5 py-1.5 border border-border-subtle text-text-secondary"
                 >
                   {q}
                 </span>
@@ -1429,25 +1402,11 @@ function SectionHeader({
   id: string;
 }) {
   return (
-    <div id={id} className="scroll-mt-24 mb-6">
-      <div className="flex items-center gap-3 mb-2">
-        <div className="h-px flex-none w-8 bg-border-default" aria-hidden="true" />
-        <span className="font-sans text-[10px] font-bold uppercase tracking-[0.15em] text-text-ghost">
-          {partLabel}
-        </span>
-      </div>
-      <div className="flex items-center gap-2.5">
-        <span
-          className="p-1.5 rounded-card border shrink-0"
-          style={{
-            backgroundColor: 'color-mix(in srgb, var(--tile-correct) 10%, transparent)',
-            borderColor: 'color-mix(in srgb, var(--tile-correct) 18%, transparent)',
-            color: 'var(--tile-correct)',
-          }}
-        >
-          {icon}
-        </span>
-        <h2 className="font-display font-black text-2xl text-text-primary">{title}</h2>
+    <div id={id} className="scroll-mt-24 mb-6 rule-top pt-3">
+      <Label className="block mb-1">{partLabel}</Label>
+      <div className="flex items-center gap-3">
+        <span className="text-text-tertiary shrink-0" aria-hidden="true">{icon}</span>
+        <h2 className="font-display text-display-md text-text-primary">{title}</h2>
       </div>
     </div>
   );
@@ -1470,26 +1429,24 @@ function FAQAccordionItem({
 }) {
   return (
     <div
-      className={clsx(
-        'border-b border-border-subtle last:border-b-0',
-      )}
+      className="rule-hair"
     >
       <button
         onClick={onToggle}
-        className="w-full flex items-start gap-3 py-4 text-left group"
+        className="w-full flex items-start gap-4 py-5 text-left group"
         aria-expanded={isOpen}
         id={`faq-btn-${id}`}
         aria-controls={`faq-body-${id}`}
       >
-        <h3 className="flex-1 font-display font-semibold text-sm text-text-primary leading-snug group-hover:text-tile-correct transition-colors">
-          {item.q}
+        <h3 className="flex-1 font-display text-display-sm text-text-primary leading-snug">
+          <span className="ink-link">{item.q}</span>
         </h3>
         <span
-          className="shrink-0 mt-0.5 text-text-ghost transition-transform duration-fast"
+          className={clsx('shrink-0 mt-1 transition-[transform,color] duration-med ease-ink', isOpen ? 'text-accent' : 'text-text-tertiary group-hover:text-text-primary')}
           style={{ transform: isOpen ? 'rotate(45deg)' : 'rotate(0deg)' }}
           aria-hidden="true"
         >
-          <Plus size={16} />
+          <Plus size={18} />
         </span>
       </button>
 
@@ -1502,10 +1459,10 @@ function FAQAccordionItem({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
             className="overflow-hidden"
           >
-            <div className="pb-5 pr-6">{item.a}</div>
+            <div className="pb-6 pr-6 md:pr-10">{item.a}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1520,36 +1477,20 @@ function FAQAccordionItem({
 function LockedSection({ title }: { title: string }) {
   const router = useRouter();
   return (
-    <div
-      className="flex flex-col items-center gap-3 py-10 px-6 rounded-card border border-border-subtle text-center"
-      style={{ backgroundColor: 'color-mix(in srgb, var(--bg-muted) 60%, transparent)' }}
-    >
-      <span
-        className="p-3 rounded-full border"
-        style={{
-          backgroundColor: 'color-mix(in srgb, var(--tile-correct) 8%, transparent)',
-          borderColor: 'color-mix(in srgb, var(--tile-correct) 15%, transparent)',
-          color: 'var(--tile-correct)',
-        }}
-      >
-        <Lock size={20} />
-      </span>
-      <div className="space-y-1">
-        <p className="font-display font-semibold text-sm text-text-primary">
-          Sign in to read this section
-        </p>
-        <p className="font-sans text-xs text-text-secondary leading-relaxed max-w-xs mx-auto">
-          Create a free account to unlock <span className="font-medium text-text-primary">{title}</span> and
-          all other sections.
+    <div className="bg-wash-ochre px-6 py-8 flex flex-col md:flex-row md:items-end md:justify-between gap-5">
+      <div className="max-w-md">
+        <Label className="block mb-2">
+          <Lock size={11} className="inline-block mr-1.5 -mt-0.5" aria-hidden="true" />
+          members only
+        </Label>
+        <p className="font-display text-display-sm text-text-primary">Sign in to read {title}.</p>
+        <p className="font-sans text-sm text-text-secondary mt-2 leading-relaxed">
+          A free account unlocks this section and all the others.
         </p>
       </div>
-      <button
-        onClick={() => router.push('/login')}
-        className="mt-1 px-4 py-2 rounded-card font-sans text-xs font-semibold text-white transition-opacity hover:opacity-90"
-        style={{ backgroundColor: 'var(--tile-correct)' }}
-      >
+      <Button variant="primary" onClick={() => router.push('/login')} className="self-start md:self-auto">
         Sign in
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1659,24 +1600,25 @@ export default function FaqPage() {
 
   /* ---- mobile ToC ---- */
   const MobileToc = () => (
-    <details className="lg:hidden mb-6 rounded-card border border-border-subtle bg-bg-elevated">
-      <summary className="px-4 py-3 font-sans text-sm font-medium text-text-primary cursor-pointer flex items-center justify-between list-none">
-        <span>Jump to section</span>
-        <ChevronDown size={14} className="text-text-ghost" />
+    <details className="lg:hidden mb-8 rule-top">
+      <summary className="py-3 font-mono text-label uppercase text-text-primary cursor-pointer flex items-center justify-between list-none">
+        <span>jump to section</span>
+        <ChevronDown size={14} className="text-text-tertiary" aria-hidden="true" />
       </summary>
-      <div className="px-4 pb-3 space-y-1 border-t border-border-subtle pt-2">
+      <div className="pb-3 flex flex-col border-t border-border-subtle pt-1">
         {SECTIONS.map((section) => (
           <a
             key={section.slug}
             href={`#${section.slug}`}
-            className="block font-sans text-xs text-text-secondary hover:text-text-primary py-1 transition-colors"
+            className="font-sans text-sm text-text-secondary hover:text-text-primary py-1.5 transition-colors"
             onClick={() => {
               // close details after click
               const details = document.querySelector('details.lg\\:hidden') as HTMLDetailsElement | null;
               if (details) details.open = false;
             }}
           >
-            {section.partLabel} — {section.title}
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-tertiary mr-2">{section.partLabel}</span>
+            {section.title}
           </a>
         ))}
       </div>
@@ -1685,26 +1627,23 @@ export default function FaqPage() {
 
   /* ---- desktop ToC ---- */
   const DesktopToc = () => (
-    <aside className="hidden lg:block lg:sticky lg:top-20 self-start w-52 shrink-0">
-      <p className="font-sans text-[10px] font-bold uppercase tracking-[0.12em] text-text-ghost mb-3">
-        Contents
-      </p>
-      <nav className="space-y-0.5">
+    <aside className="hidden lg:block lg:sticky lg:top-20 self-start lg:col-span-3">
+      <Label className="block mb-3 rule-top pt-3">contents</Label>
+      <nav className="flex flex-col">
         {SECTIONS.map((section) => {
           const active = activeSectionSlug === section.slug;
           return (
             <a
               key={section.slug}
               href={`#${section.slug}`}
+              aria-current={active ? 'true' : undefined}
               className={clsx(
-                'block font-sans text-xs py-1.5 px-2 rounded-card transition-colors',
-                active
-                  ? 'text-text-primary font-semibold bg-bg-muted'
-                  : 'text-text-secondary hover:text-text-primary',
+                'flex items-baseline gap-3 py-1.5 font-sans text-sm transition-colors duration-fast',
+                active ? 'text-text-primary font-semibold' : 'text-text-secondary hover:text-text-primary'
               )}
-              style={active ? { color: 'var(--tile-correct)' } : undefined}
             >
-              {section.title}
+              <span className={clsx('block w-3 h-[2px] shrink-0 self-center transition-colors duration-fast', active ? 'bg-accent' : 'bg-transparent')} aria-hidden="true" />
+              <span className={clsx(!active && 'ink-link')}>{section.title}</span>
             </a>
           );
         })}
@@ -1713,102 +1652,70 @@ export default function FaqPage() {
   );
 
   return (
-    <div className="min-h-[calc(100dvh-56px)] bg-bg-base">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="min-h-page bg-bg-base">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16">
         {/* Page header */}
-        <motion.header
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={springs.slide}
-          className="mb-8"
-        >
-          <div className="flex items-center gap-2.5 mb-2">
-            <BookOpen size={22} style={{ color: 'var(--tile-correct)' }} />
-            <p className="font-sans text-sm font-medium text-text-secondary tracking-wide uppercase">
-              Frequently asked questions
+        <header className="grid md:grid-cols-12 gap-6 md:gap-8 mb-10 md:mb-14">
+          <div className="md:col-span-7">
+            <Label className="block mb-3">faq · {SECTIONS.length} sections</Label>
+            <SplitWords text="Frequently asked questions" as="h1" className="font-display text-display-lg text-text-primary" />
+          </div>
+          <Reveal delay={0.2} className="md:col-span-5 md:pt-8 flex flex-col gap-5">
+            <p className="font-sans text-sm md:text-base text-text-secondary leading-relaxed">
+              Everything about scores, picks, ELO, hard mode, and the rest of the bot.
             </p>
-          </div>
-          <h1 className="font-display font-black text-5xl text-text-primary tracking-tight mb-2">
-            FAQ
-          </h1>
-          <p className="font-sans text-base text-text-secondary leading-relaxed">
-            Everything about scores, picks, ELO, hard mode, and the rest of the bot.
-          </p>
 
-          {!loading && !user && (
-            <div
-              className="mt-4 flex items-center gap-2.5 px-3 py-2.5 rounded-card border"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--tile-correct) 8%, transparent)',
-                borderColor: 'color-mix(in srgb, var(--tile-correct) 20%, transparent)',
-              }}
-            >
-              <Lock size={12} style={{ color: 'var(--tile-correct)' }} className="shrink-0" />
-              <span className="font-sans text-xs text-text-secondary">
-                Some sections require an account.{' '}
-                <button
-                  onClick={() => router.push('/login')}
-                  className="font-medium hover:underline"
-                  style={{ color: 'var(--tile-correct)' }}
-                >
-                  Sign in
-                </button>{' '}
-                to unlock everything.
-              </span>
-            </div>
-          )}
+            {!loading && !user && (
+              <p className="font-sans text-xs text-text-secondary flex items-center gap-2">
+                <Lock size={12} className="shrink-0 text-text-tertiary" aria-hidden="true" />
+                <span>
+                  Some sections require an account.{' '}
+                  <button onClick={() => router.push('/login')} className="ink-link text-text-primary font-medium">
+                    Sign in
+                  </button>{' '}
+                  to unlock everything.
+                </span>
+              </p>
+            )}
 
-          {/* Search + expand/collapse row */}
-          <div className="flex items-center gap-3 mt-5">
-            <div className="relative flex-1 max-w-sm">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-ghost pointer-events-none"
-              />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search questions…"
-                className="w-full pl-9 pr-4 py-2 rounded-card bg-bg-elevated border border-border-subtle font-sans text-sm text-text-primary placeholder:text-text-ghost focus:outline-none focus:border-border-strong transition-colors"
-              />
+            {/* Search + expand/collapse row */}
+            <div className="flex items-end gap-4">
+              <div className="relative flex-1 border-b-2 border-border-default focus-within:border-accent transition-colors duration-fast">
+                <Search size={14} className="absolute left-0 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" aria-hidden="true" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search questions…"
+                  aria-label="Search questions"
+                  className="w-full pl-6 pr-2 py-2 bg-transparent border-0 font-sans text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none"
+                />
+              </div>
+              <Button variant="secondary" size="sm" onClick={handleToggleAll} className="shrink-0">
+                {allExpanded ? 'Collapse all' : 'Expand all'}
+              </Button>
             </div>
-            <button
-              onClick={handleToggleAll}
-              className="shrink-0 font-sans text-xs text-text-secondary hover:text-text-primary border border-border-subtle rounded-card px-3 py-2 bg-bg-elevated transition-colors hover:border-border-default"
-            >
-              {allExpanded ? 'Collapse all' : 'Expand all'}
-            </button>
-          </div>
-        </motion.header>
+          </Reveal>
+        </header>
 
         {/* Mobile ToC */}
         <MobileToc />
 
         {/* Body: article + desktop ToC */}
-        <div className="flex gap-10 items-start">
+        <div className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-start">
           {/* Article column */}
           <motion.article
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, delay: 0.08 }}
-            className="flex-1 min-w-0 max-w-[720px]"
+            className="min-w-0 lg:col-span-8 lg:col-start-1"
           >
             {filteredSections.length === 0 && (
-              <div className="py-16 text-center">
-                <p className="font-display font-semibold text-text-secondary text-lg">
-                  No results for &ldquo;{query}&rdquo;
-                </p>
-                <p className="font-sans text-sm text-text-ghost mt-2">
-                  Try a different keyword, or{' '}
-                  <button
-                    className="underline hover:text-text-secondary transition-colors"
-                    onClick={() => setQuery('')}
-                  >
-                    clear the search
-                  </button>
-                  .
-                </p>
+              <div className="bg-bg-ink text-text-on-ink px-6 py-10 flex flex-col gap-4 items-start">
+                <p className="font-display text-display-md">No results for &ldquo;{query}&rdquo;.</p>
+                <Button variant="secondary" size="sm" className="border-text-on-ink text-text-on-ink" onClick={() => setQuery('')}>
+                  Clear search
+                </Button>
               </div>
             )}
 
@@ -1818,7 +1725,7 @@ export default function FaqPage() {
                 <section
                   key={section.slug}
                   ref={(el) => { sectionRefs.current[section.slug] = el; }}
-                  className={clsx(sectionIdx > 0 && 'mt-14')}
+                  className={clsx(sectionIdx > 0 && 'mt-16 md:mt-20')}
                 >
                   <SectionHeader
                     id={section.slug}
@@ -1828,7 +1735,7 @@ export default function FaqPage() {
                   />
 
                   {section.intro && (
-                    <p className="font-sans text-sm text-text-secondary leading-relaxed mb-5 -mt-2">
+                    <p className="font-sans text-sm md:text-base text-text-secondary leading-relaxed mb-6 -mt-2 max-w-2xl">
                       {section.intro}
                     </p>
                   )}
@@ -1836,7 +1743,7 @@ export default function FaqPage() {
                   {locked ? (
                     <LockedSection title={section.title} />
                   ) : (
-                    <div className="border-t border-border-subtle">
+                    <div className="border-b border-border-subtle">
                       {section.items.map((item) => {
                         const itemId = `${section.slug}::${item.q}`;
                         return (
@@ -1855,22 +1762,19 @@ export default function FaqPage() {
               );
             })}
 
-            {/* Credit card */}
+            {/* Credit */}
             {!normalizedQuery && (
-              <div
-                className="mt-16 mb-4 p-6 rounded-card-lg border border-border-subtle text-center"
-                style={{
-                  backgroundColor: 'color-mix(in srgb, var(--bg-elevated) 80%, transparent)',
-                }}
-              >
-                <MiniSparkline />
-                <p className="font-display font-semibold text-text-primary mt-3">
-                  Made by Marin Bošković
-                </p>
-                <p className="font-sans text-xs text-text-ghost mt-1 leading-relaxed">
-                  ELOquence is a personal project. If you find a bug or have a suggestion,
-                  the best way to reach me is through the feedback option in your account menu.
-                </p>
+              <div className="mt-16 md:mt-20 mb-4 rule-top pt-5 grid md:grid-cols-12 gap-4 items-start">
+                <div className="md:col-span-4">
+                  <MiniSparkline />
+                </div>
+                <div className="md:col-span-8">
+                  <p className="font-display text-display-sm text-text-primary">Made by Marin Bošković</p>
+                  <p className="font-sans text-sm text-text-secondary mt-2 leading-relaxed">
+                    ELOquence is a personal project. If you find a bug or have a suggestion,
+                    the best way to reach me is through the feedback option in your account menu.
+                  </p>
+                </div>
               </div>
             )}
           </motion.article>

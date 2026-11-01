@@ -2,17 +2,44 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import clsx from 'clsx';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { adminApi } from '@/lib/api';
-import AdminNav from '@/components/admin/AdminNav';
+import { Button, Label, Reveal, Tag } from '@/components/ui';
+import { AdminLoading, AdminPage, EmptyBand, ErrorBand, Field, PanelHead, PanelLoading } from '../_shared';
 
 interface Announcement {
   id: string;
   text: string;
   active: boolean;
   created_at: string;
+}
+
+/** Same 40×22 square-knob switch as Settings. */
+function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: () => void; label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      className={clsx(
+        'relative shrink-0 w-10 h-[22px] border-2 transition-colors duration-fast disabled:opacity-40 disabled:cursor-not-allowed',
+        checked ? 'bg-accent border-accent' : 'bg-transparent border-border-default'
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={clsx(
+          'absolute top-[2px] left-[2px] w-[14px] h-[14px] transition-transform duration-fast ease-out',
+          checked ? 'translate-x-[18px] bg-accent-ink' : 'translate-x-0 bg-border-default'
+        )}
+      />
+    </button>
+  );
 }
 
 export default function AdminAnnouncementsPage() {
@@ -109,181 +136,98 @@ export default function AdminAnnouncementsPage() {
       minute: '2-digit',
     });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
-        <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
-      </div>
-    );
-  }
+  if (loading) return <AdminLoading />;
 
   if (!user?.is_admin) return null;
 
+  const activeCount = announcements.filter((a) => a.active).length;
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <Link href="/admin" className="font-sans text-text-secondary hover:text-text-primary text-sm transition-colors">
-            Admin
-          </Link>
-          <span className="text-text-tertiary text-sm">/</span>
-          <span className="font-sans text-sm text-text-primary">Announcements</span>
-        </div>
-        <h1 className="font-display font-black text-3xl text-text-primary">Admin · Announcements</h1>
-        <p className="font-sans text-text-secondary mt-0.5">
-          Manage banners shown to all users.
-        </p>
-      </motion.div>
+    <AdminPage eyebrow={`admin · announcements · ${activeCount} live`} title="Announcements">
+      {error && <ErrorBand onDismiss={() => setError('')}>{error}</ErrorBand>}
 
-      <AdminNav />
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-12">
+        {/* ── Compose: 5 cols with a live preview of the banner strip ── */}
+        <Reveal as="section" className="md:col-span-5">
+          <PanelHead title="New announcement" />
+          <form onSubmit={handleCreate} className="flex flex-col gap-6">
+            <div className="bg-wash-ochre border-b border-border-subtle h-9 flex items-center gap-4 px-4" aria-hidden="true">
+              <Label className="text-text-primary shrink-0">notice</Label>
+              <span className={clsx('flex-1 min-w-0 truncate text-sm', newText ? 'text-text-primary' : 'text-text-tertiary')}>
+                {newText || 'Your text, as players will see it under the nav.'}
+              </span>
+            </div>
+            <Field label="text">
+              <textarea
+                value={newText}
+                onChange={(e) => setNewText(e.target.value)}
+                rows={3}
+                placeholder="Short, declarative. One line reads best."
+                className="w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-ghost outline-none transition-colors duration-fast resize-none"
+              />
+            </Field>
+            {createError && <p className="text-sm text-accent" role="alert">{createError}</p>}
+            <Button type="submit" size="lg" className="w-full" loading={creating}>
+              Post announcement
+            </Button>
+          </form>
+        </Reveal>
 
-      {error && (
-        <div className="mb-4 px-4 py-3 rounded-card border text-sm flex items-center justify-between font-sans" style={{ background: 'rgba(231,76,60,0.08)', borderColor: 'rgba(231,76,60,0.25)', color: 'var(--red)' }}>
-          <span>{error}</span>
-          <button className="text-xs underline ml-2" onClick={() => setError('')}>Dismiss</button>
-        </div>
-      )}
+        {/* ── List: 7 cols ── */}
+        <Reveal as="section" delay={0.05} className="md:col-span-7">
+          <PanelHead title="All announcements" aside={`${announcements.length} total`} />
+          {fetching ? (
+            <PanelLoading label="Loading announcements" rows={4} />
+          ) : announcements.length === 0 ? (
+            <EmptyBand>No announcements yet.</EmptyBand>
+          ) : (
+            <ul>
+              <AnimatePresence initial={false}>
+                {announcements.map((a) => (
+                  <motion.li
+                    key={a.id}
+                    layout
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="py-4 border-b border-border-subtle flex items-start gap-4 hover:bg-bg-elevated transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <p className={clsx('text-sm leading-relaxed', a.active ? 'text-text-primary' : 'text-text-secondary')}>{a.text}</p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {a.active ? <Tag tone="green" dot="var(--accent)">live</Tag> : <Tag>off</Tag>}
+                          <span className="font-mono text-[11px] text-text-tertiary tabular">{formatDate(a.created_at)}</span>
+                        </div>
+                      </div>
 
-      {/* Create form card */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1, duration: 0.3 }}
-        className="bg-bg-base border border-border-default rounded-card-lg p-6 mb-6"
-      >
-        <h2 className="font-sans font-semibold text-text-primary text-sm mb-4">New Announcement</h2>
-        <form onSubmit={handleCreate} className="flex flex-col gap-3">
-          <textarea
-            value={newText}
-            onChange={(e) => setNewText(e.target.value)}
-            rows={3}
-            placeholder="Enter announcement text..."
-            className="bg-transparent border-2 border-border-default rounded-md px-3 py-2 focus:border-tile-correct outline-none text-text-primary font-sans text-sm placeholder:text-text-tertiary transition-colors resize-none"
-          />
-          {createError && (
-            <p className="text-xs font-sans" style={{ color: 'var(--red)' }}>{createError}</p>
-          )}
-          <button
-            type="submit"
-            disabled={creating}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-tile-correct text-white font-bold uppercase tracking-wider rounded-md hover:brightness-110 active:scale-[0.98] transition-[filter,transform] disabled:opacity-60 font-sans text-sm"
-          >
-            {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Post Announcement
-          </button>
-        </form>
-      </motion.div>
-
-      {/* Announcements list card */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15, duration: 0.3 }}
-        className="bg-bg-base border border-border-default rounded-card-lg overflow-hidden"
-      >
-        <div className="px-6 py-3 border-b border-border-default">
-          <h2 className="font-sans font-semibold text-text-primary text-sm">All Announcements</h2>
-        </div>
-
-        {fetching ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'var(--tile-correct)', borderTopColor: 'transparent' }} />
-          </div>
-        ) : announcements.length === 0 ? (
-          <div className="text-center py-12 text-text-secondary font-sans text-sm">
-            No announcements yet.
-          </div>
-        ) : (
-          <ul className="divide-y divide-border-subtle">
-            <AnimatePresence initial={false}>
-              {announcements.map((a) => (
-                <motion.li
-                  key={a.id}
-                  layout
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="px-6 py-4 flex items-start gap-3 hover:bg-bg-elevated/50 transition-colors"
-                >
-                  {/* Status dot */}
-                  <div className="mt-1 flex-shrink-0">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{ background: a.active ? 'var(--tile-correct)' : 'var(--border-default)' }}
-                    />
-                  </div>
-
-                  {/* Text + meta */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-sans text-sm text-text-primary leading-relaxed">{a.text}</p>
-                    <p className="font-sans text-[10px] text-text-tertiary mt-1">{formatDate(a.created_at)}</p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Toggle switch */}
-                    <button
-                      onClick={() => handleToggle(a.id, a.active)}
-                      disabled={toggling === a.id}
-                      aria-label={a.active ? 'Deactivate' : 'Activate'}
-                      className="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
-                      style={{
-                        background: a.active ? 'var(--tile-correct)' : 'var(--border-default)',
-                      }}
-                    >
-                      {toggling === a.id ? (
-                        <Loader2 size={10} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-white" />
-                      ) : (
-                        <span
-                          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${
-                            a.active ? 'left-[18px]' : 'left-0.5'
-                          }`}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Toggle
+                          checked={a.active}
+                          onChange={() => handleToggle(a.id, a.active)}
+                          label={a.active ? 'Deactivate' : 'Activate'}
+                          disabled={toggling === a.id}
                         />
-                      )}
-                    </button>
-
-                    {/* Delete */}
-                    <button
-                      onClick={() => handleDelete(a.id)}
-                      disabled={deleting === a.id}
-                      aria-label="Delete"
-                      className="p-1.5 rounded-md transition-colors text-text-tertiary hover:text-text-primary"
-                      style={
-                        confirmDelete === a.id
-                          ? { background: 'rgba(231,76,60,0.1)', color: 'var(--red)' }
-                          : undefined
-                      }
-                      onMouseEnter={(e) => {
-                        if (confirmDelete !== a.id) {
-                          (e.currentTarget as HTMLButtonElement).style.color = 'var(--red)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (confirmDelete !== a.id) {
-                          (e.currentTarget as HTMLButtonElement).style.color = '';
-                        }
-                      }}
-                    >
-                      {deleting === a.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Trash2 size={14} />
-                      )}
-                    </button>
-                  </div>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
-      </motion.div>
-    </div>
+                        <Button
+                          type="button"
+                          variant={confirmDelete === a.id ? 'danger' : 'ghost'}
+                          size="sm"
+                          onClick={() => handleDelete(a.id)}
+                          loading={deleting === a.id}
+                          aria-label={confirmDelete === a.id ? 'Confirm delete' : 'Delete'}
+                        >
+                          {confirmDelete === a.id ? 'Confirm?' : <Trash2 size={14} />}
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </ul>
+          )}
+        </Reveal>
+      </div>
+    </AdminPage>
   );
 }
