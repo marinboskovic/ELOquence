@@ -188,7 +188,9 @@ type PulseItem = { key: string; tiles?: string; tileStates?: MiniState[]; text: 
 function fmtTime(sec: number) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return m ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+  // Words, not unit letters: the strip is uppercase mono, where "2S" reads like a number.
+  if (m) return `${m} min ${s} sec`;
+  return `${s} ${s === 1 ? 'second' : 'seconds'}`;
 }
 
 function pulseItems(p: Pulse | null): PulseItem[] {
