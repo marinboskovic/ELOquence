@@ -93,6 +93,7 @@
   --rule: 1px;
   --rule-strong: 2px;
   --nav-h: 56px;
+  --tabbar-h: 56px; /* mobile bottom tab bar; 0 from md up */
 }
 
 /* ── Dark theme: warm black + chalk ── */
@@ -268,8 +269,9 @@ h1, h2 { letter-spacing: -0.035em; text-wrap: balance; }
 }
 
 /* Full-height page below the sticky nav */
-.h-page { height: calc(100dvh - var(--nav-h)); }
-.min-h-page { min-height: calc(100dvh - var(--nav-h)); }
+.h-page { height: calc(100dvh - var(--nav-h) - var(--tabbar-h)); }
+.min-h-page { min-height: calc(100dvh - var(--nav-h) - var(--tabbar-h)); }
+@media (min-width: 768px) { :root { --tabbar-h: 0px; } }
 
 /* ── Safe areas (iOS standalone PWA) ── */
 .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }

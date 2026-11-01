@@ -6,8 +6,10 @@
  */
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { motion, useInView, useReducedMotion, type HTMLMotionProps } from 'framer-motion';
+import { motion, AnimatePresence, useInView, useReducedMotion, type HTMLMotionProps } from 'framer-motion';
 import clsx from 'clsx';
+import { useViewMode } from '@/lib/viewMode';
+import { TERMS, type TermKey } from '@/lib/copy';
 
 /* ───────────────────────── Buttons ───────────────────────── */
 
@@ -314,5 +316,122 @@ export function PatternRow({ pattern, size = 10, gap = 2 }: { pattern: number; s
         <span key={i} style={{ width: size, height: size, background: c, display: 'inline-block' }} />
       ))}
     </span>
+  );
+}
+
+/* ───────────────────────── Beginner layer ─────────────────────────
+   Hint    — a term with a plain-language explanation on hover/focus/tap.
+   Detail  — renders children only in Detailed view (optional simple fallback).
+   DetailToggle — the Simple | Detailed switch.
+   All copy comes from lib/copy.ts so every screen says the same thing. */
+
+
+export function Hint({
+  term,
+  title,
+  body,
+  children,
+  className,
+  side = 'top',
+}: {
+  /** key into TERMS — fills title/body unless overridden */
+  term?: TermKey;
+  title?: string;
+  body?: string;
+  /** the text the hint is attached to; defaults to the term's name */
+  children?: React.ReactNode;
+  className?: string;
+  side?: 'top' | 'bottom';
+}) {
+  const t = term ? TERMS[term] : undefined;
+  const { detailed } = useViewMode();
+  const heading = title ?? t?.name ?? '';
+  const text = body ?? (t ? (detailed ? t.detail : t.simple) : '');
+  const [open, setOpen] = useState(false);
+  const id = useRef(`hint-${Math.random().toString(36).slice(2, 8)}`).current;
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent | TouchEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('touchstart', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('touchstart', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (!text) return <>{children ?? heading}</>;
+
+  return (
+    <span ref={ref} className={clsx('relative inline-flex items-center', className)} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button
+        type="button"
+        aria-describedby={open ? id : undefined}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="inline-flex items-center gap-1 cursor-help text-inherit font-inherit border-b border-dotted border-current/60 hover:border-solid focus-visible:outline-none focus-visible:border-solid"
+      >
+        {children ?? heading}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.span
+            id={id}
+            role="tooltip"
+            initial={{ opacity: 0, y: side === 'top' ? 4 : -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: side === 'top' ? 4 : -4 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
+            className={clsx(
+              'absolute left-0 z-40 w-64 max-w-[80vw] bg-bg-ink text-text-on-ink p-3 shadow-ink normal-case tracking-normal text-left font-sans',
+              side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+            )}
+          >
+            {heading && <span className="block font-mono text-[10px] uppercase tracking-[0.14em] opacity-70 mb-1">{heading}</span>}
+            <span className="block text-xs leading-relaxed font-normal">{text}</span>
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </span>
+  );
+}
+
+/** Show `children` only in Detailed view; show `simple` (if given) otherwise. */
+export function Detail({ children, simple }: { children: React.ReactNode; simple?: React.ReactNode }) {
+  const { detailed } = useViewMode();
+  return <>{detailed ? children : simple ?? null}</>;
+}
+
+/** Simple | Detailed segmented switch. */
+export function DetailToggle({ className, size = 'sm' }: { className?: string; size?: 'sm' | 'md' }) {
+  const { mode, setMode } = useViewMode();
+  const h = size === 'sm' ? 'h-7 text-[10px]' : 'h-9 text-[11px]';
+  return (
+    <div role="group" aria-label="Level of detail" className={clsx('inline-flex border border-border-default', className)}>
+      {(['simple', 'detailed'] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={mode === m}
+          onClick={() => setMode(m)}
+          className={clsx(
+            'px-3 font-mono uppercase tracking-[0.14em] transition-colors duration-fast',
+            h,
+            mode === m ? 'bg-bg-ink text-text-on-ink' : 'text-text-secondary hover:text-text-primary'
+          )}
+        >
+          {m}
+        </button>
+      ))}
+    </div>
   );
 }

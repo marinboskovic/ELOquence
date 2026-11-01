@@ -6,6 +6,7 @@ import AnnouncementBanner from '@/components/AnnouncementBanner';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import InstallCapture from '@/components/InstallCapture';
 import MotionProvider from '@/components/MotionProvider';
+import { ViewModeProvider } from '@/lib/viewMode';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
@@ -73,10 +74,12 @@ export default function RootLayout({
         `}} />
         <MotionProvider>
           <AuthProvider>
+           <ViewModeProvider>
             <Navigation />
             <AnnouncementBanner />
-            <main id="main" tabIndex={-1} className="relative z-10 outline-none">{children}</main>
+            <main id="main" tabIndex={-1} className="relative z-10 outline-none pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
             <InstallCapture />
+           </ViewModeProvider>
           </AuthProvider>
         </MotionProvider>
         <ServiceWorkerRegister />
