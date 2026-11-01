@@ -6,7 +6,7 @@
 import clsx from 'clsx';
 import { Hint, Label } from '@/components/ui';
 import type { MoveAnalysis } from '@/lib/types';
-import { SOLVED_PATTERN } from './takeaway';
+import { SOLVED_PATTERN } from './insights';
 
 export default function StatsTable({ moves, activeRow }: { moves: MoveAnalysis[]; activeRow: number }) {
   const COLS = '2.5rem repeat(4, 1fr)';

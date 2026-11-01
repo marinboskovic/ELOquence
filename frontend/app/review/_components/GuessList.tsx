@@ -7,7 +7,7 @@ import { Label, MiniTiles } from '@/components/ui';
 import { MOVE_CLASS, fmtInt, narrowing } from '@/lib/copy';
 import { patternToTiles, type AnalysisResult } from '@/lib/types';
 import MoveTag from './MoveTag';
-import { SOLVED_PATTERN, betterWord, remainingAfter, remainingBefore } from './takeaway';
+import { SOLVED_PATTERN, betterWord, remainingAfter, remainingBefore } from './insights';
 
 export default function GuessList({ analysis }: { analysis: AnalysisResult }) {
   return (

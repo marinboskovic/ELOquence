@@ -7,7 +7,7 @@
 import clsx from 'clsx';
 import { MOVE_CLASS } from '@/lib/copy';
 import type { Classification } from '@/lib/types';
-import { moveTone } from './takeaway';
+import { moveTone } from './insights';
 
 export default function MoveTag({ classification, className }: { classification: Classification; className?: string }) {
   const tone = moveTone(classification);

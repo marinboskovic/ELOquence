@@ -13,7 +13,7 @@ import { aiApi } from '@/lib/api';
 import { fmtInt } from '@/lib/copy';
 import { patternToTiles, type MoveAnalysis, type PatternBucket, type TopPick } from '@/lib/types';
 import MoveTag from './MoveTag';
-import { SOLVED_PATTERN } from './takeaway';
+import { SOLVED_PATTERN } from './insights';
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                              */

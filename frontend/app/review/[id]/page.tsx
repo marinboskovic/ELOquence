@@ -34,7 +34,7 @@ import {
   headlineSkill,
   luckSentence,
   skillSentence,
-} from '@/app/review/_components/takeaway';
+} from '@/app/review/_components/insights';
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                              */
