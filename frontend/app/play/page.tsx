@@ -102,7 +102,7 @@ function ModeRow({ title, copy, status, tag, extra, onClick, disabled, loading, 
         )}
       >
         {/* Display label */}
-        <div className="md:col-span-5 flex items-center gap-4 min-w-0">
+        <div className="md:col-span-5 flex flex-wrap items-center gap-x-4 gap-y-2 min-w-0">
           <span className="font-display text-display-md text-text-primary transition-transform duration-fast ease-out group-hover:-translate-y-0.5">
             {title}
           </span>

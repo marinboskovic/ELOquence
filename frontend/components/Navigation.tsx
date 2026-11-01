@@ -90,7 +90,7 @@ export default function Navigation() {
         </Link>
 
         {/* Desktop links */}
-        <nav className="hidden md:flex items-center gap-6" aria-label="Main navigation">
+        <nav className="hidden lg:flex items-center gap-6" aria-label="Main navigation">
           {navLinks.map((link) => {
             const active = isLinkActive(pathname, link.href);
             return (
@@ -111,7 +111,7 @@ export default function Navigation() {
         </nav>
 
         {/* Desktop right */}
-        <div className="hidden md:flex items-center gap-4">
+        <div className="hidden lg:flex items-center gap-4">
           {user ? (
             <>
               {!isAdmin && tier && (
@@ -150,7 +150,7 @@ export default function Navigation() {
 
         {/* Mobile toggle */}
         <button
-          className="md:hidden p-1.5 text-text-primary"
+          className="lg:hidden p-1.5 text-text-primary"
           onClick={() => setMobileOpen((v) => !v)}
           aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileOpen}
@@ -171,7 +171,7 @@ export default function Navigation() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
-            className="md:hidden absolute left-0 right-0 bg-bg-base border-b-2 border-border-default max-h-[calc(100dvh-56px)] overflow-y-auto"
+            className="lg:hidden absolute left-0 right-0 bg-bg-base border-b-2 border-border-default max-h-[calc(100dvh-56px)] overflow-y-auto"
             style={{ top: NAV_HEIGHT }}
           >
             <ul className="px-4 py-2">

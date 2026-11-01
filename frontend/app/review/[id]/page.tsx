@@ -1014,10 +1014,10 @@ function StepOverview({
       </div>
 
       {/* Headline numbers */}
-      <div className="mt-10 grid grid-cols-3 gap-x-6">
+      <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-6">
         <Stat label="skill" value={skill} size="lg" sub="your decisions" />
         <Stat label="luck" value={luck} size="lg" sub="your outcomes" />
-        <Stat label="opener" value={analysis.opener_word || '—'} size="lg" sub={openerSub} />
+        <Stat label="opener" value={analysis.opener_word || '—'} size="lg" sub={openerSub} className="col-span-2 sm:col-span-1" />
       </div>
 
       <div className="mt-10">

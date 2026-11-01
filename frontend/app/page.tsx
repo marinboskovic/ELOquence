@@ -296,17 +296,17 @@ export default function HomePage() {
             </div>
 
             {/* The one ink block on this page */}
-            <div className="md:col-span-5 bg-bg-ink text-text-on-ink p-6 md:p-8 grid grid-cols-2 gap-6">
-              <div>
+            <div className="md:col-span-5 bg-bg-ink text-text-on-ink p-6 md:p-8 grid grid-cols-2 gap-6 [container-type:inline-size]">
+              <div className="min-w-0">
                 <Label className="block !text-text-on-ink opacity-60">best opener</Label>
-                <div className="font-display font-black text-display-lg tabular mt-2 leading-none">
+                <div className="font-display font-black tabular mt-2 leading-none tracking-[-0.04em] text-[clamp(2rem,13cqi,4.5rem)] whitespace-nowrap">
                   <CountUp value={5.88} decimals={2} />
                 </div>
                 <div className="font-mono text-xs mt-2 opacity-70">bits · SALET</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label className="block !text-text-on-ink opacity-60">answers</Label>
-                <div className="font-display font-black text-display-lg tabular mt-2 leading-none">
+                <div className="font-display font-black tabular mt-2 leading-none tracking-[-0.04em] text-[clamp(2rem,13cqi,4.5rem)] whitespace-nowrap">
                   <CountUp value={2309} decimals={0} />
                 </div>
                 <div className="font-mono text-xs mt-2 opacity-70">in the pool</div>

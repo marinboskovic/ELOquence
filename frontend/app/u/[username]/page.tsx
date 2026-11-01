@@ -58,7 +58,7 @@ function GameCard({ game }: { game: PublicProfile['recent_games'][number] }) {
   return (
     <motion.div
       variants={staggerChild}
-      className="shrink-0 w-[92px] border-2 border-border-default bg-bg-base p-2.5 flex flex-col gap-2 transition-all duration-fast hover:shadow-ink hover:-translate-x-0.5 hover:-translate-y-0.5"
+      className="shrink-0 w-[108px] border-2 border-border-default bg-bg-base p-2.5 flex flex-col gap-2 min-w-0 transition-all duration-fast hover:shadow-ink hover:-translate-x-0.5 hover:-translate-y-0.5"
       title={`${game.mode}${game.hard_mode ? ' · hard mode' : ''} · ${won ? `won in ${game.num_guesses}` : lost ? 'lost' : game.status}`}
     >
       <div className="flex flex-col justify-end" style={{ gap: 2, minHeight: 6 * 12 }}>
@@ -77,7 +77,7 @@ function GameCard({ game }: { game: PublicProfile['recent_games'][number] }) {
           {delta == null ? '·' : `${delta >= 0 ? '+' : ''}${Math.round(delta)}`}
         </span>
       </div>
-      <Label className="text-text-tertiary">{game.mode}</Label>
+      <span className="block font-mono text-[10px] uppercase tracking-[0.08em] text-text-tertiary truncate">{game.mode}</span>
     </motion.div>
   );
 }
