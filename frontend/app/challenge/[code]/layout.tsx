@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Challenge',
-  description: 'Play a friend\'s challenge word and compare results.',
+  title: 'Friends',
+  description: 'Play the word a friend sent you and see who solved it.',
 };
 
 export default function ChallengeLayout({ children }: { children: React.ReactNode }) {

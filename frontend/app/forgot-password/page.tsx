@@ -1,7 +1,7 @@
 'use client';
 import { useState, FormEvent } from 'react';
-import { authApi, errorMessage } from '@/lib/api';
-import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, AuthSuccess } from '@/components/auth/AuthShell';
+import { authApi } from '@/lib/api';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, AuthSuccess, authErrorMessage } from '@/components/auth/AuthShell';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
       await authApi.forgotPassword(email);
       setDone(true);
     } catch (err) {
-      setError(errorMessage(err, 'Could not send the reset e-mail. Please try again.'));
+      setError(authErrorMessage(err, "Couldn't send the email. Try again."));
     } finally {
       setLoading(false);
     }
@@ -25,23 +25,23 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthShell
-      title="Reset password"
-      eyebrow="account · reset"
+      title="Forgot your password?"
+      eyebrow="sign in"
       manifesto="Forgot the word? It happens to the best of us."
       footer={<AuthLink href="/login">Back to sign in</AuthLink>}
     >
       {done ? (
         <div className="flex flex-col gap-4">
-          <AuthSuccess message="If an account exists for that e-mail, a reset link is on its way." />
+          <AuthSuccess message="Check your inbox. If that email has an account, a link is on its way." />
           <p className="text-sm text-text-secondary leading-relaxed">
-            The link works for 30 minutes. Didn&apos;t get anything? Check your spam folder, or make sure you signed up with
-            a password rather than Google.
+            The link works for 30 minutes. Nothing there? Look in spam. If you signed up with Google, there is no password
+            to reset — just sign in with Google.
           </p>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <p className="text-sm text-text-secondary leading-relaxed -mt-4">
-            Enter the e-mail you signed up with and we&apos;ll send you a link to choose a new password.
+            Type the email you signed up with. We&apos;ll send you a link to choose a new password.
           </p>
           <AuthField
             id="email"
@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
           />
           <AuthError message={error} />
           <AuthSubmit loading={loading} loadingLabel="Sending…">
-            Send reset link
+            Email me a link
           </AuthSubmit>
         </form>
       )}

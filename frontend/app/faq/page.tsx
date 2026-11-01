@@ -7,23 +7,21 @@ import {
   Brain,
   Zap,
   Target,
-  Trophy,
   MessageSquare,
   TrendingUp,
-  AlertTriangle,
   Star,
-  Lock,
   Search,
   ChevronDown,
   Sun,
   Swords,
   FlaskConical,
   FileText,
+  Users,
   Plus,
 } from 'lucide-react';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { useRouter } from 'next/navigation';
-import { Button, Label, MiniTiles, Reveal, SplitWords, Tag } from '@/components/ui';
+import { Button, Hint, Label, MiniTiles, Reveal, SplitWords, Tag } from '@/components/ui';
+import { MODES, MOVE_CLASS, TERMS, TIER_COPY } from '@/lib/copy';
+import type { Classification } from '@/lib/types';
 import clsx from 'clsx';
 
 /* ------------------------------------------------------------------ */
@@ -60,26 +58,28 @@ function TileRow({
   return <MiniTiles word={word} states={pattern.map((c) => FAQ_STATE[c])} size={28} gap={4} />;
 }
 
-/** Classification tag — tone follows the label; the legacy `color` prop is ignored. */
-function classTone(label: string): 'green' | 'ochre' | 'accent' | 'neutral' {
-  const l = label.toLowerCase();
-  if (l === 'brilliant' || l === 'best' || l === 'good') return 'green';
-  if (l === 'okay' || l === 'inaccuracy') return 'ochre';
-  if (l === 'mistake' || l === 'blunder' || l === 'miss') return 'accent';
-  return 'neutral';
+/** Move-label tag — the wording and tone come from MOVE_CLASS so Help says the same thing as the review page. */
+function classTone(key: Classification): 'green' | 'ochre' | 'accent' | 'neutral' {
+  const t = MOVE_CLASS[key].tone;
+  if (t === 'great' || t === 'good') return 'green';
+  if (t === 'bad' || t === 'worse') return 'accent';
+  return key === 'forced' ? 'neutral' : 'ochre';
 }
-function classVar(label: string): string {
-  const l = label.toLowerCase();
-  if (l === 'brilliant') return 'var(--cls-blue)';
-  if (l === 'best' || l === 'good') return 'var(--tile-correct)';
-  if (l === 'okay' || l === 'inaccuracy') return 'var(--tile-present)';
-  if (l === 'mistake') return 'var(--cls-orange)';
-  if (l === 'blunder' || l === 'miss') return 'var(--cls-red)';
+function classVar(key: Classification): string {
+  if (key === 'brilliant') return 'var(--cls-blue)';
+  if (key === 'best' || key === 'good') return 'var(--tile-correct)';
+  if (key === 'okay' || key === 'inaccuracy') return 'var(--tile-present)';
+  if (key === 'mistake') return 'var(--cls-orange)';
+  if (key === 'blunder' || key === 'miss') return 'var(--cls-red)';
   return 'var(--text-tertiary)';
 }
 
-function ClassBadge({ label }: { label: string; color?: string }) {
-  return <Tag tone={classTone(label)} className="align-middle">{label}</Tag>;
+function ClassBadge({ cls }: { cls: Classification }) {
+  return (
+    <Tag tone={classTone(cls)} className="align-middle">
+      {MOVE_CLASS[cls].label}
+    </Tag>
+  );
 }
 
 function EfficiencyBar({ pct, color }: { pct: number; color: string }) {
@@ -149,11 +149,12 @@ interface SectionDef {
   slug: string;
   title: string;
   icon: React.ReactNode;
-  partLabel: string;
   intro?: string;
   items: FAQItem[];
-  guestUnlocked: boolean;
 }
+
+/** "Part 01", "Part 02", … from the section's position — sections are ordered beginner-first. */
+const partLabel = (i: number) => `Part ${String(i + 1).padStart(2, '0')}`;
 
 /* ------------------------------------------------------------------ */
 /*  Section data                                                        */
@@ -163,21 +164,19 @@ const SECTIONS: SectionDef[] = [
   /* ============================== 1. THE BASICS ============================== */
   {
     slug: 'basics',
-    title: 'The Basics',
+    title: 'The basics',
     icon: <BookOpen size={16} />,
-    partLabel: 'PART 01',
-    intro: 'New to ELOquence? Start here.',
-    guestUnlocked: true,
+    intro: 'New here? Start with these.',
     items: [
       {
         q: 'What is ELOquence?',
         plain:
-          'ELOquence is a Wordle analyzer that reviews every guess you make, scores your skill and luck separately, and tracks your improvement over time with an ELO rating. Think of it as a chess engine but for Wordle — it tells you what the optimal play was, how close you came, and why.',
+          'ELOquence is a Wordle analyzer that reviews every guess you make, scores your skill and luck separately, and tracks your improvement over time with a rating. Think of it as a chess engine but for Wordle — it tells you what the optimal play was, how close you came, and why.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
               ELOquence is a Wordle analyzer that reviews every guess you make, scores your skill
-              and luck separately, and tracks your improvement over time with an ELO rating. Think
+              and luck separately, and tracks your improvement over time with a rating. Think
               of it as a chess engine but for Wordle — it tells you what the optimal play was, how
               close you came, and why.
             </p>
@@ -231,47 +230,6 @@ const SECTIONS: SectionDef[] = [
         ),
       },
       {
-        q: 'What modes can I play?',
-        plain:
-          'Three modes: Daily is one puzzle per day, same word for everyone — unrated, just for fun and streaks. Competitive is unlimited rated games from an extended word pool, and it is the only mode that moves your ELO. Practice is unlimited unrated games from the standard pool — experiment freely.',
-        a: (
-          <div className="space-y-3">
-            <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              Three modes, three different purposes.
-            </p>
-            <div className="grid gap-3">
-              {[
-                {
-                  icon: <Sun size={15} style={{ color: 'var(--tile-present)' }} className="shrink-0 mt-0.5" />,
-                  name: 'Daily',
-                  desc: 'One puzzle per day, shared by all players. Unrated — daily results do not change your ELO; they only feed your streak and stats. Miss a day and your streak resets, so come back tomorrow.',
-                },
-                {
-                  icon: <Swords size={15} style={{ color: 'var(--tile-absent)' }} className="shrink-0 mt-0.5" />,
-                  name: 'Competitive',
-                  desc: 'Unlimited rated games drawn from the ~5,500-word competitive pool. Each game adjusts your ELO. Great for climbing the tiers quickly.',
-                },
-                {
-                  icon: <FlaskConical size={15} className="shrink-0 mt-0.5 text-text-secondary" />,
-                  name: 'Practice',
-                  desc: 'Unlimited unrated games from the standard 2,309-word list. Zero ELO risk — the place to try weird openers or practice endgame escapes.',
-                },
-              ].map((m) => (
-                <InnerCard key={m.name} className="flex gap-3">
-                  {m.icon}
-                  <div>
-                    <p className="font-sans text-xs font-semibold text-text-primary">{m.name}</p>
-                    <p className="font-sans text-xs text-text-secondary mt-0.5 leading-relaxed">
-                      {m.desc}
-                    </p>
-                  </div>
-                </InnerCard>
-              ))}
-            </div>
-          </div>
-        ),
-      },
-      {
         q: 'What do the colored tiles mean?',
         plain:
           'Green means the letter is correct and in the right position. Yellow means the letter is in the word but placed incorrectly. Gray means the letter does not appear in the word at all. Pay close attention to yellows — they are the most commonly wasted clues.',
@@ -306,60 +264,55 @@ const SECTIONS: SectionDef[] = [
       {
         q: 'Should I sign in?',
         plain:
-          'You can browse and play without an account, but signing in unlocks your personal ELO rating, full game history, Coach Chat, and the detailed review pages. All rated games also require an account so your progress persists across devices.',
+          'No account is needed to read this page, play the Daily, Practice, use Learn or the Word Lab. Signing in gives you a rating, Ranked games, your game history, Coach Chat and your profile. It is free and takes about ten seconds.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            You can browse and play without an account, but signing in unlocks your personal ELO
-            rating, full game history, Coach Chat, and the detailed review pages. All rated games
-            also require an account so your progress persists across devices. It&apos;s free and
-            takes about ten seconds.
+            Not to read this page, play the Daily or Practice, or use Learn and the Word Lab. Signing
+            in gives you a rating, Ranked games, your game history, Coach Chat and a profile that
+            follows you across devices. It&apos;s free and takes about ten seconds.
           </p>
         ),
       },
     ],
   },
 
-  /* ============================== 2. YOUR SCORES ============================== */
+  /* ============================== 2. WHAT THE SCORES MEAN ============================== */
   {
     slug: 'scores',
-    title: 'Your Scores',
+    title: 'What the scores mean',
     icon: <BarChart2 size={16} />,
-    partLabel: 'PART 02',
-    intro: 'Skill, luck, opener — what they measure and why they are separate.',
-    guestUnlocked: true,
+    intro: 'Skill, luck, first word, narrowing — every number on a review page, in one sentence each.',
     items: [
       {
-        q: 'What are skill, luck, and opener?',
-        plain:
-          'Skill measures the quality of your guesses — how close each one came to the theoretical best. Luck measures how favorable the feedback was — you can make a perfect guess and still get unlucky if it produces a terrible pattern. Opener shows how rare your first guess was compared to everyone else who played.',
+        q: 'What are skill, luck and first word?',
+        plain: `Skill: ${TERMS.skill.simple} Luck: ${TERMS.luck.simple} First word: ${TERMS.opener.simple} Three numbers, three different questions about the same game.`,
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
               Three numbers, three different questions about the same game.
             </p>
             <div className="grid gap-2">
-              {[
-                {
-                  label: 'Skill (0–99)',
-                  color: 'var(--tile-correct)',
-                  desc: 'How good were your guesses? Compares each move to the mathematically optimal one. Pure skill — luck is factored out.',
-                },
-                {
-                  label: 'Luck (0–99)',
-                  color: 'var(--tile-present)',
-                  desc: 'How favorable was the feedback? A guess can be brilliant and still give you an ugly, unhelpful pattern. Luck captures that variance.',
-                },
-                {
-                  label: 'Opener',
-                  color: 'var(--yellow)',
-                  desc: 'How rare was your first guess? Most players open with CRANE, SLATE or SALET, so anything else pushes your rarity up. Not better or worse — just how off-piste you started.',
-                },
-              ].map((s) => (
-                <InnerCard key={s.label} className="flex gap-3 items-start">
-                  <Tag className="shrink-0 mt-0.5">{s.label}</Tag>
-                  <p className="font-sans text-xs text-text-secondary leading-relaxed">{s.desc}</p>
-                </InnerCard>
-              ))}
+              {(
+                [
+                  { key: 'skill', range: '0–100' },
+                  { key: 'luck', range: '0–100' },
+                  { key: 'opener', range: null },
+                ] as const
+              ).map((s) => {
+                const t = TERMS[s.key];
+                return (
+                  <InnerCard key={s.key} className="flex gap-3 items-start">
+                    <Tag className="shrink-0 mt-0.5">
+                      {t.name}
+                      {s.range ? ` ${s.range}` : ''}
+                    </Tag>
+                    <div>
+                      <p className="font-sans text-xs text-text-primary leading-relaxed">{t.simple}</p>
+                      <p className="font-sans text-xs text-text-secondary leading-relaxed mt-0.5">{t.detail}</p>
+                    </div>
+                  </InnerCard>
+                );
+              })}
             </div>
           </div>
         ),
@@ -367,27 +320,25 @@ const SECTIONS: SectionDef[] = [
       {
         q: 'What does the Skill score mean exactly?',
         plain:
-          'Your skill score starts at 99 and drops for every guess that falls short of optimal. The gap between what you guessed and what the bot would have guessed determines how many points come off. Make all optimal guesses and you score a 99. One bad guess in a lucky two-move game might still land you a 70. The opener does not count — more on that below.',
+          'Skill is how good your guesses were, ignoring luck. It starts at 100 and drops for every guess that falls short of the best choice available at that moment. Make the best guess every time and you score 100. One poor guess in a short, lucky game can still leave you around 70. The first word does not count.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              Your skill score starts at 99 and drops for every guess that falls short of optimal.
-              The gap between what you guessed and what the bot would have guessed determines how
-              many points come off. Make all optimal guesses and you score a 99. One bad guess in a
-              lucky two-move game might still land you a 70.
+              <Hint term="skill" /> is {TERMS.skill.simple.charAt(0).toLowerCase() + TERMS.skill.simple.slice(1)} It
+              starts at 100 and drops for every guess that falls short of the best choice available at that moment. The
+              gap between your guess and the best one decides how many points come off. Make the best guess every time
+              and you score 100; one poor guess in a short, lucky game can still leave you around 70.
             </p>
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              The score is averaged across all your moves (excluding the opener), weighted by the
-              stakes of each position. A blunder when 30 words remain costs more than the same
-              blunder when 500 words remain — because you had better information and still
-              messed it up.
+              The score is averaged across your guesses (the first word is left out), weighted by how much was at stake.
+              A poor guess with 30 words left costs more than the same guess with 500 left — you had better clues and
+              still missed.
             </p>
             <InnerCard>
               <p className="font-sans text-xs text-text-secondary leading-relaxed">
-                <span className="font-semibold text-text-primary">Note:</span> Skill is computed
-                only on moves where a meaningful choice existed. If only one valid guess remains,
-                the move is marked <ClassBadge label="Forced" color="var(--text-tertiary)" /> and skipped — you
-                get no credit and no penalty.
+                <span className="font-semibold text-text-primary">Note:</span> Skill only counts guesses where you had
+                a real choice. If only one word could still be the answer, the guess is marked{' '}
+                <ClassBadge cls="forced" /> and skipped — no credit, no penalty.
               </p>
             </InnerCard>
           </div>
@@ -396,122 +347,131 @@ const SECTIONS: SectionDef[] = [
       {
         q: 'What does the Luck score mean?',
         plain:
-          'Luck measures how informative the feedback pattern was — independent of your guess quality. Say you open with CRANE. It could come back all gray (terrible luck, nothing learned) or all green (lucky break, word solved). Same guess, wildly different outcomes. The luck score quantifies that difference.',
+          'Luck is how kindly the tiles fell. The same guess can come back all gray (nothing learned) or almost all green (nearly solved). Luck compares how many words were actually left after each guess with how many you could expect on average. Above 50 means the hidden word landed in a small group more often than it should have.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              Luck measures how informative the feedback pattern was — independent of your guess
-              quality. Say you open with CRANE. It could come back all gray (terrible luck, nothing
-              learned) or all green (lucky break, word solved). Same guess, wildly different
-              outcomes. The luck score quantifies that difference.
+              <Hint term="luck" /> is {TERMS.luck.simple.charAt(0).toLowerCase() + TERMS.luck.simple.slice(1)} Say you
+              start with CRANE. It could come back all gray (bad luck, nothing learned) or all green (lucky break, word
+              solved). Same guess, wildly different outcomes. The luck score measures that difference.
             </p>
-            <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              High luck means the patterns you got were more helpful than average. Low luck means
-              you were dealt a poor hand — the feedback was sparse or misleading. It&apos;s
-              possible to play brilliantly and still lose, and that&apos;s what the luck score is
-              designed to capture.
-            </p>
+            <p className="font-sans text-sm text-text-secondary leading-relaxed">{TERMS.luck.detail}</p>
             <InnerCard>
               <p className="font-sans text-xs text-text-secondary leading-relaxed">
-                Yes, it just so happened that CRANE came back with four green squares. That&apos;s
-                high luck, not high skill. They look the same from the outside — your scorecard
-                tells you which one it was.
+                CRANE came back with four green tiles? That is high luck, not high skill. They look the same from the
+                outside — your review tells you which one it was.
               </p>
             </InnerCard>
           </div>
         ),
       },
       {
-        q: 'What does the Opener stat mean?',
+        q: 'What does the First word line mean?',
         plain:
-          'It shows your first guess and the percentage of other completed games that started with a different word. CRANE, SLATE and SALET are the heavy favourites — open with something unusual and the rarity climbs. It is not a quality judgment, just a measure of how off-piste your opening choice was.',
-        a: (
-          <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            The Opener stat shows your first guess and what fraction of other completed games
-            started with a different word. Openers cluster heavily around CRANE, SLATE and SALET,
-            so playing anything else pushes your rarity toward 100%. It&apos;s descriptive, not
-            evaluative — &quot;different&quot; doesn&apos;t mean &quot;better.&quot;
-          </p>
-        ),
-      },
-      {
-        q: 'What is "info gained" and "efficiency"?',
-        plain:
-          'Info gained is how much a single guess narrowed down the remaining possibilities, measured in bits. A perfect opener gains around 5-6 bits and cuts 2,000 words down to maybe 50. Efficiency is the ratio of your info gained to the maximum possible info gain for that position — so 90% efficiency means you got 90% of the value the best possible guess would have gotten.',
+          'It shows the word you started with and how many other players started differently. Most people open with CRANE, SLATE or SALET, so anything else counts as rare. Rare is not better or worse — to see how strong a first word actually is, try it in the Word Lab.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              Info gained (measured in bits) tells you how much a single guess narrowed down the
-              remaining possibilities. Think of it like asking yes/no questions: each bit cuts the
-              search space in half. A perfect opener at the start of the game gains around 5–6
-              bits, slashing 2,000+ possible words down to maybe 50.
+              <Hint term="opener" /> shows the word you started with and what share of other players started with
+              something else. Most people open with CRANE, SLATE or SALET, so anything else reads as rare. Rare is not
+              better or worse — it just says how unusual your start was.
             </p>
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              Efficiency is the ratio of your info gained to the maximum possible info gain for that
-              position. 90% efficiency means your guess got 90% of the value the single best guess
-              would have gotten. It&apos;s the closest thing to a per-move grade.
+              {TERMS.opener.simple} To see how strong yours actually is, type it into the{' '}
+              <a href="/lab" className="ink-link text-text-primary">
+                Word Lab
+              </a>
+              .
+            </p>
+          </div>
+        ),
+      },
+      {
+        q: 'What is narrowing, and what are "words left"?',
+        plain:
+          'Narrowing is how much a guess shrank the list of possible answers. There are 2,309 possible answers; a good first word leaves about 60 of them. Words left is how many answers were still possible after a guess. In Detailed view narrowing is measured in bits: one bit halves the list.',
+        a: (
+          <div className="space-y-3">
+            <p className="font-sans text-sm text-text-secondary leading-relaxed">
+              <Hint term="information" /> is{' '}
+              {TERMS.information.simple.charAt(0).toLowerCase() + TERMS.information.simple.slice(1)} There are 2,309
+              possible answers at the start. A good first word leaves about 60 of them; a weak one leaves a few hundred.
+              The review shows this as plain counts: <span className="font-mono text-text-primary">2,309 → 78 words</span>.
+            </p>
+            <p className="font-sans text-sm text-text-secondary leading-relaxed">
+              <Hint term="wordsLeft" /> is {TERMS.wordsLeft.simple.charAt(0).toLowerCase() + TERMS.wordsLeft.simple.slice(1)}{' '}
+              Fewer is better, and reaching one means your next guess is the answer.
             </p>
             <InnerCard className="space-y-2">
-              <p className="font-sans text-[10px] text-text-tertiary uppercase tracking-wider">
-                Example — SALET as opener
-              </p>
+              <p className="font-sans text-[10px] text-text-secondary uppercase tracking-wider">Example — SALET as a first word</p>
               <div className="flex items-center gap-3">
                 <TileRow word="SALET" pattern={['gray', 'yellow', 'gray', 'yellow', 'gray']} />
-                <ClassBadge label="Best" color="var(--tile-correct)" />
+                <ClassBadge cls="best" />
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-sans text-xs mt-1">
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">Info gained</span>
-                  <span className="font-mono text-text-primary">5.43 bits</span>
+                  <span className="text-text-secondary">Words left</span>
+                  <span className="font-mono text-text-primary">2,309 → 53</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-tertiary">Words remaining</span>
-                  <span className="font-mono text-text-primary">53</span>
+                  <span className="text-text-secondary">Narrowing (bits)</span>
+                  <span className="font-mono text-text-primary">5.43</span>
                 </div>
               </div>
               <EfficiencyBar pct={97} color="var(--tile-correct)" />
             </InnerCard>
+            <p className="font-sans text-xs text-text-secondary leading-relaxed">
+              <span className="font-semibold text-text-primary">In Detailed view</span> narrowing is also shown in bits:
+              one bit halves the list, so 2,309 → 1,154 is one bit and a great first word earns about 5.9. The bar above
+              is efficiency — how close your narrowing came to the best guess available.
+            </p>
           </div>
         ),
       },
       {
-        q: 'What do the move classification badges mean?',
-        plain:
-          'Each guess is classified by comparing its efficiency to the theoretical best. Brilliant means you beat the bot — you found a guess the algorithm ranked lower but that turned out to be more valuable. Best means you matched or nearly matched the optimal pick. Good, Okay, Inaccuracy, Mistake, Blunder, Miss, and Forced cover the rest of the spectrum.',
+        q: 'What do the move labels mean?',
+        plain: `Each guess gets a label by comparing it with the best guess available at that moment. ${(
+          Object.keys(MOVE_CLASS) as Classification[]
+        )
+          .map((k) => `${MOVE_CLASS[k].label}: ${MOVE_CLASS[k].simple}.`)
+          .join(' ')}`,
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              Each guess is classified by comparing its efficiency to the theoretical best. Here is
-              the full ladder:
+              Each guess gets a label by comparing it with the best guess available at that moment. Here is the full
+              ladder, from best to worst:
             </p>
             <div className="space-y-1.5">
-              {[
-                { label: 'Brilliant', color: 'var(--cls-blue)', pct: '> 100%', w: 100, note: 'You beat the bot.' },
-                { label: 'Best', color: 'var(--tile-correct)', pct: '95–100%', w: 97, note: 'Matched the optimal pick.' },
-                { label: 'Good', color: 'var(--green-light)', pct: '85–95%', w: 90, note: 'Very close to optimal.' },
-                { label: 'Okay', color: 'var(--tile-present)', pct: '70–85%', w: 77, note: 'Solid, minor room to improve.' },
-                { label: 'Inaccuracy', color: 'var(--yellow)', pct: '50–70%', w: 60, note: 'Noticeably suboptimal.' },
-                { label: 'Mistake', color: 'var(--cls-orange)', pct: '30–50%', w: 40, note: 'A meaningful miss.' },
-                { label: 'Blunder', color: 'var(--cls-red)', pct: '< 30%', w: 20, note: 'Significant information left on the table.' },
-                { label: 'Miss', color: 'var(--cls-red)', pct: '—', w: 10, note: 'Violated a known constraint.' },
-                { label: 'Forced', color: 'var(--text-tertiary)', pct: '—', w: 5, note: 'Only one valid guess remained. No credit, no penalty.' },
-              ].map((c) => (
-                <div key={c.label} className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] w-20 text-right shrink-0 text-text-secondary">
-                    {c.label}
+              {(
+                [
+                  { cls: 'brilliant', pct: '> 100%', w: 100 },
+                  { cls: 'best', pct: '95–100%', w: 97 },
+                  { cls: 'good', pct: '85–95%', w: 90 },
+                  { cls: 'okay', pct: '70–85%', w: 77 },
+                  { cls: 'inaccuracy', pct: '50–70%', w: 60 },
+                  { cls: 'mistake', pct: '30–50%', w: 40 },
+                  { cls: 'blunder', pct: '< 30%', w: 20 },
+                  { cls: 'miss', pct: '—', w: 10 },
+                  { cls: 'forced', pct: '—', w: 5 },
+                ] as { cls: Classification; pct: string; w: number }[]
+              ).map((c) => (
+                <div key={c.cls} className="grid grid-cols-[6.5rem_1fr] sm:grid-cols-[6.5rem_1fr_3.5rem] items-center gap-x-2 gap-y-0.5">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-right text-text-secondary">
+                    {MOVE_CLASS[c.cls].label}
                   </span>
-                  <div className="flex-1 relative h-[2px]">
+                  <div className="relative h-[2px]">
                     <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" aria-hidden="true" />
-                    <div className="absolute inset-y-0 left-0" style={{ width: `${c.w}%`, backgroundColor: classVar(c.label) }} />
+                    <div className="absolute inset-y-0 left-0" style={{ width: `${c.w}%`, backgroundColor: classVar(c.cls) }} />
                   </div>
-                  <span className="font-mono text-[9px] tabular text-text-tertiary w-14 shrink-0">{c.pct}</span>
+                  <span className="hidden sm:block font-mono text-[9px] tabular text-text-secondary">{c.pct}</span>
+                  <span className="col-start-2 sm:col-span-2 font-sans text-xs text-text-secondary">{MOVE_CLASS[c.cls].simple}</span>
                 </div>
               ))}
             </div>
-            <p className="font-sans text-xs text-text-tertiary leading-relaxed">
-              <span className="font-semibold text-text-secondary">Brilliant</span> is genuinely
-              rare — it means you identified an option the algorithm under-ranked. When you see
-              it, it&apos;s real.
+            <p className="font-sans text-xs text-text-secondary leading-relaxed">
+              The percentage is efficiency: how much of the best available narrowing your guess achieved.{' '}
+              <span className="font-semibold text-text-primary">Brilliant</span> is genuinely rare — it means you found
+              a word the engine under-rated. When you see it, it is real.
             </p>
           </div>
         ),
@@ -519,14 +479,164 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /* ============================== 3. THE BOT'S PICKS ============================== */
+  /* ============================== 3. MODES & RATING ============================== */
+  {
+    slug: 'modes',
+    title: 'Modes & rating',
+    icon: <TrendingUp size={16} />,
+    intro: 'Four ways to play, and how the one rated mode moves your number.',
+    items: [
+      {
+        q: 'What modes can I play?',
+        plain: `${MODES.daily.name}: ${MODES.daily.tagline} ${MODES.daily.note} ${MODES.competitive.name}: ${MODES.competitive.tagline} ${MODES.competitive.note} ${MODES.practice.name}: ${MODES.practice.tagline} ${MODES.practice.note} ${MODES.challenge.name}: ${MODES.challenge.tagline} ${MODES.challenge.note}`,
+        a: (
+          <div className="space-y-3">
+            <p className="font-sans text-sm text-text-secondary leading-relaxed">
+              Four modes. Only Ranked changes your rating.
+            </p>
+            <div className="grid gap-3">
+              {(
+                [
+                  { key: 'daily', icon: <Sun size={15} style={{ color: 'var(--tile-present)' }} className="shrink-0 mt-0.5" /> },
+                  { key: 'competitive', icon: <Swords size={15} className="shrink-0 mt-0.5 text-text-secondary" /> },
+                  { key: 'practice', icon: <FlaskConical size={15} className="shrink-0 mt-0.5 text-text-secondary" /> },
+                  { key: 'challenge', icon: <Users size={15} className="shrink-0 mt-0.5 text-text-secondary" /> },
+                ] as const
+              ).map((m) => {
+                const mode = MODES[m.key];
+                return (
+                  <InnerCard key={m.key} className="flex gap-3">
+                    {m.icon}
+                    <div>
+                      <p className="font-sans text-xs font-semibold text-text-primary">
+                        {mode.name}
+                        {mode.rated && (
+                          <Tag tone="green" className="ml-2">
+                            rated
+                          </Tag>
+                        )}
+                      </p>
+                      <p className="font-sans text-xs text-text-secondary mt-0.5 leading-relaxed">
+                        {mode.tagline} {mode.note}
+                      </p>
+                    </div>
+                  </InnerCard>
+                );
+              })}
+            </div>
+          </div>
+        ),
+      },
+      {
+        q: 'What is my rating?',
+        plain: `${TERMS.rating.simple} ${TERMS.rating.detail}`,
+        a: (
+          <div className="space-y-3">
+            <p className="font-sans text-sm text-text-secondary leading-relaxed">
+              <Hint term="rating" /> is {TERMS.rating.simple.charAt(0).toLowerCase() + TERMS.rating.simple.slice(1)}{' '}
+              {TERMS.rating.detail}
+            </p>
+            <InnerCard className="space-y-2">
+              <p className="font-sans text-[10px] text-text-secondary uppercase tracking-wider">
+                Example: solving a hard word
+              </p>
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <p className="font-display text-lg font-bold text-text-primary">1057</p>
+                  <p className="font-sans text-[10px] text-text-secondary">Before</p>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="font-sans text-xs font-bold" style={{ color: 'var(--tile-correct)' }}>+43</span>
+                  <div className="w-12 h-px bg-border-subtle" />
+                  <span className="font-sans text-[9px] text-text-secondary">Word difficulty 1420</span>
+                </div>
+                <div className="text-center">
+                  <p className="font-display text-lg font-bold" style={{ color: 'var(--tile-correct)' }}>1100</p>
+                  <p className="font-sans text-[10px] text-text-secondary">After</p>
+                </div>
+              </div>
+            </InnerCard>
+            <p className="font-sans text-xs text-text-secondary leading-relaxed">
+              In Detailed view the rating is shown as an Elo number, the same system chess uses.
+            </p>
+          </div>
+        ),
+      },
+      {
+        q: 'What are the tiers?',
+        plain:
+          'Tiers are rating bands with a name: Novice (up to 1199), Veteran (1200–1399), Master (1400–1599), Grandmaster (1600+). They are milestones — your rating is the real number.',
+        a: (
+          <div className="space-y-3">
+            <p className="font-sans text-sm text-text-secondary leading-relaxed">
+              Tiers are rating bands with a name — milestones that mark your progress. Your rating is the real number;
+              tiers just give it a name.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { name: 'Novice', range: 'up to 1199', cls: 'bg-tier-novice' },
+                { name: 'Veteran', range: '1200 – 1399', cls: 'bg-tier-veteran' },
+                { name: 'Master', range: '1400 – 1599', cls: 'bg-tier-master' },
+                { name: 'Grandmaster', range: '1600+', cls: 'bg-tier-grandmaster' },
+              ].map((t) => (
+                <InnerCard key={t.name} className="flex items-start gap-2 py-2">
+                  <span className={clsx('w-2 h-2 rounded-full shrink-0 mt-1', t.cls)} />
+                  <div>
+                    <span className="font-sans text-xs font-semibold text-text-primary">{t.name}</span>
+                    <span className="font-sans text-[10px] text-text-secondary ml-1.5">{t.range}</span>
+                    {TIER_COPY[t.name] && (
+                      <p className="font-sans text-[11px] text-text-secondary leading-relaxed">{TIER_COPY[t.name].simple}</p>
+                    )}
+                  </div>
+                </InnerCard>
+              ))}
+            </div>
+          </div>
+        ),
+      },
+      {
+        q: 'What are the first 5 games?',
+        plain: `${TERMS.placement.simple} ${TERMS.placement.detail} Want a quick start? Play five Ranked games and let the system find you.`,
+        a: (
+          <p className="font-sans text-sm text-text-secondary leading-relaxed">
+            <Hint term="placement">Your first 5 games</Hint> decide your starting rating. {TERMS.placement.detail} Want
+            a quick start? Play five Ranked games and let the system find your level.
+          </p>
+        ),
+      },
+      {
+        q: 'How is word difficulty worked out?',
+        plain: `${TERMS.wordRating.simple} ${TERMS.wordRating.detail} Rare letters, unusual positions, repeated letters and uncommon words all push difficulty up. The number feeds directly into how much rating you gain or lose for that word.`,
+        a: (
+          <p className="font-sans text-sm text-text-secondary leading-relaxed">
+            <Hint term="wordRating" /> is {TERMS.wordRating.simple.charAt(0).toLowerCase() + TERMS.wordRating.simple.slice(1)}{' '}
+            {TERMS.wordRating.detail} It starts from how common the letters are, how typical their positions are,
+            whether letters repeat and how everyday the word is, then learns from every game played on it. The number
+            feeds directly into how much rating you gain or lose: beating a 1,500 word earns much more than beating a
+            700 word.
+          </p>
+        ),
+      },
+      {
+        q: "What's my streak?",
+        plain: `${TERMS.streak.simple} ${TERMS.streak.detail} Miss a day and it resets to zero; your all-time best streak is saved separately.`,
+        a: (
+          <p className="font-sans text-sm text-text-secondary leading-relaxed">
+            <Hint term="streak" />: {TERMS.streak.simple.charAt(0).toLowerCase() + TERMS.streak.simple.slice(1)} Miss a
+            day — even by a few minutes past midnight in your local time — and it resets to zero. Your all-time best
+            streak is saved separately and never resets. {TERMS.streak.detail} The Daily refreshes at midnight in your
+            local time zone.
+          </p>
+        ),
+      },
+    ],
+  },
+  /* ============================== 4. THE BOT'S PICKS ============================== */
   {
     slug: 'bot',
-    title: "The Bot's Picks",
+    title: "The engine's picks",
     icon: <Brain size={16} />,
-    partLabel: 'PART 03',
-    intro: "How the analyzer chooses its recommendations — and why they sometimes surprise you.",
-    guestUnlocked: false,
+    intro: 'How the engine chooses the guesses it recommends — and why they sometimes surprise you. From here on, the sections get more technical.',
     items: [
       {
         q: "How does the bot decide its top picks?",
@@ -642,14 +752,12 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /* ============================== 4. HARD MODE ============================== */
+  /* ============================== 5. HARD MODE ============================== */
   {
     slug: 'hardmode',
-    title: 'Hard Mode',
+    title: 'Hard mode',
     icon: <Swords size={16} />,
-    partLabel: 'PART 04',
     intro: 'Stricter rules, different optimal strategy.',
-    guestUnlocked: false,
     items: [
       {
         q: 'What is hard mode?',
@@ -680,19 +788,19 @@ const SECTIONS: SectionDef[] = [
             In hard mode, the bot re-solves the game under the same constraints you faced. It only
             recommends guesses that honor all known green and yellow letters. The efficiency
             calculations and classifications are identical — they just apply to a smaller set of
-            valid options. A <ClassBadge label="Brilliant" color="var(--cls-blue)" /> guess in hard mode is
+            valid options. A <ClassBadge cls="brilliant" /> guess in hard mode is
             rarer and arguably more impressive, because the room for creative plays is narrower.
           </p>
         ),
       },
       {
-        q: 'Why is CLASP the recommended hard-mode opener, not SLATE?',
+        q: 'Why is CLASP the recommended hard-mode first word, not SLATE?',
         plain:
-          'In normal mode, SLATE is an excellent opener — it tests five high-frequency letters with no duplicates. In hard mode, SLATE commits you to placing those letters correctly from the start. CLASP, by contrast, shares similar letter coverage but leaves you more flexibility in where yellows land. The hard-mode constraint means the opener choice matters more, and CLASP survives those constraints slightly better on average.',
+          'In normal mode, SLATE is an excellent first word — it tests five high-frequency letters with no duplicates. In hard mode, SLATE commits you to placing those letters correctly from the start. CLASP, by contrast, shares similar letter coverage but leaves you more flexibility in where yellows land. The hard-mode constraint means the choice of first word matters more, and CLASP survives those constraints slightly better on average.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              In normal mode, SLATE is an excellent opener — it tests five high-frequency letters
+              In normal mode, SLATE is an excellent first word — it tests five high-frequency letters
               with no repeats. But in hard mode, every yellow and green you earn must be carried
               forward. CLASP, which covers a similar set of common letters (C, L, A, S, P), tends
               to leave you in better shape when those letters come back yellow, because the
@@ -701,7 +809,7 @@ const SECTIONS: SectionDef[] = [
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
               The difference is small, but across thousands of games, CLASP produces a slightly
               lower average solve count under hard-mode rules. Normal-mode players should stick
-              with SLATE or whatever opener they prefer.
+              with SLATE or whatever first word they prefer.
             </p>
           </div>
         ),
@@ -723,14 +831,12 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /* ============================== 5. STRATEGY & MATH ============================== */
+  /* ============================== 6. STRATEGY & MATH ============================== */
   {
     slug: 'strategy',
-    title: 'Strategy & Math',
+    title: 'Strategy & math',
     icon: <Zap size={16} />,
-    partLabel: 'PART 05',
     intro: 'The concepts behind efficient guessing — no formulas required.',
-    guestUnlocked: true,
     items: [
       {
         q: 'What is "efficient guessing"?',
@@ -846,7 +952,7 @@ const SECTIONS: SectionDef[] = [
               <p className="font-sans text-xs text-text-secondary leading-relaxed">
                 You used a gray letter again, or put a yellow letter in the exact position it
                 already appeared. This is never strategically correct — it throws away guaranteed
-                information. Marked with a <ClassBadge label="Miss" color="var(--cls-red)" /> badge.
+                information. Marked with a <ClassBadge cls="miss" /> badge.
               </p>
             </div>
             <InnerCard className="space-y-2">
@@ -906,31 +1012,29 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /* ============================== 6. GAME REVIEW ============================== */
+  /* ============================== 7. GAME REVIEW ============================== */
   {
     slug: 'review',
-    title: 'Game Review & Analysis Tools',
+    title: 'The review page',
     icon: <Target size={16} />,
-    partLabel: 'PART 06',
     intro: 'A walkthrough of everything on the post-game review page.',
-    guestUnlocked: false,
     items: [
       {
         q: "What's on the review page?",
         plain:
-          'The review page is your main post-game tool. It walks you through the game one step at a time: an overview of all your moves, then a card for each guess comparing it to the bot’s optimal pick, then a final summary with community stats and your ELO change. Move between steps with the arrow keys or the on-screen arrows.',
+          'The review page is your main post-game tool. It walks you through the game one step at a time: an overview of all your moves, then a card for each guess comparing it to the bot’s optimal pick, then a final summary with community stats and your rating change. Move between steps with the arrow keys or the on-screen arrows.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
               The review is a step-by-step walkthrough rather than a dashboard. Your overall skill,
-              luck, and opener stats sit at the top of the overview; from there you page through one
+              luck and first-word stats sit at the top of the overview; from there you page through one
               step at a time.
             </p>
             <div className="grid gap-2">
               {[
                 { n: '1', name: 'Overview', desc: 'Your full guess grid plus a stats table summarising every move — skill, luck, words left and info gained, row by row. Click any row to jump straight to that move.' },
                 { n: '2', name: 'Per-move cards', desc: 'One card per guess: its classification, a “Comparing our guesses” table (your guess vs. the bot’s optimal pick), the bits of information gained, and how each guess split the remaining solutions into groups. Expand the optimal pick to see runner-up alternatives.' },
-                { n: '3', name: 'Summary', desc: 'How unique your game was versus the community, your projected ELO change (rated games), and links back to play or share.' },
+                { n: '3', name: 'Summary', desc: 'How unique your game was versus the community, your projected rating change (Ranked games), and links back to play or share.' },
               ].map((tab) => (
                 <InnerCard key={tab.n} className="flex gap-2.5">
                   <span className="font-mono text-[10px] text-text-tertiary bg-bg-muted w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
@@ -987,13 +1091,13 @@ const SECTIONS: SectionDef[] = [
       {
         q: 'What’s on the final summary (community stats)?',
         plain:
-          'The last step of the review pulls back from individual moves and compares your whole game to everyone else who solved the same word: how many players got it, how your guess count stacks up, and how unique your exact sequence of guesses was. Rated games also show your projected ELO change here.',
+          'The last step of the review pulls back from individual moves and compares your whole game to everyone else who solved the same word: how many players got it, how your guess count stacks up, and how unique your exact sequence of guesses was. Ranked games also show your projected rating change here.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
             The final step looks at the whole game in context. It shows community stats for the
             same answer — how many people solved it and how your number of guesses compares — plus
             how unique your particular path was, since identical games share a fingerprint. For
-            rated games, your projected ELO change is shown here too. From this step you can jump
+            Ranked games, your projected rating change is shown here too. From this step you can jump
             back to play or share the game.
           </p>
         ),
@@ -1028,14 +1132,12 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /* ============================== 7. THE COACH ============================== */
+  /* ============================== 8. THE COACH ============================== */
   {
     slug: 'coach',
-    title: 'The Coach (AI Chat)',
+    title: 'Coach chat',
     icon: <MessageSquare size={16} />,
-    partLabel: 'PART 07',
     intro: 'A personal tutor that has read every line of your game.',
-    guestUnlocked: false,
     items: [
       {
         q: 'What is Coach Chat?',
@@ -1110,138 +1212,17 @@ const SECTIONS: SectionDef[] = [
     ],
   },
 
-  /* ============================== 8. ELO & PROGRESS ============================== */
-  {
-    slug: 'elo',
-    title: 'ELO & Progress',
-    icon: <TrendingUp size={16} />,
-    partLabel: 'PART 08',
-    intro: 'How your rating is calculated and what the tiers mean.',
-    guestUnlocked: false,
-    items: [
-      {
-        q: 'What is my ELO rating?',
-        plain:
-          'ELO is a number that represents your current skill level relative to other players. It goes up when you beat a hard word and down when you lose to an easy one. The system is borrowed from chess: it accounts for the expected difficulty of what you faced, so beating a hard word earns more than beating an easy one.',
-        a: (
-          <div className="space-y-3">
-            <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              ELO is a number that represents your skill level relative to other players. It goes up
-              when you solve a word and down when you fail, with the magnitude depending on the
-              word&apos;s difficulty. Beat a hard word and you gain more. Lose to an easy one and
-              you lose more.
-            </p>
-            <InnerCard className="space-y-2">
-              <p className="font-sans text-[10px] text-text-tertiary uppercase tracking-wider">
-                Example: win against a hard word
-              </p>
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <p className="font-display text-lg font-bold text-text-primary">1057</p>
-                  <p className="font-sans text-[10px] text-text-tertiary">Before</p>
-                </div>
-                <div className="flex flex-col items-center gap-0.5">
-                  <span className="font-sans text-xs font-bold" style={{ color: 'var(--tile-correct)' }}>+43</span>
-                  <div className="w-12 h-px bg-border-subtle" />
-                  <span className="font-sans text-[9px] text-text-tertiary">Word difficulty: 1420</span>
-                </div>
-                <div className="text-center">
-                  <p className="font-display text-lg font-bold" style={{ color: 'var(--tile-correct)' }}>1100</p>
-                  <p className="font-sans text-[10px] text-text-tertiary">After</p>
-                </div>
-              </div>
-            </InnerCard>
-          </div>
-        ),
-      },
-      {
-        q: 'What are the tiers?',
-        plain:
-          'Tiers are ELO bands: Novice (0–1199), Veteran (1200–1399), Master (1400–1599), Grandmaster (1600+). They are decorative milestones — your raw ELO is the authoritative number. Reaching a new tier does feel good though.',
-        a: (
-          <div className="space-y-3">
-            <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              Tiers are ELO bands — decorative milestones that mark your progress. Your raw ELO
-              is the authoritative number; tiers just give it a name.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { name: 'Novice', range: '0 – 1199', cls: 'bg-tier-novice' },
-                { name: 'Veteran', range: '1200 – 1399', cls: 'bg-tier-veteran' },
-                { name: 'Master', range: '1400 – 1599', cls: 'bg-tier-master' },
-                { name: 'Grandmaster', range: '1600+', cls: 'bg-tier-grandmaster' },
-              ].map((t) => (
-                <InnerCard key={t.name} className="flex items-center gap-2 py-2">
-                  <span className={clsx('w-2 h-2 rounded-full shrink-0', t.cls)} />
-                  <div>
-                    <span className="font-sans text-xs font-semibold text-text-primary">{t.name}</span>
-                    <span className="font-sans text-[10px] text-text-tertiary ml-1.5">{t.range}</span>
-                  </div>
-                </InnerCard>
-              ))}
-            </div>
-          </div>
-        ),
-      },
-      {
-        q: 'What are placement matches?',
-        plain:
-          'Your first five rated games use a boosted adjustment factor (K=128 instead of the usual K=32). This means your rating moves four times faster during placement, so it settles close to your true level quickly rather than grinding there over weeks. After placement, changes are more gradual.',
-        a: (
-          <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            Your first five rated games use a boosted adjustment factor — four times higher than
-            normal. This means your rating moves quickly during placement, settling close to your
-            true level fast rather than grinding there over weeks. Once placement ends, rating
-            changes become more gradual and stable. If you want a fast calibration: play five
-            competitive games and let the system find you.
-          </p>
-        ),
-      },
-      {
-        q: 'How is word difficulty computed?',
-        plain:
-          'Each word gets a difficulty score from how common its letters are, how typical those letters are in their positions, whether it repeats letters, and how everyday the word itself is. Rare letters, unusual placements, duplicates, and words outside the common answer list all push difficulty up. The score (roughly 600–1800) feeds directly into how much ELO you gain or lose for that word.',
-        a: (
-          <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            Each word gets a difficulty score from how common its letters are, how typical those
-            letters are in their positions, whether it repeats letters, and how everyday the word
-            itself is. Rare letters, unusual placements, duplicates, and words outside the common
-            answer list all push it up — those words are genuinely harder to solve. Scores span
-            roughly 600–1800, and the number feeds directly into how much ELO you gain or lose:
-            beat a difficulty-1500 word and you gain significantly more than beating a
-            difficulty-700 word.
-          </p>
-        ),
-      },
-      {
-        q: "What's my streak?",
-        plain:
-          'Your streak counts consecutive days on which you solved the Daily puzzle. Miss a day — even by a few minutes past midnight in your local time — and it resets to zero. Your all-time best streak is saved separately and never resets.',
-        a: (
-          <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            Your streak counts consecutive days on which you solved the Daily puzzle. Miss a
-            day — even by a few minutes past midnight in your local time — and it resets to zero.
-            Your all-time best streak is saved separately and never resets. The Daily puzzle
-            refreshes at midnight in your local timezone, so plan accordingly.
-          </p>
-        ),
-      },
-    ],
-  },
-
   /* ============================== 9. WORD LISTS ============================== */
   {
     slug: 'wordlists',
-    title: 'Word Lists',
+    title: 'Word lists',
     icon: <FileText size={16} />,
-    partLabel: 'PART 09',
     intro: 'Four different word lists power different parts of the game.',
-    guestUnlocked: true,
     items: [
       {
         q: "How many words does ELOquence know?",
         plain:
-          'ELOquence works with four distinct word lists. 15,000 valid guesses — anything you can submit. 5,500 competitive answers — the pool used for Competitive mode. 4,500 bot suggestion words — the pool the bot draws its top-pick recommendations from. 2,309 standard daily words — the classic Wordle answer list.',
+          'ELOquence works with four distinct word lists. 15,000 valid guesses — anything you can submit. 5,500 Ranked answers — the pool used for Ranked mode. 4,500 bot suggestion words — the pool the bot draws its top-pick recommendations from. 2,309 standard daily words — the classic Wordle answer list.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
@@ -1256,8 +1237,8 @@ const SECTIONS: SectionDef[] = [
                 },
                 {
                   n: '5,500',
-                  label: 'Competitive answers',
-                  desc: 'The pool used for Competitive mode games. Broader than the daily list — includes less common but still fair words.',
+                  label: 'Ranked answers',
+                  desc: 'The pool used for Ranked games. Broader than the daily list — includes less common but still fair words.',
                 },
                 {
                   n: '4,500',
@@ -1335,19 +1316,17 @@ const SECTIONS: SectionDef[] = [
   /* ============================== 10. ARCHIVE & REPLAY ============================== */
   {
     slug: 'archive',
-    title: 'Archive & Replay',
+    title: 'Past dailies & replay',
     icon: <Star size={16} />,
-    partLabel: 'PART 10',
-    intro: 'Go back and play any past daily puzzle.',
-    guestUnlocked: false,
+    intro: 'Go back and play any past Daily.',
     items: [
       {
-        q: 'What is the Wordle Archive?',
+        q: 'What are Past dailies?',
         plain:
-          'The archive is a collection of every past daily puzzle, available at /archive. You can replay any of them, get a full analysis, and use Coach Chat — exactly like a regular game. The only difference is that archive games are unrated.',
+          'Past dailies is a collection of every past daily puzzle, available at /archive. You can replay any of them, get a full analysis, and use Coach Chat — exactly like a regular game. The only difference is that past dailies are unrated.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            The archive is a collection of every past daily puzzle, available at{' '}
+            Past dailies is a collection of every past daily puzzle, available at{' '}
             <span className="font-mono text-text-primary">/archive</span>. You can replay any of
             them, get a full analysis, and use Coach Chat — exactly like a regular game. It is a
             great way to study specific words you heard about from friends, or to deliberately
@@ -1356,12 +1335,12 @@ const SECTIONS: SectionDef[] = [
         ),
       },
       {
-        q: 'Does replaying a past daily affect my ELO?',
+        q: 'Does replaying a past daily affect my rating?',
         plain:
-          'No. Archive games are always unrated. Your ELO, streak, and stats are not affected by anything that happens in the archive. Play as many as you like without risk.',
+          'No. Past dailies are always unrated. Your rating, streak, and stats are not affected by anything that happens in the archive. Play as many as you like without risk.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            No. Archive games are always unrated. Your ELO, streak, and stats are completely
+            No. Past dailies are always unrated. Your rating, streak, and stats are completely
             unaffected by anything that happens in the archive. Play as many as you like without
             any risk to your rating. Think of the archive as a practice lab with a full analysis
             suite attached.
@@ -1391,19 +1370,19 @@ const SECTIONS: SectionDef[] = [
 /* ------------------------------------------------------------------ */
 
 function SectionHeader({
-  partLabel,
+  part,
   title,
   icon,
   id,
 }: {
-  partLabel: string;
+  part: string;
   title: string;
   icon: React.ReactNode;
   id: string;
 }) {
   return (
     <div id={id} className="scroll-mt-24 mb-6 rule-top pt-3">
-      <Label className="block mb-1">{partLabel}</Label>
+      <Label className="block mb-1">{part}</Label>
       <div className="flex items-center gap-3">
         <span className="text-text-tertiary shrink-0" aria-hidden="true">{icon}</span>
         <h2 className="font-display text-display-md text-text-primary">{title}</h2>
@@ -1471,38 +1450,10 @@ function FAQAccordionItem({
 }
 
 /* ------------------------------------------------------------------ */
-/*  Locked section card                                                 */
-/* ------------------------------------------------------------------ */
-
-function LockedSection({ title }: { title: string }) {
-  const router = useRouter();
-  return (
-    <div className="bg-wash-ochre px-6 py-8 flex flex-col md:flex-row md:items-end md:justify-between gap-5">
-      <div className="max-w-md">
-        <Label className="block mb-2">
-          <Lock size={11} className="inline-block mr-1.5 -mt-0.5" aria-hidden="true" />
-          members only
-        </Label>
-        <p className="font-display text-display-sm text-text-primary">Sign in to read {title}.</p>
-        <p className="font-sans text-sm text-text-secondary mt-2 leading-relaxed">
-          A free account unlocks this section and all the others.
-        </p>
-      </div>
-      <Button variant="primary" onClick={() => router.push('/login')} className="self-start md:self-auto">
-        Sign in
-      </Button>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Page component                                                      */
 /* ------------------------------------------------------------------ */
 
-export default function FaqPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
-
+export default function HelpPage() {
   const [query, setQuery] = useState('');
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [allExpanded, setAllExpanded] = useState(false);
@@ -1596,8 +1547,6 @@ export default function FaqPage() {
     };
   }, []);
 
-  const isLocked = (section: SectionDef) => !user && !section.guestUnlocked;
-
   /* ---- mobile ToC ---- */
   const MobileToc = () => (
     <details className="lg:hidden mb-8 rule-top">
@@ -1617,7 +1566,7 @@ export default function FaqPage() {
               if (details) details.open = false;
             }}
           >
-            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-tertiary mr-2">{section.partLabel}</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-tertiary mr-2">{partLabel(SECTIONS.indexOf(section))}</span>
             {section.title}
           </a>
         ))}
@@ -1657,26 +1606,14 @@ export default function FaqPage() {
         {/* Page header */}
         <header className="grid md:grid-cols-12 gap-6 md:gap-8 mb-10 md:mb-14">
           <div className="md:col-span-7">
-            <Label className="block mb-3">faq · {SECTIONS.length} sections</Label>
-            <SplitWords text="Frequently asked questions" as="h1" className="font-display text-display-lg text-text-primary" />
+            <Label className="block mb-3">help · {SECTIONS.length} sections</Label>
+            <SplitWords text="Help" as="h1" className="font-display text-display-lg text-text-primary" />
           </div>
           <Reveal delay={0.2} className="md:col-span-5 md:pt-8 flex flex-col gap-5">
             <p className="font-sans text-sm md:text-base text-text-secondary leading-relaxed">
-              Everything about scores, picks, ELO, hard mode, and the rest of the bot.
+              How to play, what the scores mean and how your rating works — in plain words. The basics come first;
+              the deeper sections are for when you want to know how the engine thinks.
             </p>
-
-            {!loading && !user && (
-              <p className="font-sans text-xs text-text-secondary flex items-center gap-2">
-                <Lock size={12} className="shrink-0 text-text-tertiary" aria-hidden="true" />
-                <span>
-                  Some sections require an account.{' '}
-                  <button onClick={() => router.push('/login')} className="ink-link text-text-primary font-medium">
-                    Sign in
-                  </button>{' '}
-                  to unlock everything.
-                </span>
-              </p>
-            )}
 
             {/* Search + expand/collapse row */}
             <div className="flex items-end gap-4">
@@ -1720,7 +1657,6 @@ export default function FaqPage() {
             )}
 
             {filteredSections.map((section, sectionIdx) => {
-              const locked = isLocked(section);
               return (
                 <section
                   key={section.slug}
@@ -1729,7 +1665,7 @@ export default function FaqPage() {
                 >
                   <SectionHeader
                     id={section.slug}
-                    partLabel={section.partLabel}
+                    part={partLabel(SECTIONS.indexOf(section))}
                     title={section.title}
                     icon={section.icon}
                   />
@@ -1740,24 +1676,20 @@ export default function FaqPage() {
                     </p>
                   )}
 
-                  {locked ? (
-                    <LockedSection title={section.title} />
-                  ) : (
-                    <div className="border-b border-border-subtle">
-                      {section.items.map((item) => {
-                        const itemId = `${section.slug}::${item.q}`;
-                        return (
-                          <FAQAccordionItem
-                            key={itemId}
-                            id={itemId}
-                            item={item}
-                            isOpen={openItems.has(itemId)}
-                            onToggle={() => toggleItem(itemId)}
-                          />
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="border-b border-border-subtle">
+                    {section.items.map((item) => {
+                      const itemId = `${section.slug}::${item.q}`;
+                      return (
+                        <FAQAccordionItem
+                          key={itemId}
+                          id={itemId}
+                          item={item}
+                          isOpen={openItems.has(itemId)}
+                          onToggle={() => toggleItem(itemId)}
+                        />
+                      );
+                    })}
+                  </div>
                 </section>
               );
             })}

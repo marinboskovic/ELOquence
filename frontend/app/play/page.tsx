@@ -3,16 +3,17 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowRight, ArrowUpRight, Check, Copy, HelpCircle } from 'lucide-react';
+import { ArrowRight, Check, Copy, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { gamesApi, dailyApi, challengesApi, errorMessage } from '@/lib/api';
 import { useSettings } from '@/lib/useSettings';
 import { getRatingTier, patternToTiles, TileState } from '@/lib/types';
+import { MODES, TERMS } from '@/lib/copy';
 import TileSpinner from '@/components/TileSpinner';
 import FirstTimeTutorial from '@/components/FirstTimeTutorial';
 import Dialog from '@/components/Dialog';
-import { Button, Label, SplitWords, Tag, staggerParent, staggerChild } from '@/components/ui';
-import clsx from 'clsx';
+import ModeRow from '@/components/play/ModeRow';
+import { Button, Hint, Label, SplitWords, Tag, staggerParent } from '@/components/ui';
 
 /** Returns ms until local midnight (server TZ matches client TZ). */
 function msUntilMidnight(): number {
@@ -45,7 +46,7 @@ function DailyCountdown({ onMidnight }: { onMidnight?: () => void }) {
 
   return (
     <span className="font-mono text-xs tabular text-text-secondary">
-      next in {timeLeft}
+      next word in {timeLeft}
     </span>
   );
 }
@@ -73,64 +74,6 @@ function todayLabel(): string {
   return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).toLowerCase();
 }
 
-/* ── Mode row ─────────────────────────────────────────────────────────────── */
-
-interface ModeRowProps {
-  title: string;
-  copy: string;
-  status: React.ReactNode;
-  tag?: React.ReactNode;
-  extra?: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-  locked?: boolean;
-}
-
-function ModeRow({ title, copy, status, tag, extra, onClick, disabled, loading, locked }: ModeRowProps) {
-  return (
-    <motion.li variants={staggerChild} className="rule-hair">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        aria-busy={loading || undefined}
-        className={clsx(
-          'group w-full text-left grid grid-cols-1 md:grid-cols-12 items-center gap-x-6 gap-y-3 py-7 md:py-8',
-          'disabled:cursor-wait',
-          locked && 'opacity-70 hover:opacity-100'
-        )}
-      >
-        {/* Display label */}
-        <div className="md:col-span-5 flex flex-wrap items-center gap-x-4 gap-y-2 min-w-0">
-          <span className="font-display text-display-md text-text-primary transition-transform duration-fast ease-out group-hover:-translate-y-0.5">
-            {title}
-          </span>
-          {tag}
-        </div>
-
-        {/* Copy + extra (pattern grid) */}
-        <div className="md:col-span-4 flex items-center gap-5 min-w-0">
-          {extra}
-          <p className="text-sm text-text-secondary leading-snug">{copy}</p>
-        </div>
-
-        {/* Status + arrow */}
-        <div className="md:col-span-3 flex items-center md:justify-end gap-3 min-w-0">
-          <span className="font-mono text-xs tabular text-text-secondary text-left md:text-right truncate">
-            {loading ? <TileSpinner size="sm" label="Starting" /> : status}
-          </span>
-          <ArrowRight
-            size={18}
-            className="shrink-0 text-text-tertiary transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-1"
-            aria-hidden="true"
-          />
-        </div>
-      </button>
-    </motion.li>
-  );
-}
-
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export default function PlayPage() {
@@ -143,7 +86,7 @@ export default function PlayPage() {
   const [challengeCode, setChallengeCode] = useState<string | null>(null);
   const [challengeCopied, setChallengeCopied] = useState(false);
   const [dailyAlreadyPlayed, setDailyAlreadyPlayed] = useState(false);
-  // Daily is always unrated — only competitive affects ELO
+  // Daily is always unrated — only Ranked changes the rating
   const [dailyGameId, setDailyGameId] = useState<string | null>(null);
   const [dailyPatterns, setDailyPatterns] = useState<TileState[][] | null>(null);
   const [dailyRefreshKey, setDailyRefreshKey] = useState(0);
@@ -166,7 +109,7 @@ export default function PlayPage() {
     return () => clearTimeout(timer);
   }, [handleMidnight, dailyRefreshKey]);
 
-  // Refresh user data on mount so stats (games_played, ELO, etc.) are current
+  // Refresh user data on mount so stats (games_played, rating, etc.) are current
   useEffect(() => {
     refreshUser();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -302,7 +245,7 @@ export default function PlayPage() {
 
       router.push(`/game/${gameId}`);
     } catch (err: unknown) {
-      setError(errorMessage(err, 'Could not start game. Please try again.'));
+      setError(errorMessage(err, 'Could not start the game. Please try again.'));
       setCreating(null);
     }
   };
@@ -336,7 +279,7 @@ export default function PlayPage() {
       const res = await challengesApi.create();
       setChallengeCode(res.data.code);
     } catch {
-      setError('Could not create challenge. Please try again.');
+      setError('Could not create the link. Please try again.');
     } finally {
       setCreatingChallenge(false);
     }
@@ -366,11 +309,18 @@ export default function PlayPage() {
   const challengeUrl =
     typeof window !== 'undefined' ? `${window.location.origin}/challenge/${challengeCode}` : `/challenge/${challengeCode}`;
 
-  // ── Challenge modal ───────────────────────────────────────────────────────────
+  // Brand-new: no Ranked games, no streak, and today's Daily untouched.
+  // (games_played counts Ranked games only; the Daily shows through the streak
+  // and today's cached patterns.)
+  const isBrandNew = user
+    ? user.games_played === 0 && user.current_streak === 0 && user.max_streak === 0 && !dailyAlreadyPlayed && !dailyPatterns
+    : !dailyAlreadyPlayed && !dailyPatterns;
+
+  // ── Friends link modal ───────────────────────────────────────────────────────
   const challengeModal = (
-    <Dialog open={!!challengeCode} onClose={() => setChallengeCode(null)} title="Challenge created" maxWidth="max-w-md">
+    <Dialog open={!!challengeCode} onClose={() => setChallengeCode(null)} title="Your Friends link" maxWidth="max-w-md">
       <div className="px-5 pb-5 pt-2 flex flex-col gap-5">
-        <p className="text-sm text-text-secondary">Share the link. Everyone who plays it gets the same word.</p>
+        <p className="text-sm text-text-secondary">Send this link. Everyone gets the same word.</p>
 
         <div className="rule-top pt-3">
           <Label className="block mb-2">link</Label>
@@ -378,7 +328,7 @@ export default function PlayPage() {
             <code className="flex-1 min-w-0 h-11 px-3 flex items-center border border-border-subtle bg-bg-elevated font-mono text-xs text-text-secondary truncate">
               {challengeUrl}
             </code>
-            <Button variant="secondary" onClick={handleCopyChallengeLink} aria-label="Copy challenge link">
+            <Button variant="secondary" onClick={handleCopyChallengeLink} aria-label="Copy the link">
               {challengeCopied ? <Check size={13} /> : <Copy size={13} />}
               {challengeCopied ? 'Copied' : 'Copy'}
             </Button>
@@ -391,7 +341,7 @@ export default function PlayPage() {
             <ArrowRight size={14} />
           </Button>
           <Button variant="ghost" onClick={() => setChallengeCode(null)}>
-            Dismiss
+            Close
           </Button>
         </div>
       </div>
@@ -402,14 +352,14 @@ export default function PlayPage() {
   const dailyStatus = dailyAlreadyPlayed ? (
     <span className="flex flex-col md:items-end gap-0.5">
       <DailyCountdown onMidnight={handleMidnight} />
-      <span className="text-text-primary">view your game</span>
+      <span className="text-text-primary">see your game</span>
     </span>
   ) : dailyPatterns ? (
     <span className="text-text-primary">continue</span>
-  ) : (
-    <span>free · unrated</span>
-  );
+  ) : null;
 
+  // Rows are <button>s, so tags inside them stay plain text (no nested
+  // <Hint> buttons); the header tag carries the explanation instead.
   const dailyTag = user?.current_streak ? (
     <Tag tone="ochre">{user.current_streak} day streak</Tag>
   ) : !dailyAlreadyPlayed ? (
@@ -417,6 +367,16 @@ export default function PlayPage() {
   ) : (
     <Tag tone="green">played</Tag>
   );
+
+  const placementText = user?.is_placement ? `${TERMS.placement.name} · ${Math.min(user.games_played, 5)}/5` : null;
+  const placementTag = placementText ? (
+    <Tag tone="ochre">
+      <Hint term="placement">{placementText}</Hint>
+    </Tag>
+  ) : null;
+  const placementRowTag = placementText ? <Tag tone="ochre">{placementText}</Tag> : undefined;
+
+  const signInStatus = <span>sign in to play</span>;
 
   const helpButton = (
     <Button size="sm" variant="secondary" onClick={() => setHelpSignal((s) => s + 1)} aria-label="How to play" title="How to play">
@@ -438,12 +398,15 @@ export default function PlayPage() {
           {user ? (
             <>
               <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
-                <span className="font-display font-black text-display-md tabular text-text-primary">
-                  {Math.round(user.elo_rating)}
+                <span className="flex items-baseline gap-2">
+                  <Label>
+                    <Hint term="rating">rating</Hint>
+                  </Label>
+                  <span className="font-display font-black text-display-md tabular text-text-primary">
+                    {Math.round(user.elo_rating)}
+                  </span>
                 </span>
-                <Tag tone={user.is_placement ? 'ochre' : 'neutral'} dot={tier?.color}>
-                  {user.is_placement ? `placement ${user.games_played}/5` : tier?.name}
-                </Tag>
+                {placementTag ?? <Tag dot={tier?.color}>{tier?.name}</Tag>}
               </div>
               <div className="flex items-center gap-4">
                 <span className="font-mono text-xs text-text-secondary">{user.username}</span>
@@ -453,7 +416,7 @@ export default function PlayPage() {
           ) : (
             <>
               <p className="text-base text-text-secondary md:text-right max-w-xs">
-                One word a day for everyone. Sign in for rated games.
+                One word a day for everyone. Sign in for Ranked games.
               </p>
               {helpButton}
             </>
@@ -477,17 +440,23 @@ export default function PlayPage() {
         )}
       </AnimatePresence>
 
+      {/* ── New here? ── */}
+      {isBrandNew && (
+        <p className="mt-8 md:mt-10 pl-4 border-l-2 border-border-default text-base text-text-primary">
+          <span className="font-semibold">New here?</span> Start with the Daily — same word for everyone, nothing at stake.
+        </p>
+      )}
+
       {/* ── Modes ── */}
       <motion.ul
         variants={staggerParent}
         initial="hidden"
         animate="show"
-        className="mt-10 md:mt-14 rule-top list-none m-0 p-0"
-        aria-label="Game modes"
+        className={isBrandNew ? 'mt-6 md:mt-8 rule-top list-none m-0 p-0' : 'mt-10 md:mt-14 rule-top list-none m-0 p-0'}
+        aria-label="Boards"
       >
         <ModeRow
-          title="Daily"
-          copy={user ? 'One word per day. Play against the community.' : 'One word per day, shared across the community. No account needed.'}
+          mode="daily"
           status={dailyStatus}
           tag={dailyTag}
           extra={dailyPatterns ? <MiniPatternGrid rows={dailyPatterns} /> : undefined}
@@ -497,10 +466,9 @@ export default function PlayPage() {
         />
 
         <ModeRow
-          title="Competitive"
-          copy="Random words from the full pool. Every result moves your rating."
-          status={user ? `rated · ±elo` : 'rated · sign in'}
-          tag={user?.is_placement ? <Tag tone="ochre">placement {user.games_played}/5</Tag> : user ? <Tag tone="ink">rated</Tag> : <Tag>locked</Tag>}
+          mode="competitive"
+          status={user ? null : signInStatus}
+          tag={placementRowTag}
           onClick={() => handleModeSelect('competitive')}
           disabled={!!creating}
           loading={creating === 'competitive'}
@@ -508,10 +476,8 @@ export default function PlayPage() {
         />
 
         <ModeRow
-          title="Practice"
-          copy="The same words, no stakes. Nothing is recorded against your rating."
-          status={user ? 'unrated' : 'unrated · sign in'}
-          tag={!user ? <Tag>locked</Tag> : undefined}
+          mode="practice"
+          status={user ? null : signInStatus}
           onClick={() => handleModeSelect('practice')}
           disabled={!!creating}
           loading={creating === 'practice'}
@@ -519,49 +485,30 @@ export default function PlayPage() {
         />
 
         <ModeRow
-          title="Challenge"
-          copy="Pick a word for a friend. Same word, separate boards, one leaderboard."
-          status={user ? 'friends · link' : 'friends · sign in'}
-          tag={!user ? <Tag>locked</Tag> : undefined}
+          mode="challenge"
+          status={user ? <span>get a link</span> : signInStatus}
           onClick={() => (user ? handleCreateChallenge() : router.push('/login'))}
           disabled={creatingChallenge || !!creating}
           loading={creatingChallenge}
           locked={!user}
         />
-
-        {/* Opener Lab — a tool, not a mode: a quieter secondary row */}
-        <motion.li variants={staggerChild} className="rule-hair">
-          <Link
-            href="/lab"
-            className="group grid grid-cols-1 md:grid-cols-12 items-center gap-x-6 gap-y-1 py-5"
-          >
-            <span className="md:col-span-5 flex items-center gap-3">
-              <span className="font-display font-bold text-display-sm text-text-primary transition-transform duration-fast ease-out group-hover:-translate-y-0.5">
-                Opener Lab
-              </span>
-              <Tag>tool</Tag>
-            </span>
-            <span className="md:col-span-4 text-sm text-text-secondary">
-              See how any opener splits the word list. No account needed.
-            </span>
-            <span className="md:col-span-3 flex items-center md:justify-end gap-3 font-mono text-xs text-text-secondary">
-              entropy · bits
-              <ArrowUpRight
-                size={16}
-                className="text-text-tertiary transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                aria-hidden="true"
-              />
-            </span>
-          </Link>
-        </motion.li>
         <li className="rule-hair" aria-hidden="true" />
       </motion.ul>
+
+      {/* ── Word Lab: a tool, not a board ── */}
+      <p className="mt-6 text-sm text-text-secondary">
+        Not sure what word to start with?{' '}
+        <Link href="/lab" className="ink-link text-text-primary">
+          Try one in the Word Lab
+        </Link>
+        .
+      </p>
 
       {/* ── Guest: sign-in nudge ── */}
       {!user && (
         <div className="mt-12 md:mt-16 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
           <p className="md:col-span-8 font-display text-display-md text-text-primary">
-            Sign in to play rated, keep a streak and review every game.
+            Sign in to play {MODES.competitive.name}, keep a streak and review every game.
           </p>
           <div className="md:col-span-4 flex md:justify-end">
             <Button size="lg" onClick={() => router.push('/login')}>

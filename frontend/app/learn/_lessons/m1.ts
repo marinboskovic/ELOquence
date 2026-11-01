@@ -2,14 +2,14 @@ import type { Module } from '../_components/challenges/types';
 
 export const MODULE_1: Module = {
   id: 'm1',
-  title: 'Openings',
-  blurb: 'Pick a strong first guess and commit to it.',
+  title: 'Your first word',
+  blurb: 'Pick a strong first word and stick with it.',
   lessons: [
     {
       id: 'm1l1',
       moduleId: 'm1',
-      title: 'Why your opening matters',
-      subtitle: 'Strong openers light up more tiles on guess 1.',
+      title: 'Why your first word matters',
+      subtitle: 'A strong first word lights up more tiles on guess 1.',
       challenges: [
         {
           kind: 'reveal',
@@ -55,7 +55,7 @@ export const MODULE_1: Module = {
     {
       id: 'm1l2',
       moduleId: 'm1',
-      title: 'Build your own opener',
+      title: 'Build your own first word',
       subtitle: 'Pick 5 letters that carry their weight.',
       challenges: [
         {
@@ -105,8 +105,8 @@ export const MODULE_1: Module = {
     {
       id: 'm1l3',
       moduleId: 'm1',
-      title: 'One opener, every day',
-      subtitle: 'Memorising branches > picking random.',
+      title: 'One first word, every day',
+      subtitle: 'Knowing your follow-ups beats picking at random.',
       challenges: [
         {
           kind: 'reveal',

@@ -97,7 +97,7 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
       viewBox={`0 0 ${width} ${height}`}
       className="w-full block"
       role="img"
-      aria-label={`ELO rating history from ${elos[0]} to ${elos[elos.length - 1]}`}
+      aria-label={`Rating over time, from ${elos[0]} to ${elos[elos.length - 1]}`}
       onMouseLeave={() => setHoverIndex(null)}
       style={{ fontFamily: 'var(--font-mono), ui-monospace, monospace' }}
     >

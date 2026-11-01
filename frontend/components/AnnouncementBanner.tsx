@@ -110,7 +110,7 @@ export default function AnnouncementBanner() {
         >
           <div className={`${isWarning ? 'bg-wash-accent' : 'bg-wash-ochre'} border-b border-border-subtle`}>
             <div className="max-w-6xl mx-auto px-4 md:px-8 h-9 flex items-center gap-4">
-              <Label className="text-text-primary shrink-0">{isWarning ? 'warning' : 'notice'}</Label>
+              <Label className="text-text-primary shrink-0">{isWarning ? 'heads up' : 'news'}</Label>
 
               <AnimatePresence mode="wait">
                 <motion.p
@@ -127,19 +127,19 @@ export default function AnnouncementBanner() {
 
               {showNav && (
                 <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={handlePrev} className={SQUARE_BTN} aria-label="Previous announcement">
+                  <button onClick={handlePrev} className={SQUARE_BTN} aria-label="Previous notice">
                     <ChevronLeft size={14} />
                   </button>
                   <span className="font-mono text-[11px] text-text-secondary tabular">
                     {index + 1}/{announcements.length}
                   </span>
-                  <button onClick={handleNext} className={SQUARE_BTN} aria-label="Next announcement">
+                  <button onClick={handleNext} className={SQUARE_BTN} aria-label="Next notice">
                     <ChevronRight size={14} />
                   </button>
                 </div>
               )}
 
-              <button onClick={handleDismiss} className={`${SQUARE_BTN} shrink-0`} aria-label="Dismiss announcement">
+              <button onClick={handleDismiss} className={`${SQUARE_BTN} shrink-0`} aria-label="Close this notice">
                 <X size={14} />
               </button>
             </div>

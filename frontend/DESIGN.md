@@ -100,9 +100,14 @@ framer-motion runs through `MotionConfig reducedMotion`).
 
 ## 6. Voice
 
-Short, declarative, lower-case micro-labels in mono (`rating`, `streak`, `bits`). No exclamation
-marks except on a win. Numbers carry units (`5.74 bits`, `+31`). Croatian product name stays
-"ELOquence" in the wordmark.
+Short, declarative, lower-case micro-labels in mono (`rating`, `streak`). No exclamation marks
+except on a win. Numbers carry units and, in Simple view, a sentence (`2,309 → 78 words`, not
+`4.9 bits`). Croatian product name stays "ELOquence" in the wordmark.
+
+**Vocabulary lives in `lib/copy.ts`** — modes are Daily / Ranked / Practice / Friends, "Rating" not
+"ELO", "First word" not "Opener", "Narrowing" for information gain, "First 5 games" for placement.
+**Simple view is the default**; every number the thesis needs stays available behind `<Detail>` /
+the Simple | Detailed toggle, and every stat label a beginner cannot guess gets a `<Hint>`.
 
 ## 7. Don'ts
 

@@ -1,9 +1,9 @@
 'use client';
 import { Suspense, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { authApi, errorMessage } from '@/lib/api';
+import { authApi } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit } from '@/components/auth/AuthShell';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, authErrorMessage } from '@/components/auth/AuthShell';
 
 function ResetInner() {
   const router = useRouter();
@@ -12,14 +12,14 @@ function ResetInner() {
   const { adoptTokens } = useAuth();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState(token ? '' : 'This reset link is missing its token. Request a new one.');
+  const [error, setError] = useState(token ? '' : 'This link is incomplete. Ask for a new one below.');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     if (password !== confirm) {
-      setError('Passwords do not match.');
+      setError("The two passwords don't match.");
       return;
     }
     setLoading(true);
@@ -28,7 +28,7 @@ function ResetInner() {
       await adoptTokens(res.data);
       router.replace('/play');
     } catch (err) {
-      setError(errorMessage(err, 'This reset link is invalid or has expired.'));
+      setError(authErrorMessage(err, 'This link has expired or was already used. Ask for a new one below.'));
     } finally {
       setLoading(false);
     }
@@ -36,10 +36,10 @@ function ResetInner() {
 
   return (
     <AuthShell
-      title="New password"
-      eyebrow="account · reset"
+      title="Choose a new password"
+      eyebrow="sign in"
       manifesto="A fresh start. Pick something you will remember."
-      footer={<AuthLink href="/forgot-password">Request a new link</AuthLink>}
+      footer={<AuthLink href="/forgot-password">Ask for a new link</AuthLink>}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <AuthField
@@ -51,12 +51,12 @@ function ResetInner() {
           required
           minLength={8}
           autoComplete="new-password"
-          placeholder="At least 8 characters"
+          placeholder="8 characters or more"
           disabled={!token}
         />
         <AuthField
           id="confirm"
-          label="confirm password"
+          label="same password again"
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
@@ -68,9 +68,9 @@ function ResetInner() {
         />
         <AuthError message={error} />
         <AuthSubmit loading={loading} loadingLabel="Saving…">
-          Set password
+          Save and sign in
         </AuthSubmit>
-        <p className="text-xs text-text-tertiary">You&apos;ll be signed out of every other device.</p>
+        <p className="text-xs text-text-secondary">You stay signed in here. Any other phone or computer is signed out.</p>
       </form>
     </AuthShell>
   );

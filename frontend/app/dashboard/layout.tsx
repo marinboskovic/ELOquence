@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Dashboard',
-  description: 'Your rating, streaks, accuracy and recent games.',
+  title: 'Your profile',
+  description: 'Your rating, streak and every game you played.',
 };
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

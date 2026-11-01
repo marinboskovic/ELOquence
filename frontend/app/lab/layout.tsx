@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Opener Lab · ELOquence',
+  title: 'Word Lab',
   description:
-    'Information theory, interactive. Analyse any Wordle opener, see how it splits the answer pool, and ask the engine what to guess next.',
+    'Type any five-letter word and see how many of the 2,309 possible answers it rules out — or rebuild a board you played and see the best next guess.',
 };
 
 export default function LabLayout({ children }: { children: React.ReactNode }) {

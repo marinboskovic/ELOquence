@@ -115,7 +115,8 @@ export function StatTile({
   accent,
   delay = 0,
 }: {
-  label: string;
+  /** mono micro-label; may wrap a `<Hint>` */
+  label: React.ReactNode;
   value: string | number;
   /** decimals for numeric count-up */
   decimals?: number;

@@ -15,7 +15,9 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useAbandonOnExit } from '@/lib/hooks/useAbandonOnExit';
 import { Game, GameStatus, TileState, patternToTiles } from '@/lib/types';
 import { useSettings } from '@/lib/useSettings';
-import { Button, Label, Tag } from '@/components/ui';
+import { MODES, TERMS, fmtInt } from '@/lib/copy';
+import { Button, Detail, Hint, Label, Tag } from '@/components/ui';
+import { dailyDateLabel, sortedMoves, wordsLeftAfterLastGuess } from '@/components/play/takeaway';
 
 /** Local date string (YYYY-MM-DD) matching the server's TZ. */
 function localDateStr(): string {
@@ -26,6 +28,11 @@ function localDateStr(): string {
 // Flip animation: 5 tiles × 0.15s stagger + 0.5s each tile = ~1.25s total
 // Ink-fill reveal: 5 tiles × 80ms stagger + 480ms fill + settle
 const FLIP_ANIMATION_MS = 4 * 80 + 480 + 160;
+
+// Error toasts in plain words.
+const NOT_IN_LIST = 'Not in the word list';
+const HARD_MODE_GREEN = 'You must keep the green letters in place (hard mode)';
+const HARD_MODE_YELLOW = 'You must reuse the yellow letters (hard mode)';
 
 const TILE_WORD: Record<TileState, string> = {
   correct: 'correct',
@@ -46,7 +53,7 @@ export default function GamePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshUser } = useAuth();
 
   // ?challenge=<code> is set when the user accepted a challenge that
   // routed them here; the game-over modal uses it to offer a "Back to
@@ -254,7 +261,7 @@ export default function GamePage() {
           if (tiles[pos] === 'correct' && currentGuess[pos] !== prevGuess[pos]) {
             setShakeRow(guesses.length);
             setTimeout(() => setShakeRow(-1), 500);
-            showToast(`Hard mode: must reuse ${prevGuess[pos]}`);
+            showToast(HARD_MODE_GREEN, 2600);
             return;
           }
         }
@@ -263,7 +270,7 @@ export default function GamePage() {
           if (tiles[pos] === 'present' && !currentGuess.includes(prevGuess[pos])) {
             setShakeRow(guesses.length);
             setTimeout(() => setShakeRow(-1), 500);
-            showToast(`Hard mode: must reuse ${prevGuess[pos]}`);
+            showToast(HARD_MODE_YELLOW, 2600);
             return;
           }
         }
@@ -331,6 +338,9 @@ export default function GamePage() {
           }
 
           setTimeout(() => setModalOpen(true), 250);
+          // Streak / rating on the user object change server-side on
+          // completion; pull them so the game-over sheet shows the new values.
+          if (user) void refreshUser();
 
           const newlyUnlocked: string[] =
             (updatedGame as Game & { newly_unlocked?: string[] }).newly_unlocked || [];
@@ -359,11 +369,18 @@ export default function GamePage() {
         lower.includes('not in word list') ||
         lower.includes('invalid word') ||
         lower.includes('not a valid');
+      const hardModeServer = lower.includes('hard mode');
 
       if (notInList) {
         setShakeRow(guesses.length);
         setTimeout(() => setShakeRow(-1), 500);
-        showToast(lower.includes('not a valid') || status === 422 ? 'Not in word list' : msg);
+        showToast(NOT_IN_LIST);
+      } else if (hardModeServer) {
+        // Server wording is "Hard mode: X must stay in position N" (green)
+        // or "Hard mode: guess must contain X" (yellow) — say it plainly.
+        setShakeRow(guesses.length);
+        setTimeout(() => setShakeRow(-1), 500);
+        showToast(lower.includes('position') ? HARD_MODE_GREEN : HARD_MODE_YELLOW, 2600);
       } else {
         showToast(msg);
       }
@@ -380,6 +397,7 @@ export default function GamePage() {
     user,
     showToast,
     hardMode,
+    refreshUser,
   ]);
 
   const handleAbandon = async () => {
@@ -398,14 +416,18 @@ export default function GamePage() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Derive mode label for the pill badge
-  const modeLabel = game
-    ? game.mode === 'competitive'
-      ? game.is_placement
-        ? 'Placement'
-        : 'Competitive'
-      : game.mode.charAt(0).toUpperCase() + game.mode.slice(1)
-    : null;
+  // Minimal header: the board's name, plus the date for the Daily.
+  const modeLabel = game ? MODES[game.mode]?.name ?? game.mode : null;
+  const modeSub = game?.mode === 'daily' ? dailyDateLabel(game.created_at) : null;
+
+  // Live stats the response already carries (no extra calls). Simple view
+  // shows only "words left" after a guess; Detailed adds narrowing + timer.
+  // `game` is updated only once the reveal has finished, so the numbers never
+  // run ahead of the tiles.
+  const statsSettled = isInProgress && guesses.length > 0 && (game?.moves?.length ?? 0) === guesses.length;
+  const wordsLeft = statsSettled ? wordsLeftAfterLastGuess(game) : null;
+  const lastMove = game ? sortedMoves(game).slice(-1)[0] : undefined;
+  const lastBits = statsSettled && typeof lastMove?.info_gained === 'number' ? lastMove.info_gained : null;
 
   if (loadingGame) {
     return (
@@ -416,10 +438,10 @@ export default function GamePage() {
   }
 
   const abandonTitle = isRatedComp
-    ? 'Abandon game?'
+    ? 'Give up this game?'
     : isChallenge
-    ? 'Leave challenge?'
-    : 'Leave the daily?';
+    ? 'Leave this Friends game?'
+    : 'Leave the Daily?';
 
   return (
     <div className="relative z-10 flex flex-col items-center h-page pt-3 pb-2 px-2 select-none">
@@ -435,8 +457,8 @@ export default function GamePage() {
         {announcement}
       </div>
 
-      {/* ── Top bar: back · mode + hard · timer ── */}
-      <div className="w-full max-w-lg grid grid-cols-[2.25rem_1fr_2.25rem] md:grid-cols-[2.25rem_1fr_5rem] items-center gap-2 px-1 pb-3 mb-2 shrink-0 border-b border-border-subtle">
+      {/* ── Top bar: back · board name (+ date, hard mode) · live stats ── */}
+      <div className="w-full max-w-lg grid grid-cols-[2.25rem_1fr_minmax(2.25rem,auto)] items-center gap-2 px-1 pb-3 mb-2 shrink-0 border-b border-border-subtle">
         <button
           type="button"
           onClick={() => {
@@ -447,31 +469,49 @@ export default function GamePage() {
             }
           }}
           className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors duration-fast"
-          aria-label="Back to mode selection"
+          aria-label="Back to Play"
         >
           <ArrowLeft size={17} />
         </button>
 
         <div className="flex items-center justify-center gap-2 min-w-0">
-          {modeLabel && <Label className="text-text-primary truncate">{modeLabel}</Label>}
+          {modeLabel && (
+            <Label className="text-text-primary truncate">
+              {modeLabel}
+              {modeSub ? <span className="text-text-secondary"> · {modeSub}</span> : null}
+            </Label>
+          )}
           {hardMode && (
             <Tag tone="ochre" className="shrink-0">
-              <span title="Hard mode: revealed hints must be used">hard</span>
+              <Hint term="hardMode">{TERMS.hardMode.name}</Hint>
             </Tag>
           )}
         </div>
 
-        {/* Timer (competitive only) */}
-        {game?.mode === 'competitive' ? (
-          <span
-            className="font-mono text-xs tabular text-text-secondary text-right"
-            aria-label={`Elapsed ${formatTime(elapsed)}`}
+        {/* Simple: words left after a guess. Detailed: narrowing + timer too. */}
+        <span className="font-mono text-xs tabular text-text-secondary text-right whitespace-nowrap">
+          <Detail
+            simple={
+              wordsLeft != null ? (
+                <span title={TERMS.wordsLeft.simple}>{fmtInt(wordsLeft)} words left</span>
+              ) : (
+                <span aria-hidden="true" />
+              )
+            }
           >
-            {formatTime(elapsed)}
-          </span>
-        ) : (
-          <span aria-hidden="true" />
-        )}
+            <span className="inline-flex items-center gap-3">
+              {wordsLeft != null && <span title={TERMS.wordsLeft.detail}>{fmtInt(wordsLeft)} words left</span>}
+              {lastBits != null && (
+                <span title={TERMS.information.detail}>
+                  +{lastBits.toFixed(1)} {TERMS.information.unit}
+                </span>
+              )}
+              {game?.mode === 'competitive' && (
+                <span aria-label={`Elapsed ${formatTime(elapsed)}`}>{formatTime(elapsed)}</span>
+              )}
+            </span>
+          </Detail>
+        </span>
       </div>
 
       {/* ── Board — flex-1 so it takes available space between header and keyboard ── */}
@@ -514,18 +554,18 @@ export default function GamePage() {
             {isRatedComp ? (
               <>
                 This counts as a{' '}
-                <span className="font-semibold" style={{ color: 'var(--red)' }}>loss</span> and you
-                will lose ELO.
+                <span className="font-semibold" style={{ color: 'var(--red)' }}>loss</span> and your
+                rating will go down.
               </>
             ) : isChallenge ? (
               <>
-                You won&apos;t be able to replay this challenge — the word will be{' '}
+                You cannot try this word again — it will be{' '}
                 <span className="font-semibold" style={{ color: 'var(--red)' }}>locked</span> for you.
               </>
             ) : (
               <>
-                Your current attempt will be marked abandoned. You can come back and
-                try today&apos;s word again.
+                This attempt will be left unfinished. You can come back and try
+                today&apos;s word again.
               </>
             )}
           </p>
@@ -540,7 +580,7 @@ export default function GamePage() {
               Keep playing
             </Button>
             <Button variant="danger" onClick={handleAbandon} loading={abandoning}>
-              {abandoning ? 'Leaving' : isRatedComp ? 'Abandon' : 'Leave'}
+              {abandoning ? 'Leaving' : isRatedComp ? 'Give up' : 'Leave'}
             </Button>
           </div>
         </div>
@@ -554,6 +594,7 @@ export default function GamePage() {
           isGuest={!user}
           onClose={() => setModalOpen(false)}
           gamesPlayed={user?.games_played}
+          streak={user?.current_streak}
           challengeCode={challengeCode}
         />
       )}

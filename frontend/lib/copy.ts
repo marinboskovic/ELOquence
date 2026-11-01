@@ -64,7 +64,7 @@ export const TERMS = {
   placement: {
     name: 'First 5 games',
     simple: 'Your first five ranked games decide your starting rating.',
-    detail: 'During placement the rating moves faster so it can find your level quickly. After five games it settles down.',
+    detail: 'During your first five Ranked games the rating moves faster so it can find your level quickly. After that it settles down.',
   },
   skill: {
     name: 'Skill',

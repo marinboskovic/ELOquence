@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
 import Dialog from '@/components/Dialog';
 import Tile from '@/components/Tile';
-import { Button, Label } from '@/components/ui';
+import { Button, Label, MiniTiles, Tag } from '@/components/ui';
+import { MODES, MOVE_CLASS } from '@/lib/copy';
 import type { TileState } from '@/lib/types';
 
 // One-time "how to play Wordle" intro for people who've never seen the game.
@@ -56,12 +57,37 @@ const STEPS: Step[] = [
     ),
   },
   {
-    title: 'Narrow it down',
-    body: 'Use the clues to rule words out, then land the answer before your six guesses run out. That’s the whole game.',
+    title: 'After the game, a review',
+    body: `When the game ends, every guess gets a plain verdict — ${MOVE_CLASS.best.label}, ${MOVE_CLASS.good.label}, ${MOVE_CLASS.mistake.label} — and next to the costly ones you see the word you could have played.`,
     visual: (
-      <div className="flex flex-col" style={{ gap: 5 }}>
-        <Row word="SLATE" states={['absent', 'absent', 'present', 'absent', 'correct']} size="36px" />
-        <Row word="ABIDE" states={['present', 'absent', 'correct', 'absent', 'correct']} size="36px" />
+      <div className="flex flex-col gap-3 w-full">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Row word="FUZZY" states={['absent', 'absent', 'absent', 'absent', 'absent']} size="32px" />
+          <Tag tone="ochre">{MOVE_CLASS.mistake.label}</Tag>
+        </div>
+        <p className="text-sm text-text-secondary flex items-center gap-2 flex-wrap">
+          <span>a better word was</span>
+          <MiniTiles word="SLATE" states={['empty', 'empty', 'empty', 'empty', 'empty']} size={20} />
+        </p>
+      </div>
+    ),
+  },
+  {
+    title: `${MODES.daily.name} is free. ${MODES.competitive.name} gives you a rating.`,
+    body: 'Start with the daily word — it is the same one for everyone. When you feel ready, Ranked games give you a rating that goes up as you improve.',
+    visual: (
+      <div className="flex flex-col gap-3 w-full">
+        {([MODES.daily, MODES.competitive] as const).map((m) => (
+          <div key={m.name} className="flex items-start gap-3">
+            <Tag tone={m.rated ? 'ochre' : 'green'} className="shrink-0 mt-0.5">
+              {m.name}
+            </Tag>
+            <div className="min-w-0">
+              <p className="text-sm text-text-primary">{m.tagline}</p>
+              <p className="text-xs text-text-secondary mt-0.5">{m.note}</p>
+            </div>
+          </div>
+        ))}
       </div>
     ),
   },
@@ -152,7 +178,7 @@ export default function FirstTimeTutorial({ openSignal }: { openSignal?: number 
               </Button>
             )}
             <Button size="sm" onClick={next} data-autofocus>
-              {isLast ? 'Got it — play' : 'Next'}
+              {isLast ? 'Play the daily word' : 'Next'}
               {!isLast && <ArrowRight size={13} />}
             </Button>
           </div>

@@ -8,7 +8,9 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import type { TileState } from '@/lib/types';
 import Tile from '@/components/Tile';
 import TileSpinner from '@/components/TileSpinner';
-import { ButtonLink, CountUp, Label, Reveal, SplitWords } from '@/components/ui';
+import { ButtonLink, CountUp, Label, Reveal, SplitWords, Tag } from '@/components/ui';
+import ShrinkStrip from '@/components/landing/ShrinkStrip';
+import { MODES, MOVE_CLASS } from '@/lib/copy';
 
 // ---------------------------------------------------------------------------
 // Self-playing board
@@ -169,33 +171,6 @@ function AutoBoard() {
 }
 
 // ---------------------------------------------------------------------------
-// Marquee strip
-// ---------------------------------------------------------------------------
-
-const MARQUEE = ['entropy', 'skill', 'luck', 'bits', 'placement', 'season', 'hard mode'];
-
-function Marquee() {
-  const line = (key: string, hidden?: boolean) => (
-    <span key={key} className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
-      {MARQUEE.map((w) => (
-        <span key={w} className="flex items-center font-mono text-label uppercase text-text-secondary">
-          <span className="px-6 md:px-10">{w}</span>
-          <span className="w-1.5 h-1.5 bg-accent" aria-hidden="true" />
-        </span>
-      ))}
-    </span>
-  );
-  return (
-    <div className="rule-top border-b border-border-subtle py-3 overflow-hidden">
-      <div className="marquee flex w-max">
-        {line('a')}
-        {line('b', true)}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -223,11 +198,11 @@ export default function HomePage() {
       <section className="max-w-6xl mx-auto w-full px-4 md:px-8 pt-12 md:pt-20 pb-14 md:pb-24">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 items-center">
           <div className="md:col-span-7 min-w-0">
-            <Label className="block mb-4">competitive wordle · season one</Label>
-            <SplitWords text="Wordle, rated." as="h1" className="font-display text-display-xl text-text-primary" />
+            <Label className="block mb-4">free · one word a day · no account needed</Label>
+            <SplitWords text="Wordle, with a coach." as="h1" className="font-display text-display-xl text-text-primary" />
             <Reveal delay={0.25}>
               <p className="mt-6 md:mt-8 text-lg md:text-xl text-text-secondary max-w-md leading-snug">
-                Every guess is scored in bits. Every game moves a rating. Then you review it like a chess player.
+                Play the daily word. Then see which guess cost you — and what a stronger one was.
               </p>
             </Reveal>
             <Reveal delay={0.35} className="mt-8 md:mt-10 flex flex-wrap items-center gap-3">
@@ -236,12 +211,12 @@ export default function HomePage() {
                 <ArrowRight size={15} />
               </ButtonLink>
               <ButtonLink href="/lab" size="lg" variant="secondary">
-                Open the Lab
+                Try a first word
               </ButtonLink>
             </Reveal>
             <Reveal delay={0.45}>
               <p className="mt-6 text-sm text-text-secondary">
-                Already rated?{' '}
+                Have an account?{' '}
                 <Link href="/login" className="ink-link font-semibold text-text-primary">
                   Sign in
                 </Link>
@@ -255,64 +230,77 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Marquee ── */}
-      <Marquee />
+      {/* ── The idea, drawn: the list of answers shrinks with every guess ── */}
+      <ShrinkStrip />
 
       {/* ── Ochre wash band: the three things ── */}
       <section className="bg-wash-ochre">
         <div className="max-w-6xl mx-auto w-full px-4 md:px-8 py-14 md:py-24 grid grid-cols-1 md:grid-cols-12 gap-x-8 gap-y-12 md:gap-y-16">
-          <Reveal as="div" className="md:col-span-7 rule-top pt-4">
-            <Label className="block mb-3">01 · competitive elo</Label>
-            <h2 className="font-display text-display-md text-text-primary">
-              Words have ratings too.
-            </h2>
-            <p className="mt-4 text-base text-text-secondary max-w-lg">
-              Every answer carries an ELO learned from thousands of games. Beat a hard word quickly and your rating climbs; stumble on an easy one and it falls. Five placement games, then a season ladder.
-            </p>
-          </Reveal>
-
-          <Reveal as="div" delay={0.1} className="md:col-span-5 rule-top pt-4">
-            <Label className="block mb-3">02 · post-game review</Label>
-            <h2 className="font-display text-display-md text-text-primary">
-              See the move you missed.
-            </h2>
-            <p className="mt-4 text-base text-text-secondary">
-              Each guess gets an accuracy score and a luck factor. Brilliant, book, mistake, blunder — the same language as a chess engine, applied to five letters.
-            </p>
-          </Reveal>
-
-          <Reveal as="div" delay={0.15} className="md:col-span-12 rule-top pt-4 grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
+          <Reveal as="div" className="md:col-span-12 rule-top pt-4 grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
             <div className="md:col-span-7">
-              <Label className="block mb-3">03 · opener lab</Label>
+              <Label className="block mb-3">01 · after the game</Label>
               <h2 className="font-display text-display-md text-text-primary">
-                Measure your opener in bits.
+                See where you lost the word.
               </h2>
               <p className="mt-4 text-base text-text-secondary max-w-lg">
-                Type any word and see how it splits the answer list — expected remaining words, worst case, and the entropy it buys. No account needed.
+                When the game ends you get a review. Every guess gets a plain verdict, and next to the costly ones you see the word you could have played instead.
               </p>
-              <Link href="/lab" className="ink-link inline-flex items-center gap-1.5 mt-5 font-mono text-label uppercase text-text-primary">
-                open the lab <ArrowRight size={12} />
-              </Link>
+              <div className="mt-5 flex flex-wrap items-center gap-2" aria-label="Example verdicts">
+                <Tag tone="green">{MOVE_CLASS.best.label}</Tag>
+                <Tag tone="neutral">{MOVE_CLASS.good.label}</Tag>
+                <Tag tone="ochre">{MOVE_CLASS.mistake.label}</Tag>
+                <span className="text-sm text-text-secondary ml-1">— that is the whole scale you need.</span>
+              </div>
             </div>
 
             {/* The one ink block on this page */}
-            <div className="md:col-span-5 bg-bg-ink text-text-on-ink p-6 md:p-8 grid grid-cols-2 gap-6 [container-type:inline-size]">
-              <div className="min-w-0">
-                <Label className="block !text-text-on-ink opacity-60">best opener</Label>
-                <div className="font-display font-black tabular mt-2 leading-none tracking-[-0.04em] text-[clamp(2rem,13cqi,4.5rem)] whitespace-nowrap">
-                  <CountUp value={5.88} decimals={2} />
+            <div className="md:col-span-5 bg-bg-ink text-text-on-ink p-6 md:p-8 [container-type:inline-size]">
+              <Label className="block !text-text-on-ink opacity-60">best first word · SALET</Label>
+              <div className="mt-4 grid grid-cols-2 gap-6">
+                <div className="min-w-0">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] opacity-70">leaves about</div>
+                  <div className="font-display font-black tabular mt-1 leading-none tracking-[-0.04em] text-[clamp(2rem,13cqi,4.5rem)] whitespace-nowrap">
+                    <CountUp value={60} decimals={0} />
+                  </div>
+                  <div className="font-mono text-xs mt-2 opacity-70">answers to pick from</div>
                 </div>
-                <div className="font-mono text-xs mt-2 opacity-70">bits · SALET</div>
-              </div>
-              <div className="min-w-0">
-                <Label className="block !text-text-on-ink opacity-60">answers</Label>
-                <div className="font-display font-black tabular mt-2 leading-none tracking-[-0.04em] text-[clamp(2rem,13cqi,4.5rem)] whitespace-nowrap">
-                  <CountUp value={2309} decimals={0} />
+                <div className="min-w-0">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.14em] opacity-70">out of</div>
+                  <div className="font-display font-black tabular mt-1 leading-none tracking-[-0.04em] text-[clamp(2rem,13cqi,4.5rem)] whitespace-nowrap">
+                    <CountUp value={2309} decimals={0} />
+                  </div>
+                  <div className="font-mono text-xs mt-2 opacity-70">possible answers</div>
                 </div>
-                <div className="font-mono text-xs mt-2 opacity-70">in the pool</div>
               </div>
             </div>
           </Reveal>
+
+          <Reveal as="div" delay={0.1} className="md:col-span-7 rule-top pt-4">
+            <Label className="block mb-3">02 · learn</Label>
+            <h2 className="font-display text-display-md text-text-primary">
+              Learn it in ten minutes.
+            </h2>
+            <p className="mt-4 text-base text-text-secondary max-w-lg">
+              Short lessons on the three things that matter: picking a first word, using the colours, and knowing when to go for the answer. Each one ends with a word to try.
+            </p>
+            <Link href="/learn" className="ink-link inline-flex items-center gap-1.5 mt-5 font-mono text-label uppercase text-text-primary">
+              start the first lesson <ArrowRight size={12} />
+            </Link>
+          </Reveal>
+
+          <Reveal as="div" delay={0.15} className="md:col-span-5 rule-top pt-4">
+            <Label className="block mb-3">03 · optional</Label>
+            <h2 className="font-display text-display-md text-text-primary">
+              A rating, if you want one.
+            </h2>
+            <p className="mt-4 text-base text-text-secondary">
+              {MODES.competitive.name} mode — {MODES.competitive.tagline} {MODES.daily.name} and {MODES.practice.name} stay free of it: play those as much as you like and nothing counts against you.
+            </p>
+          </Reveal>
+
+          <p className="md:col-span-12 rule-hair pt-4 text-sm text-text-secondary">
+            Curious? The numbers behind it (information theory) are one toggle away — Simple or Detailed, your choice, on every page.
+          </p>
         </div>
       </section>
 

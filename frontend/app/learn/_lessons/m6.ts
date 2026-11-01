@@ -3,7 +3,7 @@ import type { Module } from '../_components/challenges/types';
 export const MODULE_6: Module = {
   id: 'm6',
   title: 'Hard mode',
-  blurb: 'Play under the forced-reuse constraint.',
+  blurb: 'Play when every clue you find must be reused.',
   lessons: [
     {
       id: 'm6l1',
@@ -58,8 +58,8 @@ export const MODULE_6: Module = {
     {
       id: 'm6l2',
       moduleId: 'm6',
-      title: 'Openers for hard mode',
-      subtitle: 'Not every opener leaves good follow-ups.',
+      title: 'First words for hard mode',
+      subtitle: 'Not every first word leaves good follow-ups.',
       challenges: [
         {
           kind: 'reveal',

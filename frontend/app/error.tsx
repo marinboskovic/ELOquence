@@ -27,7 +27,7 @@ export default function RouteError({
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 w-full">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-end">
           <section className="md:col-span-8 bg-bg-ink text-text-on-ink p-6 md:p-12 flex flex-col gap-8">
-            <Label className="text-text-on-ink opacity-70">error · something went wrong</Label>
+            <Label className="text-text-on-ink opacity-70">something went wrong</Label>
             <div className="flex" style={{ gap: 'var(--tile-gap)' }} role="img" aria-label={WORD}>
               {WORD.split('').map((ch, i) => (
                 <Tile
@@ -41,18 +41,18 @@ export default function RouteError({
                 />
               ))}
             </div>
-            <h1 className="font-display text-display-lg text-balance">That guess didn&apos;t land.</h1>
-            <p className="text-base max-w-md opacity-80">You can try again, or head back home.</p>
+            <h1 className="font-display text-display-lg text-balance">Something went wrong on our side.</h1>
+            <p className="text-base max-w-md opacity-80">Nothing you did. Your games are safe.</p>
             {error.digest && <Label className="text-text-on-ink opacity-50">ref {error.digest}</Label>}
           </section>
 
-          <div className="md:col-span-4 flex flex-col sm:flex-row md:flex-col gap-3">
-            <Button size="lg" onClick={() => reset()}>
-              Try again
-            </Button>
-            <ButtonLink href="/" variant="secondary" size="lg">
-              Go home
+          <div className="md:col-span-4 flex flex-col gap-3 md:items-start">
+            <ButtonLink href="/play" size="lg">
+              Back to Play
             </ButtonLink>
+            <Button variant="ghost" size="sm" onClick={() => reset()} className="self-start">
+              or try this page again
+            </Button>
           </div>
         </div>
       </div>

@@ -13,7 +13,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Lock } from 'lucide-react';
-import { Label, SplitWords, Reveal } from '@/components/ui';
+import { Button, Label, SplitWords, Reveal } from '@/components/ui';
 import clsx from 'clsx';
 import LessonRunner from './_components/challenges/LessonRunner';
 import ScrollArea from '@/components/ScrollArea';
@@ -213,6 +213,8 @@ export default function LearnPage() {
 
   // Overview view — same trick: scroll happens on the bounded inner column.
   const overallPct = TOTAL_LESSONS > 0 ? completedCount / TOTAL_LESSONS : 0;
+  const hasAnyProgress = Object.values(progress).some((n) => n > 0);
+  const firstLesson = MODULES[0]?.lessons[0] ?? null;
 
   return (
     <div className="h-page bg-bg-base flex justify-center">
@@ -227,31 +229,52 @@ export default function LearnPage() {
         <div className="px-4 md:px-8 py-10 md:py-16">
           {/* Header */}
           <header className="grid md:grid-cols-12 gap-6 md:gap-8 mb-12 md:mb-16">
-            <div className="md:col-span-8">
+            <div className="md:col-span-7">
               <Label className="block mb-3">learn · {MODULES.length} modules · {TOTAL_LESSONS} lessons</Label>
-              <SplitWords text="Train your Wordle instincts" as="h1" className="font-display text-display-lg text-text-primary" />
+              <SplitWords text="Learn" as="h1" className="font-display text-display-lg text-text-primary" />
+              <Reveal delay={0.15}>
+                <p className="font-display text-display-sm text-text-primary mt-4 max-w-md text-balance">
+                  Ten minutes of lessons. Then your guesses start getting better.
+                </p>
+              </Reveal>
             </div>
-            <Reveal delay={0.2} className="md:col-span-4 md:self-end">
-              <div className="flex items-baseline justify-between gap-4 mb-2">
-                <Label>progress</Label>
-                <span className="font-mono text-xs tabular text-text-secondary">
-                  {completedCount} / {TOTAL_LESSONS}
-                </span>
-              </div>
-              {/* Overall progress: a thin ink rule that grows */}
-              <div className="relative h-[2px] w-full">
-                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" aria-hidden="true" />
-                <motion.div
-                  className="absolute inset-y-0 left-0 w-full origin-left bg-bg-ink"
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: overallPct }}
-                  transition={{ duration: 0.8, ease: [0.2, 0.8, 0.2, 1], delay: 0.3 }}
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={TOTAL_LESSONS}
-                  aria-valuenow={completedCount}
-                />
-              </div>
+            <Reveal delay={0.2} className="md:col-span-5 md:self-end">
+              {!hasAnyProgress && firstLesson ? (
+                /* Nothing done yet: point at lesson 1 instead of an empty progress bar. */
+                <div className="rule-top pt-3 flex flex-col gap-3">
+                  <Label>start here</Label>
+                  <p className="font-sans text-sm text-text-secondary leading-relaxed">
+                    Module 1 · {MODULES[0].title} — {firstLesson.title}. A few minutes, no account needed.
+                  </p>
+                  <Button size="md" onClick={() => handleStart(firstLesson.id)} className="self-start">
+                    Start lesson 1
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between gap-4 mb-2">
+                    <Label>progress</Label>
+                    <span className="font-mono text-xs tabular text-text-secondary">
+                      {completedCount} of {TOTAL_LESSONS} lessons done
+                    </span>
+                  </div>
+                  {/* Overall progress: a thin ink rule that grows */}
+                  <div className="relative h-[2px] w-full">
+                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" aria-hidden="true" />
+                    <motion.div
+                      className="absolute inset-y-0 left-0 w-full origin-left bg-bg-ink"
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: overallPct }}
+                      transition={{ duration: 0.8, ease: [0.2, 0.8, 0.2, 1], delay: 0.3 }}
+                      role="progressbar"
+                      aria-label="Lessons completed"
+                      aria-valuemin={0}
+                      aria-valuemax={TOTAL_LESSONS}
+                      aria-valuenow={completedCount}
+                    />
+                  </div>
+                </>
+              )}
             </Reveal>
           </header>
 
@@ -309,7 +332,7 @@ export default function LearnPage() {
                               type="button"
                               onClick={() => !locked && handleStart(l.id)}
                               disabled={locked}
-                              aria-label={`${locked ? 'Locked: ' : ''}Lesson ${li + 1}, ${l.title}, ${challengesDone} of ${total} challenges done`}
+                              aria-label={`${locked ? 'Locked: ' : ''}Lesson ${li + 1}, ${l.title}, ${challengesDone} of ${total} steps done`}
                               className={clsx(
                                 'group w-full flex items-center gap-4 py-3 text-left transition-colors duration-fast',
                                 locked ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-bg-elevated'

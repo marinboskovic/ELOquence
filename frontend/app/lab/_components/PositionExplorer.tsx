@@ -9,7 +9,8 @@ import TileSpinner from '@/components/TileSpinner';
 import { analysisApi, errorMessage, PositionReport } from '@/lib/api';
 import { patternToTiles, TileState } from '@/lib/types';
 import { springs } from '@/lib/animations';
-import { Button, Label, MiniTiles } from '@/components/ui';
+import { Button, Detail, Hint, Label, MiniTiles } from '@/components/ui';
+import { useViewMode } from '@/lib/viewMode';
 import clsx from 'clsx';
 import WordInputRow from './WordInputRow';
 import { useWordInput } from './useWordInput';
@@ -200,11 +201,11 @@ export default function PositionExplorer() {
           ) : solved ? (
             <span className="font-mono text-xs text-text-primary">Solved in {guesses.length} — nothing left to learn.</span>
           ) : guesses.length === 0 ? (
-            <span className="font-mono text-label uppercase text-text-tertiary">enter the guess you played · tap tiles to paint the colours</span>
+            <span className="font-sans text-xs text-text-secondary">Type the guess you played, press Enter, then tap the tiles to set their colours</span>
           ) : canType ? (
-            <span className="font-mono text-label uppercase text-text-tertiary">tap tiles to paint · gray → yellow → green</span>
+            <span className="font-sans text-xs text-text-secondary">Tap a tile to change its colour: gray → yellow → green</span>
           ) : (
-            <span className="font-mono text-label uppercase text-text-tertiary">six guesses used — undo one to keep exploring</span>
+            <span className="font-sans text-xs text-text-secondary">Six guesses used — undo one to keep exploring</span>
           )}
         </div>
 
@@ -228,8 +229,8 @@ export default function PositionExplorer() {
       {/* ── Evaluation ────────────────────────────────────────────────────── */}
       {!report && loading && (
         <div className="flex flex-col items-center gap-3 py-10">
-          <TileSpinner size="md" label="Evaluating position" />
-          <span className="font-mono text-xs text-text-secondary">asking the engine…</span>
+          <TileSpinner size="md" label="Looking at your board" />
+          <span className="font-mono text-xs text-text-secondary">looking at your board…</span>
         </div>
       )}
 
@@ -252,6 +253,7 @@ function PositionResults({
   dimmed: boolean;
   onUse?: (word: string) => void;
 }) {
+  const { detailed } = useViewMode();
   const impossible = report.remaining === 0;
   const remainingAccent = impossible ? 'var(--red)' : report.remaining === 1 ? 'var(--tile-correct)' : undefined;
 
@@ -266,28 +268,30 @@ function PositionResults({
         >
           <MiniTiles word={guesses[guesses.length - 1] ?? ''} states={['correct', 'correct', 'correct', 'correct', 'correct']} size={26} />
           <span className="font-display text-display-sm text-text-primary">
-            Solved in {guesses.length}/{MAX_GUESSES}.
+            Solved in {guesses.length}.
           </span>
           <span className="font-sans text-xs text-text-secondary">Undo a guess to see what else would have worked.</span>
         </motion.div>
       )}
 
       {/* Headline numbers */}
-      <div className="grid grid-cols-3 gap-x-6 gap-y-8">
+      <div className={clsx('grid gap-x-6 gap-y-8', detailed ? 'grid-cols-3' : 'grid-cols-2')}>
         <StatTile
-          label="answers left"
+          label={<Hint term="wordsLeft" />}
           value={report.remaining}
           decimals={0}
-          sub={impossible ? 'no answer fits — check your colours' : `of ${formatInt(ANSWERS_TOTAL)} possible answers`}
+          sub={impossible ? 'no answer fits — check your colours' : `${formatInt(report.remaining)} of ${formatInt(ANSWERS_TOTAL)} answers still fit your clues`}
           accent={remainingAccent}
         />
-        <StatTile label="uncertainty" value={report.entropy_left} decimals={2} unit="bits" sub="log₂ of answers left" delay={0.04} />
-        <StatTile label="guesses" value={`${guesses.length}/${MAX_GUESSES}`} sub={guesses.length ? 'painted so far' : 'opening position'} delay={0.08} />
+        <Detail>
+          <StatTile label="uncertainty" value={report.entropy_left} decimals={2} unit="bits" sub="log₂ of answers left" delay={0.04} />
+        </Detail>
+        <StatTile label="guesses used" value={`${guesses.length} of ${MAX_GUESSES}`} sub={guesses.length ? 'on the board so far' : 'empty board'} delay={0.08} />
       </div>
 
       {/* Path */}
       {report.history.length > 0 && (
-        <LabCard title="Your path" eyebrow="history" aside="answers before → after" padded={false}>
+        <LabCard title="How the list shrank" eyebrow="your guesses so far" aside="answers before → after" padded={false}>
           <div>
             {report.history.map((h, i) => {
               const bits = h.remaining_after > 0 ? Math.log2(h.remaining_before / h.remaining_after) : null;
@@ -298,9 +302,15 @@ function PositionResults({
                   <span className="flex-1 font-mono text-xs tabular text-text-secondary text-right">
                     {formatInt(h.remaining_before)} → <span className="text-text-primary font-semibold">{formatInt(h.remaining_after)}</span>
                   </span>
-                  <span className="font-mono text-xs tabular w-20 text-right shrink-0" style={{ color: bits == null ? 'var(--red)' : undefined }}>
-                    {bits == null ? 'impossible' : `+${bits.toFixed(2)} bits`}
-                  </span>
+                  {bits == null ? (
+                    <span className="font-mono text-xs tabular w-20 text-right shrink-0" style={{ color: 'var(--red)' }}>
+                      impossible
+                    </span>
+                  ) : (
+                    <Detail>
+                      <span className="font-mono text-xs tabular w-20 text-right shrink-0">+{bits.toFixed(2)} bits</span>
+                    </Detail>
+                  )}
                 </div>
               );
             })}
@@ -318,9 +328,9 @@ function PositionResults({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-12 md:gap-8">
           {/* Top picks */}
           <LabCard
-            title={solved ? 'Best next guess (if it weren’t over)' : 'What should I guess next?'}
-            eyebrow="engine"
-            aside="top picks"
+            title={solved ? 'Best next guess (if it weren’t over)' : 'Best next guess'}
+            eyebrow="our picks"
+            aside={detailed ? 'by information gained' : 'fewest words left'}
             padded={false}
             className="md:col-span-7"
           >
@@ -331,9 +341,15 @@ function PositionResults({
                 <div className="flex items-center gap-3 py-2 border-b border-border-subtle">
                   <Label className="w-5 text-right shrink-0">#</Label>
                   <Label className="flex-1">word</Label>
-                  <Label className="w-12 text-right shrink-0">bits</Label>
-                  <Label className="w-12 text-right shrink-0">exp.</Label>
-                  <Label className="w-12 text-right shrink-0 hidden sm:block">worst</Label>
+                  <Detail>
+                    <Label className="w-12 text-right shrink-0">bits</Label>
+                  </Detail>
+                  <Label className="w-16 text-right shrink-0">
+                    <Hint term="wordsLeft">words left</Hint>
+                  </Label>
+                  <Detail>
+                    <Label className="w-12 text-right shrink-0 hidden sm:block">worst</Label>
+                  </Detail>
                   <span className="w-2 shrink-0" />
                 </div>
                 <div>
@@ -344,11 +360,17 @@ function PositionResults({
                         <div className="flex-1 min-w-0 flex items-center gap-2">
                           <MiniTiles word={p.word} states={Array.from({ length: 5 }, () => (i === 0 ? 'correct' : 'absent'))} size={18} gap={2} />
                         </div>
-                        <span className="font-mono text-sm font-semibold tabular text-text-primary w-12 text-right shrink-0">{p.entropy.toFixed(2)}</span>
-                        <span className="font-mono text-xs tabular text-text-secondary w-12 text-right shrink-0">{p.expected_remaining.toFixed(1)}</span>
-                        <span className="font-mono text-xs tabular text-text-secondary w-12 text-right shrink-0 hidden sm:block">
-                          {formatInt(p.worst_case_remaining)}
+                        <Detail>
+                          <span className="font-mono text-sm font-semibold tabular text-text-primary w-12 text-right shrink-0">{p.entropy.toFixed(2)}</span>
+                        </Detail>
+                        <span className="font-mono text-sm font-semibold tabular text-text-primary w-16 text-right shrink-0">
+                          ~{formatInt(Math.round(p.expected_remaining))}
                         </span>
+                        <Detail>
+                          <span className="font-mono text-xs tabular text-text-secondary w-12 text-right shrink-0 hidden sm:block">
+                            {formatInt(p.worst_case_remaining)}
+                          </span>
+                        </Detail>
                         <AnswerDot on={p.is_possible_answer} />
                       </>
                     );
@@ -371,8 +393,8 @@ function PositionResults({
                 </div>
                 <div className="pt-3 flex items-center gap-2">
                   <AnswerDot on />
-                  <span className="font-sans text-xs text-text-tertiary">
-                    = could be the answer.{onUse ? ' Tap a row to type it in.' : ''}
+                  <span className="font-sans text-xs text-text-secondary">
+                    = could be the answer itself.{onUse ? ' Tap a word to type it in.' : ''}
                   </span>
                 </div>
               </>
@@ -381,8 +403,8 @@ function PositionResults({
 
           {/* Remaining words */}
           <LabCard
-            title="Still possible"
-            eyebrow="answer pool"
+            title="Answers still possible"
+            eyebrow="fit every clue so far"
             aside={report.remaining_truncated ? `showing ${report.remaining_words.length} of ${formatInt(report.remaining)}` : `${formatInt(report.remaining)} word${report.remaining === 1 ? '' : 's'}`}
             className="md:col-span-5"
           >
@@ -394,8 +416,8 @@ function PositionResults({
               ))}
             </div>
             {report.remaining_truncated && (
-              <p className="font-sans text-xs text-text-tertiary mt-3">
-                Too many to list — paint another guess to narrow it down.
+              <p className="font-sans text-xs text-text-secondary mt-3">
+                Too many to list — add another guess to narrow it down.
               </p>
             )}
           </LabCard>

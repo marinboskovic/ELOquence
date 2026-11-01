@@ -1,12 +1,13 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { leaderboardApi, type SeasonBoard, type SeasonEntry } from '@/lib/api';
 import { getRatingTier } from '@/lib/types';
-import { Button, Label, MiniTiles, Reveal, SplitWords, Tag, staggerChild, staggerParent } from '@/components/ui';
+import { Button, ButtonLink, Hint, Label, MiniTiles, Reveal, SplitWords, Tag, staggerChild, staggerParent } from '@/components/ui';
 import clsx from 'clsx';
 
 interface LeaderboardEntry {
@@ -138,18 +139,18 @@ function OpenersPanel() {
         <thead>
           <tr className="rule-top">
             <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
-            <th scope="col" className={clsx(TH, 'pr-4')}><Label>opener</Label></th>
-            <th scope="col" className={clsx(TH, 'pr-4 hidden md:table-cell w-[28%]')}><Label>share</Label></th>
-            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>used</Label></th>
-            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>solve</Label></th>
-            <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label>avg</Label></th>
+            <th scope="col" className={clsx(TH, 'pr-4')}><Label><Hint term="opener">first word</Hint></Label></th>
+            <th scope="col" className={clsx(TH, 'pr-4 hidden md:table-cell w-[28%]')}><Label>how often</Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label><Hint title="Used" body="Share of all finished games that started with this word.">used</Hint></Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label><Hint title="Solved" body="How often games that started with this word were solved.">solved</Hint></Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label><Hint title="Guesses" body="Average number of guesses to solve, when this first word was used.">guesses</Hint></Label></th>
           </tr>
         </thead>
         <tbody>
           {loading ? (
             <SkeletonRows count={10} cols={6} />
           ) : rows.length === 0 ? (
-            <tr><td colSpan={6} className="pt-6"><EmptyBand>No completed games yet.</EmptyBand></td></tr>
+            <tr><td colSpan={6} className="pt-6"><EmptyBand>No finished games yet.</EmptyBand></td></tr>
           ) : (
             rows.map((r) => (
               <tr key={r.opener} className="border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast">
@@ -179,7 +180,7 @@ function OpenersPanel() {
       </table>
       {!loading && total > 0 && (
         <p className="mt-3 font-mono text-label uppercase text-text-tertiary">
-          from {total.toLocaleString()} completed games · avg = guesses to win when this opener led
+          from {total.toLocaleString()} finished games
         </p>
       )}
     </Reveal>
@@ -317,10 +318,10 @@ function SeasonPanel({ currentUserId }: { currentUserId: string | null }) {
             <tr className="rule-top">
               <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
               <th scope="col" className={clsx(TH, 'pr-4')}><Label>player</Label></th>
-              <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label>gained</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label><Hint title="Gained" body="How much this player's rating went up (or down) in Ranked games this month.">gained</Hint></Label></th>
               <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>games</Label></th>
               <th scope="col" className={clsx(TH_R, 'pr-4 w-14')}><Label>wins</Label></th>
-              <th scope="col" className={clsx(TH_R, 'pr-3 w-16 hidden sm:table-cell')}><Label>peak</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-3 w-16 hidden sm:table-cell')}><Label><Hint title="Best" body="The highest rating this player reached this month.">best</Hint></Label></th>
             </tr>
           </thead>
           {loading ? (
@@ -331,7 +332,7 @@ function SeasonPanel({ currentUserId }: { currentUserId: string | null }) {
             </tbody>
           ) : entries.length === 0 ? (
             <tbody>
-              <tr><td colSpan={6} className="pt-6"><EmptyBand>No rated games this month yet.</EmptyBand></td></tr>
+              <tr><td colSpan={6} className="pt-6"><EmptyBand>No Ranked games this month yet. Be the first.</EmptyBand></td></tr>
             </tbody>
           ) : (
             <motion.tbody variants={staggerParent} initial="hidden" animate="show" key={`${year}-${month}`}>
@@ -343,7 +344,7 @@ function SeasonPanel({ currentUserId }: { currentUserId: string | null }) {
           )}
         </table>
         <p className="mt-3 font-mono text-label uppercase text-text-tertiary">
-          ranked by elo gained from rated games this month · peak = highest rating reached
+          rating gained this month — everyone starts at zero
         </p>
       </div>
     </Reveal>
@@ -354,14 +355,45 @@ function SeasonPanel({ currentUserId }: { currentUserId: string | null }) {
 type LeaderboardTab = 'players' | 'season' | 'openers';
 
 const TABS: { key: LeaderboardTab; label: string; blurb: string }[] = [
-  { key: 'players', label: 'players', blurb: 'Every player, ranked by rating.' },
-  { key: 'season',  label: 'season',  blurb: 'Who climbed the most this month.' },
-  { key: 'openers', label: 'openers', blurb: 'The most-played opening words across all completed games.' },
+  { key: 'players', label: 'Players', blurb: 'Everyone with a rating, best first.' },
+  { key: 'season',  label: 'This season',  blurb: 'Rating gained this month — everyone starts at zero.' },
+  { key: 'openers', label: 'First words', blurb: 'The first words people play most, and how well they work.' },
 ];
 
-export default function LeaderboardPage() {
+const isTab = (v: string | null): v is LeaderboardTab => v === 'players' || v === 'season' || v === 'openers';
+
+/** One line under the table telling you how to get on it. */
+function JoinBand({ user }: { user: { id: string } | null }) {
+  return (
+    <div className="rule-hair pt-4 flex items-center justify-between gap-4 flex-wrap">
+      <p className="text-sm text-text-secondary">
+        Play five Ranked games to appear here.
+        {!user && ' You need a free account first.'}
+      </p>
+      {user ? (
+        <ButtonLink href="/play?mode=competitive" size="sm">Play Ranked</ButtonLink>
+      ) : (
+        <ButtonLink href="/register" size="sm">Create an account</ButtonLink>
+      )}
+    </div>
+  );
+}
+
+function LeaderboardInner() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<LeaderboardTab>('players');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get('tab');
+  const [tab, setTabState] = useState<LeaderboardTab>(() => (isTab(urlTab) ? urlTab : 'players'));
+  // The nav links to /leaderboard?tab=season; follow the URL when it changes.
+  useEffect(() => {
+    if (isTab(urlTab)) setTabState(urlTab);
+    else if (urlTab == null) setTabState('players');
+  }, [urlTab]);
+  const setTab = (t: LeaderboardTab) => {
+    setTabState(t);
+    router.replace(t === 'players' ? '/leaderboard' : `/leaderboard?tab=${t}`, { scroll: false });
+  };
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -390,8 +422,8 @@ export default function LeaderboardPage() {
       {/* Title */}
       <header className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
         <div className="md:col-span-8">
-          <Label className="block mb-3">leaderboard · {monthName}</Label>
-          <SplitWords text="The ladder" as="h1" className="font-display text-display-lg text-text-primary" />
+          <Label className="block mb-3">ranked · {monthName}</Label>
+          <SplitWords text="Leaderboard" as="h1" className="font-display text-display-lg text-text-primary" />
         </div>
         <p className="md:col-span-4 text-sm text-text-secondary md:pb-2" aria-live="polite">
           {TABS.find((t) => t.key === tab)?.blurb}
@@ -409,8 +441,9 @@ export default function LeaderboardPage() {
               type="button"
               aria-selected={active}
               onClick={() => setTab(t.key)}
+              aria-current={active ? 'page' : undefined}
               className={clsx(
-                'relative pb-3 -mb-px font-mono text-label uppercase transition-colors duration-fast',
+                'relative pb-3 -mb-px min-h-[24px] font-mono text-label uppercase transition-colors duration-fast',
                 active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'
               )}
             >
@@ -437,16 +470,16 @@ export default function LeaderboardPage() {
               <tr className="rule-top">
                 <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
                 <th scope="col" className={clsx(TH, 'pr-4')}><Label>player</Label></th>
-                <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label>rating</Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label><Hint term="rating">rating</Hint></Label></th>
                 <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>games</Label></th>
-                <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label>win</Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label><Hint title="Solved" body="Share of Ranked games this player solved.">solved</Hint></Label></th>
               </tr>
             </thead>
             {loading ? (
               <tbody><SkeletonRows count={10} cols={5} /></tbody>
             ) : entries.length === 0 ? (
               <tbody>
-                <tr><td colSpan={5} className="pt-6"><EmptyBand>No players yet. Be the first.</EmptyBand></td></tr>
+                <tr><td colSpan={5} className="pt-6"><EmptyBand>Nobody has a rating yet. Play five Ranked games to appear here.</EmptyBand></td></tr>
               </tbody>
             ) : (
               <motion.tbody variants={staggerParent} initial="hidden" animate="show" key={page}>
@@ -487,8 +520,20 @@ export default function LeaderboardPage() {
               </Button>
             </div>
           )}
+
+          {!loading && (!user || user.is_placement) && <JoinBand user={user ? { id: user.id } : null} />}
         </Reveal>
       )}
     </div>
+  );
+}
+
+// Next.js 14 requires a Suspense boundary around any client component that
+// reads useSearchParams(), otherwise the page bails out of static rendering.
+export default function LeaderboardPage() {
+  return (
+    <Suspense fallback={<div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16" aria-busy="true" />}>
+      <LeaderboardInner />
+    </Suspense>
   );
 }

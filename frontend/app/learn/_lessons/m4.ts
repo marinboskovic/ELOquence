@@ -2,14 +2,14 @@ import type { Module } from '../_components/challenges/types';
 
 export const MODULE_4: Module = {
   id: 'm4',
-  title: 'Probes vs candidates',
-  blurb: 'When to gather info, when to swing.',
+  title: 'Gather clues or go for it?',
+  blurb: 'When to test new letters, and when to guess an answer.',
   lessons: [
     {
       id: 'm4l1',
       moduleId: 'm4',
-      title: 'Info over commitment',
-      subtitle: '47 candidates left. Probe or commit?',
+      title: 'Clues before answers',
+      subtitle: '47 words left. Test new letters, or guess one of them?',
       challenges: [
         {
           kind: 'reveal',
@@ -56,8 +56,8 @@ export const MODULE_4: Module = {
     {
       id: 'm4l2',
       moduleId: 'm4',
-      title: 'Splitter probes',
-      subtitle: 'Two candidates? Find a word that breaks the tie.',
+      title: 'Tie-breaker words',
+      subtitle: 'Two answers left? Find a word that tells them apart.',
       challenges: [
         {
           kind: 'reveal',
@@ -111,7 +111,7 @@ export const MODULE_4: Module = {
       id: 'm4l3',
       moduleId: 'm4',
       title: 'When to commit',
-      subtitle: 'Probe wins until the last guess.',
+      subtitle: 'Testing letters wins — until the last guess.',
       challenges: [
         {
           kind: 'reveal',

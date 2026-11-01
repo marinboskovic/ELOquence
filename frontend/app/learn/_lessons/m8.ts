@@ -3,13 +3,13 @@ import type { Module } from '../_components/challenges/types';
 export const MODULE_8: Module = {
   id: 'm8',
   title: 'The math, briefly',
-  blurb: 'Where the "bits" numbers come from.',
+  blurb: 'Where the narrowing numbers ("bits") in Detailed view come from.',
   lessons: [
     {
       id: 'm8l1',
       moduleId: 'm8',
       title: 'What’s a bit?',
-      subtitle: 'Each bit halves the candidate pool.',
+      subtitle: 'One bit halves the list of possible answers.',
       challenges: [
         {
           kind: 'reveal',

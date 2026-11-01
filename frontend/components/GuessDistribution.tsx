@@ -8,14 +8,14 @@ interface Props {
   highlight?: number;
 }
 
-const ROWS: Array<{ key: string; label: string }> = [
-  { key: '1', label: '1' },
-  { key: '2', label: '2' },
-  { key: '3', label: '3' },
-  { key: '4', label: '4' },
-  { key: '5', label: '5' },
-  { key: '6', label: '6' },
-  { key: 'X', label: 'X' },
+const ROWS: Array<{ key: string; label: string; name: string }> = [
+  { key: '1', label: '1', name: 'Solved in 1' },
+  { key: '2', label: '2', name: 'Solved in 2' },
+  { key: '3', label: '3', name: 'Solved in 3' },
+  { key: '4', label: '4', name: 'Solved in 4' },
+  { key: '5', label: '5', name: 'Solved in 5' },
+  { key: '6', label: '6', name: 'Solved in 6' },
+  { key: 'X', label: 'X', name: 'Not solved' },
 ];
 
 /**
@@ -48,8 +48,8 @@ export default function GuessDistribution({ distribution, losses, highlight }: P
     }, undefined);
 
   return (
-    <div className="flex flex-col" role="img" aria-label="Guess distribution chart">
-      {ROWS.map(({ key, label }, rowIdx) => {
+    <div className="flex flex-col" role="img" aria-label="How many guesses you needed, game by game">
+      {ROWS.map(({ key, label, name }, rowIdx) => {
         const count = counts[key] ?? 0;
         const isBest = bestKey === key && count > 0;
         const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
@@ -57,7 +57,10 @@ export default function GuessDistribution({ distribution, losses, highlight }: P
         return (
           <div key={key} className="rule-hair grid items-center gap-3 py-1.5" style={{ gridTemplateColumns: '1.5rem 1fr 2.5rem' }}>
             {/* Label column — mono */}
-            <span className={clsx('font-mono text-xs tabular text-right', isBest ? 'text-text-primary font-semibold' : 'text-text-secondary')}>
+            <span
+              className={clsx('font-mono text-xs tabular text-right', isBest ? 'text-text-primary font-semibold' : 'text-text-secondary')}
+              title={name}
+            >
               {label}
             </span>
 
@@ -90,7 +93,7 @@ export default function GuessDistribution({ distribution, losses, highlight }: P
         </span>
         {bestKey && (counts[bestKey] ?? 0) > 0 && (
           <span className="font-mono text-label uppercase text-text-tertiary">
-            most often · {bestKey === 'X' ? 'x' : `${bestKey}/6`}
+            most often · {bestKey === 'X' ? 'not solved' : `solved in ${bestKey}`}
           </span>
         )}
       </div>

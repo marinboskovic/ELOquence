@@ -16,7 +16,8 @@ import { pushApi, type PushPreferences, type SessionInfo } from '@/lib/api';
 import Dialog from '@/components/Dialog';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { getRefreshToken } from '@/lib/session';
-import { Button, Label, Reveal, SectionHead, SplitWords, Tag } from '@/components/ui';
+import { Button, DetailToggle, Label, Reveal, SectionHead, SplitWords, Tag } from '@/components/ui';
+import { TERMS } from '@/lib/copy';
 
 /* ------------------------------------------------------------------ */
 /*  Shared bits                                                         */
@@ -162,22 +163,22 @@ function DeleteGamesModal({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Delete all game data"
+      title="Delete all my games"
       accent="var(--red)"
       locked={loading}
       maxWidth="max-w-md"
     >
       <div className="p-5 pt-3 flex flex-col gap-5">
         <p className="text-sm text-text-secondary leading-relaxed">
-          This will permanently delete{' '}
-          <span className="text-text-primary font-medium">all your past games</span>. Your ELO
-          rating will be preserved.
+          This permanently deletes{' '}
+          <span className="text-text-primary font-medium">all your past games</span>. Your rating
+          stays as it is.
         </p>
 
         <ul className="text-sm text-text-secondary space-y-1.5 pl-4 list-disc">
-          <li>All game history erased</li>
-          <li>Win/loss record cleared</li>
-          <li>Streaks reset</li>
+          <li>Every past game is erased</li>
+          <li>Your win/loss record is cleared</li>
+          <li>Your streak goes back to zero</li>
         </ul>
 
         <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -189,8 +190,8 @@ function DeleteGamesModal({
             style={{ accentColor: 'var(--red)' }}
           />
           <span className="text-sm text-text-secondary">
-            I understand this action is{' '}
-            <span className="text-text-primary font-medium">irreversible</span>
+            I understand this{' '}
+            <span className="text-text-primary font-medium">cannot be undone</span>
           </span>
         </label>
 
@@ -204,7 +205,7 @@ function DeleteGamesModal({
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Re-enter your password to confirm"
+              placeholder="Your password, to confirm"
               className={INPUT_CLS}
             />
           ) : (
@@ -303,8 +304,8 @@ function DeleteAccountModal({
         <div className="bg-wash-accent p-4 flex items-start gap-2.5">
           <AlertCircle size={16} className="shrink-0 mt-0.5 text-accent" aria-hidden="true" />
           <p className="text-sm leading-relaxed text-text-primary">
-            Your account, all game data, ELO history, and achievements will be permanently
-            deleted and <strong>cannot be recovered</strong>.
+            Your account, every game, your rating history and your achievements are deleted for
+            good. <strong>This cannot be undone.</strong>
           </p>
         </div>
 
@@ -336,7 +337,7 @@ function DeleteAccountModal({
                 if (e.key === 'Enter' && canDelete) handleDelete();
               }}
               disabled={loading}
-              placeholder="Re-enter your password to confirm"
+              placeholder="Your password, to confirm"
               className={INPUT_CLS}
             />
           </label>
@@ -364,8 +365,8 @@ function DeleteAccountModal({
 const TRIGGER_LABELS: { key: keyof PushPreferences; title: string; description: string }[] = [
   {
     key: 'challenge_results',
-    title: 'Challenge results',
-    description: 'When someone plays a challenge you created.',
+    title: 'Friends results',
+    description: 'When a friend plays a word you sent them.',
   },
   {
     key: 'achievement_unlock',
@@ -374,13 +375,13 @@ const TRIGGER_LABELS: { key: keyof PushPreferences; title: string; description: 
   },
   {
     key: 'daily_reminder',
-    title: 'Daily puzzle reminder',
-    description: "A nudge in the morning if you haven't played today.",
+    title: 'Daily reminder',
+    description: "A morning nudge if you haven't played today's Daily yet.",
   },
   {
     key: 'streak_warning',
     title: 'Streak warning',
-    description: 'Evening alert if your streak is about to break.',
+    description: 'An evening heads-up when your streak is about to end.',
   },
 ];
 
@@ -419,7 +420,7 @@ function NotificationsSection() {
     } catch (err) {
       console.error('[push] update pref failed', err);
       setPrefs(prefs); // revert
-      setFeedback("Couldn't save preference. Try again.");
+      setFeedback("Couldn't save that. Try again.");
       setTimeout(() => setFeedback(''), 3000);
     } finally {
       setPrefsBusy(null);
@@ -442,14 +443,14 @@ function NotificationsSection() {
         const next = await subscribeToPush();
         setState(next);
         if (next.status === 'denied') {
-          showFeedback('Permission denied — enable notifications in your browser settings.');
+          showFeedback('Your browser said no. Allow notifications for this site in its settings, then try again.');
         } else if (next.status === 'unsubscribed') {
-          showFeedback('Could not enable notifications — try again after the page finishes loading.');
+          showFeedback('Could not turn notifications on. Wait a moment and try again.');
         }
       }
     } catch (err) {
       console.error('[push] toggle failed', err);
-      showFeedback('Something went wrong. Check the console.');
+      showFeedback('Something went wrong. Try again.');
     } finally {
       setBusy(false);
     }
@@ -459,30 +460,30 @@ function NotificationsSection() {
 
   const isSubscribed = state.status === 'subscribed';
 
-  let description = 'Get notified about challenges and daily puzzles.';
+  let description = 'Reminders for the Daily and results from friends.';
   let disabledReason: string | null = null;
   switch (state.status) {
     case 'unsupported':
-      disabledReason = 'Your browser does not support push notifications.';
+      disabledReason = 'This browser cannot show notifications.';
       break;
     case 'server-disabled':
-      disabledReason = 'Push notifications are not configured on this server.';
+      disabledReason = 'Notifications are switched off on this server.';
       break;
     case 'denied':
-      disabledReason = 'Permission is blocked — re-enable it in your browser site settings.';
+      disabledReason = 'You blocked notifications for this site. Allow them in your browser settings to turn them on.';
       break;
     case 'unsubscribed':
-      description = 'Not enabled on this device.';
+      description = 'Off on this device.';
       break;
     case 'subscribed':
-      description = 'Enabled on this device.';
+      description = 'On for this device.';
       break;
   }
 
   return (
     <Reveal as="section" id="notifications" className="scroll-mt-20">
       <SectionHead eyebrow="03" title="Notifications" className="mb-4" />
-      <Row title="Push notifications" description={disabledReason || description}>
+      <Row title="Notifications" description={disabledReason || description}>
         <Button
           type="button"
           variant={isSubscribed ? 'secondary' : 'primary'}
@@ -491,7 +492,7 @@ function NotificationsSection() {
           disabled={!!disabledReason}
           loading={busy}
         >
-          {isSubscribed ? 'Disable' : 'Enable'}
+          {isSubscribed ? 'Turn off' : 'Turn on'}
         </Button>
       </Row>
 
@@ -604,8 +605,8 @@ function ChangePasswordForm() {
         <p className="text-base font-medium text-text-primary">{hasPassword ? 'Change password' : 'Set a password'}</p>
         <p className="text-sm text-text-secondary mt-1 leading-relaxed">
           {hasPassword
-            ? 'Every other device is signed out; this one stays signed in.'
-            : 'Your account uses Google sign-in. Add a password to also sign in with email.'}
+            ? 'After you change it, you stay signed in here. Any other phone or computer is signed out and needs the new password.'
+            : 'You sign in with Google. Add a password so you can also sign in with your email.'}
         </p>
       </div>
 
@@ -632,7 +633,7 @@ function ChangePasswordForm() {
               value={next}
               onChange={(e) => setNext(e.target.value)}
               className={INPUT_CLS}
-              placeholder="At least 8 characters"
+              placeholder="8 characters or more"
               disabled={busy}
             />
           </label>
@@ -650,13 +651,13 @@ function ChangePasswordForm() {
           </label>
         </div>
 
-        {mismatch && <ErrorNote>Passwords don&apos;t match.</ErrorNote>}
+        {mismatch && <ErrorNote>The two passwords don&apos;t match.</ErrorNote>}
         {error && <ErrorNote>{error}</ErrorNote>}
         {success && <SuccessNote>Password updated.</SuccessNote>}
 
         <div className="flex justify-end">
           <Button type="submit" variant="secondary" size="sm" disabled={!canSubmit} loading={busy}>
-            {hasPassword ? 'Update password' : 'Set password'}
+            {hasPassword ? 'Change password' : 'Set password'}
           </Button>
         </div>
       </div>
@@ -678,7 +679,7 @@ function ActiveSessions() {
       .then((res) => setSessions(res.data))
       .catch((err) => {
         setSessions([]);
-        setError(errorMessage(err, 'Could not load sessions.'));
+        setError(errorMessage(err, 'Could not load the list of signed-in devices.'));
       });
   }, []);
 
@@ -698,7 +699,7 @@ function ActiveSessions() {
       }
       setSessions((prev) => (prev ? prev.filter((x) => x.id !== s.id) : prev));
     } catch (err: unknown) {
-      setError(errorMessage(err, 'Could not sign out that session.'));
+      setError(errorMessage(err, 'Could not sign out that device.'));
     } finally {
       setRevoking(null);
     }
@@ -722,8 +723,8 @@ function ActiveSessions() {
     <div className="rule-hair py-5">
       <div className="flex items-start justify-between gap-6 mb-4">
         <div className="min-w-0">
-          <p className="text-base font-medium text-text-primary">Active sessions</p>
-          <p className="text-sm text-text-secondary mt-1">Devices currently signed in to your account.</p>
+          <p className="text-base font-medium text-text-primary">Where you are signed in</p>
+          <p className="text-sm text-text-secondary mt-1">Every phone or computer that is signed in to your account right now.</p>
         </div>
         <Button type="button" variant="danger" size="sm" onClick={signOutEverywhere} loading={signingOutAll} className="shrink-0">
           <span className="hidden sm:inline">Sign out everywhere</span>
@@ -743,14 +744,14 @@ function ActiveSessions() {
           ))}
         </div>
       ) : sessions.length === 0 ? (
-        <p className="py-3 text-sm text-text-secondary">No active sessions found.</p>
+        <p className="py-3 text-sm text-text-secondary">Nothing is signed in right now.</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="rule-top">
               <th className="text-left py-2 font-normal"><Label>device</Label></th>
               <th className="text-left py-2 font-normal hidden sm:table-cell"><Label>ip · last active</Label></th>
-              <th className="text-right py-2 font-normal"><Label>action</Label></th>
+              <th className="text-right py-2 font-normal"><span className="sr-only">Sign out</span></th>
             </tr>
           </thead>
           <tbody>
@@ -834,7 +835,7 @@ function PrivacySection() {
       await usersApi.updateProfile({ profile_public: nextValue });
       setUser({ ...user, profile_public: nextValue });
     } catch (err: unknown) {
-      setProfileError(errorMessage(err, 'Could not update profile visibility.'));
+      setProfileError(errorMessage(err, 'Could not change who sees your profile.'));
     } finally {
       setProfileBusy(false);
     }
@@ -882,7 +883,7 @@ function PrivacySection() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err: unknown) {
-      setExportError(errorMessage(err, 'Could not export your data.'));
+      setExportError(errorMessage(err, 'Could not prepare your download.'));
     } finally {
       setExporting(false);
     }
@@ -906,7 +907,7 @@ function PrivacySection() {
               </Link>
             </>
           ) : (
-            'Your profile page and leaderboard links are hidden.'
+            'Your profile page is hidden and the leaderboard no longer links to it.'
           )
         }
       >
@@ -919,7 +920,7 @@ function PrivacySection() {
           <div className="min-w-0">
             <p className="text-base font-medium text-text-primary">Username</p>
             <p className="text-sm text-text-secondary mt-1 leading-relaxed">
-              Currently <span className="font-display font-bold text-text-primary">{user.username}</span>. You can change it up to 3 times a day.
+              You are <span className="font-display font-bold text-text-primary">{user.username}</span>. You can change it up to 3 times a day.
             </p>
           </div>
           {!editingName && (
@@ -964,9 +965,9 @@ function PrivacySection() {
         {nameSuccess && <div className="mt-3"><SuccessNote>Username updated.</SuccessNote></div>}
       </div>
 
-      <Row title="Download my data" description="Export your account, games and history as JSON.">
+      <Row title="Download my data" description="A file with your account, every game and your rating history (JSON).">
         <Button type="button" variant="secondary" size="sm" onClick={downloadData} loading={exporting}>
-          Export
+          Download
         </Button>
       </Row>
       {exportError && <div className="pb-3"><ErrorNote>{exportError}</ErrorNote></div>}
@@ -985,7 +986,7 @@ const SECTIONS = [
   { id: 'accessibility', label: 'Accessibility' },
   { id: 'security', label: 'Security' },
   { id: 'privacy', label: 'Privacy' },
-  { id: 'danger', label: 'Danger' },
+  { id: 'delete', label: 'Delete' },
 ];
 
 function SettingsIndex() {
@@ -1061,7 +1062,7 @@ export default function SettingsPage() {
       <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16">
         {/* Page header */}
         <header className="mb-10 md:mb-14">
-          <Label className="block mb-2">settings · account</Label>
+          <Label className="block mb-2">you · settings</Label>
           <SplitWords text="Settings" as="h1" className="font-display text-display-lg text-text-primary" />
         </header>
 
@@ -1077,8 +1078,8 @@ export default function SettingsPage() {
             <Reveal as="section" id="game" className="scroll-mt-20">
               <SectionHead eyebrow="01" title="Game" className="mb-4" />
               <Row
-                title="Hard mode"
-                description="Any revealed hints must be used in subsequent guesses. Applies to games you start from now on."
+                title={TERMS.hardMode.name}
+                description={`${TERMS.hardMode.simple} ${TERMS.hardMode.detail} Applies to games you start from now on.`}
               >
                 <Toggle
                   checked={settings.hardMode}
@@ -1087,8 +1088,8 @@ export default function SettingsPage() {
                 />
               </Row>
               <Row
-                title="Onscreen keyboard only"
-                description="Ignore physical keyboard input. Helpful for users with assistive devices."
+                title="On-screen keyboard only"
+                description="Ignore the physical keyboard and type only with the keys on the screen. Useful with some assistive devices."
               >
                 <Toggle
                   checked={settings.keyboardOnly}
@@ -1101,7 +1102,7 @@ export default function SettingsPage() {
             {/* Appearance */}
             <Reveal as="section" id="appearance" className="scroll-mt-20">
               <SectionHead eyebrow="02" title="Appearance" className="mb-4" />
-              <Row title="Theme" description="System follows your device; Dark is the warm-black palette.">
+              <Row title="Theme" description="System follows your device. Light is paper; Dark is warm black.">
                 <div role="radiogroup" aria-label="Theme" className="flex gap-1.5">
                   {THEME_OPTIONS.map((opt) => {
                     const active = settings.theme === opt;
@@ -1121,6 +1122,12 @@ export default function SettingsPage() {
                   })}
                 </div>
               </Row>
+              <Row
+                title="Level of detail"
+                description="Simple shows words; Detailed shows every number (bits, percentiles). You can switch anywhere in the app."
+              >
+                <DetailToggle size="md" />
+              </Row>
             </Reveal>
 
             {/* Notifications */}
@@ -1129,14 +1136,14 @@ export default function SettingsPage() {
             {/* Accessibility */}
             <Reveal as="section" id="accessibility" className="scroll-mt-20">
               <SectionHead eyebrow="04" title="Accessibility" className="mb-4" />
-              <Row title="High contrast mode" description="Contrast and colour-blindness improvements.">
+              <Row title="High contrast" description="Stronger colours, and orange/blue tiles instead of green/yellow for colour-blind players.">
                 <Toggle
                   checked={settings.highContrast}
                   onChange={() => setSetting('highContrast', !settings.highContrast)}
                   label="Toggle high contrast mode"
                 />
               </Row>
-              <Row title="Reduced motion" description="Minimise animations throughout the app.">
+              <Row title="Reduced motion" description="Turns off animations across the app.">
                 <Toggle
                   checked={settings.reducedMotion}
                   onChange={() => setSetting('reducedMotion', !settings.reducedMotion)}
@@ -1149,9 +1156,9 @@ export default function SettingsPage() {
                   <Label className="block mb-3">colour preview</Label>
                   <div className="flex gap-2">
                     {([
-                      ['A', 'correct', 'Correct position colour: orange'],
-                      ['B', 'present', 'Wrong position colour: blue'],
-                      ['C', 'absent', 'Not in word colour: grey'],
+                      ['A', 'correct', 'Right letter, right place: orange'],
+                      ['B', 'present', 'Right letter, wrong place: blue'],
+                      ['C', 'absent', 'Not in the word: grey'],
                     ] as const).map(([ch, st, label]) => (
                       <div
                         key={st}
@@ -1168,7 +1175,7 @@ export default function SettingsPage() {
                     ))}
                   </div>
                   <p className="font-mono text-xs text-text-secondary mt-3">
-                    orange = correct position · blue = wrong position · grey = not in word
+                    orange = right place · blue = wrong place · grey = not in the word
                   </p>
                 </div>
               )}
@@ -1180,21 +1187,21 @@ export default function SettingsPage() {
             {/* Privacy */}
             <PrivacySection />
 
-            {/* Danger zone — the one wash on the page */}
-            <Reveal as="section" id="danger" className="scroll-mt-20">
-              <SectionHead eyebrow="07" title="Danger" aside="Irreversible actions." className="mb-4" />
+            {/* Delete — the one wash on the page */}
+            <Reveal as="section" id="delete" className="scroll-mt-20">
+              <SectionHead eyebrow="07" title="Delete" aside="These cannot be undone." className="mb-4" />
               <div className="bg-wash-accent -mx-4 md:mx-0 px-4 md:px-6 py-2 mt-5">
-                <Row title="Delete all game data" description="Erase all past games. Your ELO rating will be preserved.">
+                <Row title="Delete all my games" description="Erases every past game and your streak. Your rating stays as it is.">
                   <Button type="button" variant="danger" size="sm" onClick={() => setShowDeleteGamesModal(true)}>
                     Delete games
                   </Button>
                 </Row>
                 {gamesDeletedBanner && (
                   <div className="pb-3">
-                    <SuccessNote>All game data deleted. ELO preserved.</SuccessNote>
+                    <SuccessNote>All games deleted. Your rating is unchanged.</SuccessNote>
                   </div>
                 )}
-                <Row title="Delete account" description="Permanently delete your account and all associated data.">
+                <Row title="Delete my account" description="Removes your account and everything in it, for good.">
                   <Button type="button" variant="danger" size="sm" onClick={() => setShowDeleteAccountModal(true)}>
                     Delete account
                   </Button>

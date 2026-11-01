@@ -13,15 +13,20 @@ interface Message {
 
 interface Props {
   gameId: string;
+  /** Plain one-line summary of the game shown above the chat, e.g. "CRANE · Solved in 3 · Ranked". */
   gameContext: string;
+  /** Suggested questions in plain words; the page can tailor them to the game. */
+  suggestions?: string[];
+  /** Focus the input on mount — only when the chat opens in its own panel. */
+  autoFocus?: boolean;
 }
 
 const MAX_MESSAGES = 10;
 
-const SUGGESTED_QUESTIONS = [
-  'Why was move 2 suboptimal?',
-  'What should I look for in endgame?',
-  'How can I improve my opening?',
+const DEFAULT_SUGGESTIONS = [
+  'Which guess cost me the most?',
+  'What should I open with next time?',
+  'How do I make better use of yellow letters?',
 ];
 
 function TypingIndicator() {
@@ -39,7 +44,7 @@ function TypingIndicator() {
   );
 }
 
-export default function CoachChat({ gameId, gameContext }: Props) {
+export default function CoachChat({ gameId, gameContext, suggestions, autoFocus = false }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -47,14 +52,16 @@ export default function CoachChat({ gameId, gameContext }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input on mount
+  // Focus input on mount — opt-in, so an inline chat never scrolls the page on load
   useEffect(() => {
+    if (!autoFocus) return;
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     return () => clearTimeout(t);
-  }, []);
+  }, [autoFocus]);
 
-  // Scroll to bottom when messages change
+  // Scroll the message list (not the page) to the bottom when messages change
   useEffect(() => {
+    if (messages.length === 0 && !sending) return;
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: 'smooth',
@@ -73,16 +80,13 @@ export default function CoachChat({ gameId, gameContext }: Props) {
 
     try {
       const res = await aiApi.coachChat(gameId, trimmed, messages);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: res.data.response },
-      ]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: res.data.response }]);
     } catch {
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: "Sorry, I couldn't respond. Please try again.",
+          content: 'Sorry, I could not answer that. Please try again.',
         },
       ]);
     } finally {
@@ -103,6 +107,7 @@ export default function CoachChat({ gameId, gameContext }: Props) {
   }
 
   const limitReached = msgCount >= MAX_MESSAGES;
+  const prompts = suggestions && suggestions.length > 0 ? suggestions : DEFAULT_SUGGESTIONS;
 
   return (
     <div className="w-full h-full flex flex-col bg-bg-elevated">
@@ -118,10 +123,12 @@ export default function CoachChat({ gameId, gameContext }: Props) {
         {messages.length === 0 && !sending && (
           <div className="flex flex-col gap-3 py-4">
             <p className="font-display text-display-sm text-text-primary">Ask anything about this game.</p>
+            <Label>try one of these</Label>
             <div className="flex flex-col">
-              {SUGGESTED_QUESTIONS.map((q) => (
+              {prompts.map((q) => (
                 <button
                   key={q}
+                  type="button"
                   onClick={() => fillSuggestion(q)}
                   className="rule-hair py-2.5 text-left font-sans text-sm text-text-secondary hover:text-text-primary hover:bg-bg-base transition-colors duration-fast cursor-pointer"
                 >
@@ -163,7 +170,7 @@ export default function CoachChat({ gameId, gameContext }: Props) {
       <div className="px-4 py-3 shrink-0 rule-top">
         {limitReached ? (
           <p className="font-mono text-label uppercase text-text-tertiary py-2">
-            message limit reached · {MAX_MESSAGES}/{MAX_MESSAGES}
+            that&rsquo;s all for this game · {MAX_MESSAGES} of {MAX_MESSAGES} questions used
           </p>
         ) : (
           <div className="flex items-end gap-2 border-b-2 border-border-default focus-within:border-accent transition-colors duration-fast">
@@ -174,14 +181,16 @@ export default function CoachChat({ gameId, gameContext }: Props) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about this game…"
+              aria-label="Ask the coach"
               disabled={sending}
               className="flex-1 bg-transparent border-0 py-2 font-sans text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none disabled:opacity-50"
             />
             <button
+              type="button"
               onClick={sendMessage}
               disabled={!input.trim() || sending}
               className="w-8 h-8 mb-1 inline-flex items-center justify-center bg-bg-ink text-text-on-ink disabled:opacity-30 transition-opacity duration-fast shrink-0"
-              aria-label="Send message"
+              aria-label="Send question"
             >
               <ArrowUp size={14} aria-hidden="true" />
             </button>

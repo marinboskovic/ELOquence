@@ -3,13 +3,12 @@ import { Suspense, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { errorMessage } from '@/lib/api';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
-import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, OrDivider, safeNext } from '@/components/auth/AuthShell';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, OrDivider, authErrorMessage, safeNext } from '@/components/auth/AuthShell';
 
 const GOOGLE_ERRORS: Record<string, string> = {
-  google: 'Google sign-in failed. Please try again.',
-  google_state: 'Google sign-in expired. Please try again.',
+  google: "Google sign-in didn't work. Try again.",
+  google_state: 'Google sign-in took too long. Try again.',
 };
 
 function LoginInner() {
@@ -30,7 +29,7 @@ function LoginInner() {
       const u = await login(email, password);
       router.push(u.is_admin ? '/admin' : next);
     } catch (err) {
-      setError(errorMessage(err, 'Invalid email or password.'));
+      setError(authErrorMessage(err, "That email and password don't match."));
     } finally {
       setLoading(false);
     }
@@ -38,13 +37,14 @@ function LoginInner() {
 
   return (
     <AuthShell
-      title="Sign in"
-      eyebrow="account · sign in"
+      title="Welcome back"
+      eyebrow="sign in"
+      manifesto="Pick up your streak where you left it."
       footer={
         <>
-          No account?{' '}
+          New here?{' '}
           <AuthLink href={next !== '/play' ? `/register?next=${encodeURIComponent(next)}` : '/register'}>
-            Create one free
+            Create a free account
           </AuthLink>
         </>
       }
@@ -74,7 +74,7 @@ function LoginInner() {
             placeholder="••••••••"
           />
           <Link href="/forgot-password" className="self-end ink-link text-xs text-text-secondary hover:text-text-primary">
-            Forgot password?
+            Forgot your password?
           </Link>
         </div>
         <AuthError message={error} />

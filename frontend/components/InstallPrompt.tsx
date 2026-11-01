@@ -120,7 +120,7 @@ export default function InstallPrompt() {
             <div className="min-w-0">
               <Label className="block mb-1">{showIosHint ? 'home screen' : 'install'}</Label>
               <p className="font-display text-display-sm text-text-primary">
-                {showIosHint ? 'Add ELOquence to your home screen.' : 'Install ELOquence.'}
+                {showIosHint ? 'Add ELOquence to your home screen.' : 'Put ELOquence on your home screen.'}
               </p>
               {showIosHint ? (
                 <p className="text-sm text-text-secondary mt-1 flex items-center gap-1 flex-wrap">
@@ -131,7 +131,7 @@ export default function InstallPrompt() {
                 </p>
               ) : (
                 <p className="text-sm text-text-secondary mt-1">
-                  Faster launch, full-screen play, works offline.
+                  Opens like an app, fills the screen, and works without internet.
                 </p>
               )}
             </div>
@@ -150,7 +150,7 @@ export default function InstallPrompt() {
               <button
                 type="button"
                 onClick={dismiss}
-                aria-label="Dismiss"
+                aria-label="Not now"
                 className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors duration-fast"
               >
                 <X size={16} />

@@ -2,9 +2,8 @@
 import { Suspense, useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { errorMessage } from '@/lib/api';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
-import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, OrDivider, safeNext } from '@/components/auth/AuthShell';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, OrDivider, authErrorMessage, safeNext } from '@/components/auth/AuthShell';
 
 function RegisterInner() {
   const { register } = useAuth();
@@ -21,11 +20,11 @@ function RegisterInner() {
     e.preventDefault();
     setError('');
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setError('Your password needs at least 8 characters.');
       return;
     }
     if (!/^[A-Za-z0-9_-]{3,30}$/.test(username)) {
-      setError('Username: 3–30 letters, digits, _ or -.');
+      setError('Your username can have 3 to 30 letters, digits, _ or -, with no spaces.');
       return;
     }
     setLoading(true);
@@ -33,7 +32,7 @@ function RegisterInner() {
       const u = await register(email, username, password);
       router.push(u.is_admin ? '/admin' : next);
     } catch (err) {
-      setError(errorMessage(err, 'Registration failed.'));
+      setError(authErrorMessage(err, "Couldn't create your account. Try again."));
     } finally {
       setLoading(false);
     }
@@ -42,7 +41,7 @@ function RegisterInner() {
   return (
     <AuthShell
       title="Create account"
-      eyebrow="account · register"
+      eyebrow="free account"
       manifesto="Every guess is a move. Every game is rated."
       footer={
         <>
@@ -51,6 +50,9 @@ function RegisterInner() {
         </>
       }
     >
+      <p className="text-sm text-text-secondary leading-relaxed -mt-6 mb-6">
+        Free. Keeps your streak, gives you a rating, saves every game for review.
+      </p>
       <GoogleSignInButton next={next} />
       {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && <OrDivider />}
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -75,7 +77,7 @@ function RegisterInner() {
           maxLength={30}
           autoComplete="username"
           placeholder="wordsmith"
-          hint="Shown on leaderboards and your public profile."
+          hint="The name other players see. You can change it later."
         />
         <AuthField
           id="password"
@@ -86,11 +88,11 @@ function RegisterInner() {
           required
           minLength={8}
           autoComplete="new-password"
-          placeholder="At least 8 characters"
+          placeholder="8 characters or more"
         />
         <AuthError message={error} />
         <AuthSubmit loading={loading} loadingLabel="Creating…">
-          Create account
+          Create my account
         </AuthSubmit>
       </form>
     </AuthShell>

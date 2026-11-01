@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import Tile from '@/components/Tile';
 import { Button, Label, SplitWords } from '@/components/ui';
 import type { TileState } from '@/lib/types';
+import { errorMessage } from '@/lib/api';
 
 /**
  * Editorial two-column spread for every sign-in style page.
@@ -25,7 +26,7 @@ const STATES: TileState[] = ['correct', 'absent', 'present', 'correct', 'tbd'];
 export function AuthShell({
   title,
   eyebrow = 'account',
-  manifesto = 'Five letters. Six tries. One rating.',
+  manifesto = 'Five letters. Six guesses. One rating.',
   children,
   footer,
 }: {
@@ -63,7 +64,7 @@ export function AuthShell({
           ))}
         </div>
 
-        <Label className="hidden md:block">eloquence · wordle, rated</Label>
+        <Label className="hidden md:block">eloquence · wordle with a rating</Label>
       </aside>
 
       {/* ── Right: the form on paper ─────────────────────── */}
@@ -168,6 +169,16 @@ export function AuthLink({ href, children }: { href: string; children: React.Rea
       {children}
     </Link>
   );
+}
+
+/** Human sentence for an auth error: known HTTP statuses first, then the API's own text. */
+export function authErrorMessage(err: unknown, fallback: string): string {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  if (status === 401) return "That email and password don't match.";
+  if (status === 429) return 'Too many tries. Wait a minute and try again.';
+  if (status === 409) return 'That email or username is already taken.';
+  if (!status && (err as { message?: string })?.message === 'Network Error') return "Can't reach the server. Check your connection and try again.";
+  return errorMessage(err, fallback);
 }
 
 /** Only relative, same-origin paths are accepted as a post-login target. */

@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { achievementsApi } from '@/lib/api';
-import { ACHIEVEMENT_META } from '@/components/AchievementToast';
+import { ACHIEVEMENT_META, plainAchievementText } from '@/components/AchievementToast';
 import { CountUp, Label, SplitWords, Tag, staggerChild, staggerParent } from '@/components/ui';
 
 interface AchievementDef {
@@ -166,6 +166,17 @@ const CATEGORY_LABEL: Record<Category, string> = {
   timing:   'timing',
 };
 
+/** One line under each category title so a beginner knows what the group is for. */
+const CATEGORY_BLURB: Record<Category, string> = {
+  solving:  'For solving words quickly, or just in time.',
+  accuracy: 'For guesses that were close to the best choice.',
+  streaks:  'For solving the Daily day after day.',
+  rating:   'For climbing the Ranked ladder.',
+  variety:  'For playing a lot, and playing every mode.',
+  mastery:  'For clean, careful play.',
+  timing:   'For when, and how fast, you play.',
+};
+
 const CATEGORY_ORDER: Category[] = ['solving', 'accuracy', 'streaks', 'rating', 'mastery', 'timing', 'variety'];
 
 interface MergedAchievement {
@@ -249,7 +260,7 @@ export default function AchievementsPage() {
         setAllAchievements(allRes.data);
         setUnlocked(mineRes.data);
       })
-      .catch(() => setError('Failed to load achievements.'))
+      .catch(() => setError('Could not load your achievements. Try again in a moment.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -261,11 +272,12 @@ export default function AchievementsPage() {
   const mergedAchievements: MergedAchievement[] = useMemo(
     () =>
       allAchievements.map((a) => {
+        // Local plain-language copy wins; API text is only a fallback, cleaned up.
         const meta = ACHIEVEMENT_META[a.type];
         return {
           type: a.type,
-          name: a.name || meta?.name || a.type,
-          description: a.description || meta?.description || '',
+          name: meta?.name || plainAchievementText(a.name || a.type),
+          description: meta?.description || plainAchievementText(a.description || ''),
           icon: a.icon || meta?.icon || '🏆',
           category: CATEGORY_FOR_TYPE[a.type] ?? 'rating',
         };
@@ -335,16 +347,19 @@ export default function AchievementsPage() {
       {/* ── Progress header ──────────────────────────────────────────────── */}
       <header className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
         <div className="md:col-span-7">
-          <Label className="block mb-3">achievements</Label>
+          <Label className="block mb-3">you · achievements</Label>
           <h1 className="font-display text-display-lg text-text-primary tabular">
             <CountUp value={unlockedCount} />
-            <span className="text-text-tertiary"> / {totalCount}</span>
+            <span className="text-text-tertiary"> of {totalCount}</span>
           </h1>
           <SplitWords text="unlocked" as="p" className="font-display text-display-sm text-text-secondary mt-2" delay={0.1} />
+          <p className="text-sm text-text-secondary mt-4 max-w-md">
+            Badges you earn by playing. Each one says what to do to get it.
+          </p>
         </div>
         <div className="md:col-span-5">
           <div className="flex items-baseline justify-between mb-2 font-mono text-label uppercase text-text-tertiary tabular">
-            <span>progress</span>
+            <span>unlocked</span>
             <span>{Math.round(progressPct)}%</span>
           </div>
           <div
@@ -380,9 +395,10 @@ export default function AchievementsPage() {
               role="tab"
               type="button"
               aria-selected={active}
+              aria-current={active ? 'page' : undefined}
               onClick={() => setFilter(opt.key)}
               className={clsx(
-                'relative shrink-0 pb-3 -mb-px font-mono text-label uppercase transition-colors duration-fast',
+                'relative shrink-0 pb-3 -mb-px min-h-[24px] font-mono text-label uppercase transition-colors duration-fast',
                 active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
               )}
             >
@@ -409,7 +425,7 @@ export default function AchievementsPage() {
       {/* ── Grouped two-column list ─────────────────────────────────────── */}
       {grouped.length === 0 && !error ? (
         <div className="bg-bg-ink text-text-on-ink px-6 py-10 md:px-10 md:py-12">
-          <p className="font-display text-display-md">No achievements in this category.</p>
+          <p className="font-display text-display-md">Nothing here yet.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-12">
@@ -419,11 +435,14 @@ export default function AchievementsPage() {
             return (
               <section key={category} aria-label={CATEGORY_LABEL[category]}>
                 <header className="rule-top pt-3 flex items-end justify-between gap-4 mb-2">
-                  <h2 className="font-display text-display-md text-text-primary capitalize">{CATEGORY_LABEL[category]}</h2>
-                  <span className="flex items-center gap-3">
-                    {complete && <Tag tone="green">complete</Tag>}
+                  <div>
+                    <h2 className="font-display text-display-md text-text-primary capitalize">{CATEGORY_LABEL[category]}</h2>
+                    <p className="text-sm text-text-secondary mt-1">{CATEGORY_BLURB[category]}</p>
+                  </div>
+                  <span className="flex items-center gap-3 shrink-0">
+                    {complete && <Tag tone="green">all done</Tag>}
                     <span className="font-mono text-xs tabular text-text-tertiary">
-                      {doneInGroup} / {items.length}
+                      {doneInGroup} of {items.length}
                     </span>
                   </span>
                 </header>

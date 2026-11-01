@@ -18,11 +18,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: 'ELOquence', template: '%s · ELOquence' },
   description:
-    'Competitive Wordle with information-theory analysis, ELO ratings, and deep move breakdowns.',
+    'Wordle with a coach. Play the daily word, then see which guess cost you and what a stronger one was. Optional rating, lessons, and a word lab.',
   applicationName: 'ELOquence',
   openGraph: {
     title: 'ELOquence',
-    description: 'Competitive Wordle',
+    description: 'Wordle with a coach.',
     type: 'website',
   },
   manifest: '/manifest.json',

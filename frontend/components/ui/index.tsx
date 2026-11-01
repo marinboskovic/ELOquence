@@ -378,7 +378,7 @@ export function Hint({
         onClick={() => setOpen((v) => !v)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        className="inline-flex items-center gap-1 cursor-help text-inherit font-inherit border-b border-dotted border-current/60 hover:border-solid focus-visible:outline-none focus-visible:border-solid"
+        className="inline-flex items-center gap-1 cursor-help text-inherit [font:inherit] [letter-spacing:inherit] [text-transform:inherit] border-b border-dotted border-current/60 hover:border-solid focus-visible:outline-none focus-visible:border-solid"
       >
         {children ?? heading}
       </button>
@@ -392,7 +392,7 @@ export function Hint({
             exit={{ opacity: 0, y: side === 'top' ? 4 : -4 }}
             transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
             className={clsx(
-              'absolute left-0 z-40 w-64 max-w-[80vw] bg-bg-ink text-text-on-ink p-3 shadow-ink normal-case tracking-normal text-left font-sans',
+              'absolute left-0 z-40 w-64 max-w-[80vw] bg-bg-ink text-text-on-ink p-3 shadow-ink normal-case tracking-normal text-left font-sans outline outline-1 outline-[var(--bg-base)]',
               side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
             )}
           >

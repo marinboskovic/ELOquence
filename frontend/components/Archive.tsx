@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { dailyApi } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { Button, Label, Reveal, SplitWords, Stat, Tag } from '@/components/ui';
+import { Button, Hint, Label, Reveal, SplitWords, Stat, Tag } from '@/components/ui';
 import clsx from 'clsx';
 
 interface ArchiveEntry {
@@ -95,7 +95,7 @@ function CalendarCell({ day, entry, future, isToday, loading, inStreak, onClick 
       onClick={isPlayable ? onClick : undefined}
       aria-label={
         entry
-          ? `${entry.date}${entry.played ? `, ${entry.status === 'won' ? (wasReplay ? 'won via replay' : 'won') : entry.status === 'lost' ? 'lost' : 'in progress'} in ${entry.guesses} guess${entry.guesses !== 1 ? 'es' : ''}` : ', not played'}${isToday ? ', today' : ''}`
+          ? `${entry.date}${entry.played ? `, ${entry.status === 'won' ? (wasReplay ? 'solved later as a replay' : 'solved') : entry.status === 'lost' ? 'not solved' : 'unfinished'}, ${entry.guesses} guess${entry.guesses !== 1 ? 'es' : ''}` : ', not played yet'}${isToday ? ', today' : ''}`
           : `Day ${day}`
       }
       aria-current={isToday ? 'date' : undefined}
@@ -160,7 +160,7 @@ export default function Archive() {
       const res = await dailyApi.archive(year, month);
       setEntries(res.data as ArchiveEntry[]);
     } catch {
-      setError('Could not load archive. Please try again.');
+      setError('Could not load past dailies. Try again.');
     } finally {
       setFetching(false);
     }
@@ -258,7 +258,7 @@ export default function Archive() {
       router.push(`/game/${gameId}`);
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail || 'Could not start game. Please try again.');
+      setError(detail || 'Could not open that day. Try again.');
       setReplayingDate(null);
     }
   };
@@ -286,12 +286,12 @@ export default function Archive() {
         <div className="w-full bg-bg-ink text-text-on-ink">
           <div className="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24 flex flex-col md:flex-row md:items-end justify-between gap-8">
             <div>
-              <Label className="block mb-3 text-text-on-ink opacity-70">archive</Label>
-              <SplitWords text="Sign in to open the archive." as="h1" className="font-display text-display-lg" />
-              <p className="text-base opacity-80 mt-4">Your play history is tracked per account.</p>
+              <Label className="block mb-3 text-text-on-ink opacity-70">past dailies</Label>
+              <SplitWords text="Sign in to see your past dailies." as="h1" className="font-display text-display-lg" />
+              <p className="text-base opacity-80 mt-4">Replay any day you missed. We can only keep your days when you have an account.</p>
             </div>
-            <Button variant="primary" size="lg" onClick={() => router.push('/login')}>
-              sign in
+            <Button variant="primary" size="lg" onClick={() => router.push('/login?next=%2Farchive')}>
+              Sign in
             </Button>
           </div>
         </div>
@@ -304,24 +304,24 @@ export default function Archive() {
       {/* ── Title ───────────────────────────────────────────────────────── */}
       <header className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
         <div className="md:col-span-7">
-          <Label className="block mb-3">archive · daily</Label>
-          <SplitWords text="Every day, kept." as="h1" className="font-display text-display-lg text-text-primary" />
-          <p className="text-sm text-text-secondary mt-4 max-w-md">Replay any past daily puzzle. Replays do not count toward your streak.</p>
+          <Label className="block mb-3">you · daily</Label>
+          <SplitWords text="Past dailies" as="h1" className="font-display text-display-lg text-text-primary" />
+          <p className="text-sm text-text-secondary mt-4 max-w-md">Replay any day you missed. Replays don&apos;t count toward your streak.</p>
         </div>
         <div className="md:col-span-5 rule-top pt-1 grid grid-cols-3 gap-x-6">
-          <Stat size="sm" label="streak" value={user?.current_streak ?? 0} />
-          <Stat size="sm" label="longest" value={user?.max_streak ?? 0} />
+          <Stat size="sm" label="streak" value={user?.current_streak ?? 0} sub={<Hint term="streak">days in a row</Hint>} />
+          <Stat size="sm" label="longest streak" value={user?.max_streak ?? 0} sub="your best run" />
           <Stat
             size="sm"
             label="this month"
             value={fetching && entries.length === 0 ? '—' : `${wonThisMonth}/${playedThisMonth}`}
-            sub="won / played"
+            sub="solved / played"
           />
         </div>
       </header>
 
       {/* ── Calendar ────────────────────────────────────────────────────── */}
-      <Reveal as="section" aria-label="Daily archive calendar" className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-10">
+      <Reveal as="section" aria-label="Calendar of past dailies" className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-10">
         <div className="md:col-span-8 min-w-0">
           {/* Month nav */}
           <div className="flex items-end justify-between gap-4 mb-4">
@@ -394,11 +394,11 @@ export default function Archive() {
 
           {/* Legend */}
           <div className="mt-3 flex items-center gap-5 flex-wrap font-mono text-label uppercase text-text-tertiary">
-            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-correct)' }} aria-hidden="true" />won</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-absent)' }} aria-hidden="true" />lost</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-present)' }} aria-hidden="true" />in progress</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 bg-wash-ochre border border-border-subtle" aria-hidden="true" />streak</span>
-            <span>* replay</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-correct)' }} aria-hidden="true" />solved</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-absent)' }} aria-hidden="true" />not solved</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-present)' }} aria-hidden="true" />unfinished</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 bg-wash-ochre border border-border-subtle" aria-hidden="true" />part of a streak</span>
+            <span>* solved later as a replay</span>
           </div>
         </div>
 
@@ -415,18 +415,18 @@ export default function Archive() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-text-secondary">No runs of two or more days yet.</p>
+              <p className="text-sm text-text-secondary">No two days in a row yet. Solve today&apos;s and tomorrow&apos;s to start one.</p>
             )}
           </div>
 
           <div className="rule-top pt-3">
-            <Label className="block mb-2">unplayed</Label>
+            <Label className="block mb-2">days you missed</Label>
             <p className="font-display text-display-md text-text-primary tabular">
               {unplayedPast}
               <span className="text-text-tertiary text-display-sm"> day{unplayedPast !== 1 ? 's' : ''}</span>
             </p>
             <p className="text-sm text-text-secondary mt-2">
-              {firstUnplayed ? 'Pick any open day in the grid, or jump to the latest one.' : 'Every day this month is accounted for.'}
+              {firstUnplayed ? 'Tap any open day in the calendar, or start with the most recent one.' : 'You have played every day this month so far.'}
             </p>
             {firstUnplayed && (
               <Button
@@ -437,7 +437,7 @@ export default function Archive() {
                 loading={replayingDate === firstUnplayed.date}
                 disabled={!!replayingDate}
               >
-                replay {firstUnplayed.date.slice(5).replace('-', '/')}
+                Replay {firstUnplayed.date.slice(5).replace('-', '/')}
               </Button>
             )}
           </div>

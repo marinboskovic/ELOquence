@@ -2,14 +2,14 @@ import type { Module } from '../_components/challenges/types';
 
 export const MODULE_7: Module = {
   id: 'm7',
-  title: 'Position awareness',
+  title: 'Where letters sit',
   blurb: 'Where a letter sits matters as much as which letter.',
   lessons: [
     {
       id: 'm7l1',
       moduleId: 'm7',
-      title: 'Position frequency',
-      subtitle: 'Same letters, different slots, different info.',
+      title: 'Letters have favourite spots',
+      subtitle: 'Same letters, different spots, different clues.',
       challenges: [
         {
           kind: 'reveal',

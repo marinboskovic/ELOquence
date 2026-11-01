@@ -10,6 +10,8 @@ import TileSpinner from '@/components/TileSpinner';
 import {
   Button,
   ButtonLink,
+  Detail,
+  Hint,
   Label,
   MiniTiles,
   PatternRow,
@@ -19,6 +21,8 @@ import {
   staggerChild,
   staggerParent,
 } from '@/components/ui';
+import { MODES, TERMS, fmtInt, resultSentence } from '@/lib/copy';
+import type { GameStatus } from '@/lib/types';
 
 interface ChallengeInfo {
   code: string;
@@ -73,7 +77,7 @@ function PatternGrid({ patterns, size = 7 }: { patterns: number[]; size?: number
 function LoadingSpinner() {
   return (
     <div className="flex items-center justify-center min-h-page">
-      <TileSpinner size="lg" label="Loading challenge" />
+      <TileSpinner size="lg" label="Loading" />
     </div>
   );
 }
@@ -131,7 +135,7 @@ export default function ChallengePage() {
         setMyStatus(r.my_status ?? info.my_status ?? null);
         setMyGameId(r.my_game_id ?? info.game_id ?? null);
       })
-      .catch((err: unknown) => setError(errorMessage(err, 'Challenge not found')))
+      .catch((err: unknown) => setError(errorMessage(err, 'This link does not work')))
       .finally(() => setLoading(false));
   }, [code, user, authLoading, router]);
 
@@ -141,11 +145,10 @@ export default function ChallengePage() {
     setError('');
     try {
       const res = await challengesApi.play(code);
-      // Forward the challenge code so the game-over modal can offer a
-      // "Back to results" link instead of the generic Challenge action.
+      // Forward the code so the game-over sheet can link to everyone's results.
       router.push(`/game/${res.data.id}?challenge=${encodeURIComponent(code)}`);
     } catch (err: unknown) {
-      setError(errorMessage(err, 'Could not start challenge'));
+      setError(errorMessage(err, 'Could not start the game'));
       setStarting(false);
     }
   };
@@ -174,13 +177,13 @@ export default function ChallengePage() {
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 w-full">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
             <section className="md:col-span-8 bg-bg-ink text-text-on-ink p-6 md:p-12 flex flex-col gap-6">
-              <Label className="text-text-on-ink opacity-70">challenge · {code}</Label>
-              <h1 className="font-display text-display-lg text-balance">Challenge not found.</h1>
+              <Label className="text-text-on-ink opacity-70">{MODES.challenge.name.toLowerCase()} · {code}</Label>
+              <h1 className="font-display text-display-lg text-balance">This link does not work.</h1>
               <p className="text-base opacity-80 max-w-md">{error}</p>
             </section>
             <div className="md:col-span-4">
               <ButtonLink href="/play" size="lg" className="w-full">
-                Play a game
+                Back to Play
               </ButtonLink>
             </div>
           </div>
@@ -201,12 +204,13 @@ export default function ChallengePage() {
   const headline = iAmFinished
     ? 'Results'
     : iAmInProgress
-    ? 'Your attempt is waiting'
+    ? 'Your board is waiting'
     : challenge?.is_creator
-    ? 'Your challenge'
-    : 'You have been challenged';
+    ? 'Your word for friends'
+    : 'A friend sent you a word';
 
-  const eyebrow = creatorHandle && !challenge?.is_creator ? `challenge from ${creatorHandle}` : `challenge · ${code}`;
+  const modeName = MODES.challenge.name.toLowerCase();
+  const eyebrow = creatorHandle && !challenge?.is_creator ? `${modeName} · from ${creatorHandle}` : `${modeName} · ${code}`;
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col gap-12 md:gap-16">
@@ -217,7 +221,12 @@ export default function ChallengePage() {
           <SplitWords text={headline} as="h1" className="font-display text-display-lg text-text-primary" />
           <div className="flex items-center gap-2 flex-wrap mt-5">
             {challenge?.word_difficulty != null && (
-              <Tag>word elo {Math.round(challenge.word_difficulty)}</Tag>
+              <Detail>
+                <Tag>
+                  <Hint term="wordRating">{TERMS.wordRating.name}</Hint>
+                  &nbsp;{fmtInt(Math.round(challenge.word_difficulty))}
+                </Tag>
+              </Detail>
             )}
             {/* Player count is hidden until the user has played, so the hero
                 doesn't pre-leak engagement metadata to a fresh visitor. */}
@@ -241,12 +250,12 @@ export default function ChallengePage() {
             </Button>
           ) : !challenge?.already_played ? (
             <Button size="lg" className="w-full" onClick={handlePlay} loading={starting}>
-              {starting ? 'Starting…' : 'Accept challenge'}
+              {starting ? 'Starting…' : 'Play this word'}
             </Button>
           ) : (
             myGameId && (
               <ButtonLink href={`/review/${myGameId}`} variant="secondary" size="lg" className="w-full">
-                Review your game
+                See your review
               </ButtonLink>
             )
           )}
@@ -254,7 +263,7 @@ export default function ChallengePage() {
           {challenge?.already_played && !challengeWord && (
             <p className="flex items-center gap-2 text-sm text-text-secondary">
               <Lock size={13} aria-hidden="true" />
-              Finish your attempt to reveal the word
+              Finish your board to see the word
             </p>
           )}
 
@@ -290,9 +299,9 @@ export default function ChallengePage() {
           <p className="md:col-span-7 text-base opacity-80 max-w-md">
             {iAmFinished
               ? myStatus === 'won'
-                ? 'You found it. The table below shows how everyone else fared.'
-                : 'This was the answer. The table below shows how everyone else fared.'
-              : 'Revealed because your attempt is complete.'}
+                ? 'You found it. The table below shows how everyone else did.'
+                : 'This was the answer. The table below shows how everyone else did.'
+              : 'Shown because your board is finished.'}
           </p>
         </Reveal>
       )}
@@ -302,8 +311,8 @@ export default function ChallengePage() {
         <Reveal as="section" delay={0.05}>
           <div className="rule-top pt-3 flex items-end justify-between gap-4 mb-2">
             <div>
-              <Label className="block mb-1">standings</Label>
-              <h2 className="font-display text-display-md text-text-primary">Results</h2>
+              <Label className="block mb-1">{modeName}</Label>
+              <h2 className="font-display text-display-md text-text-primary">Who solved it</h2>
             </div>
             <span className="font-mono text-xs text-text-secondary tabular">
               {finishedResults.length} finished
@@ -321,8 +330,12 @@ export default function ChallengePage() {
                 <th className="py-2 pr-3 text-left font-normal w-12"><Label>#</Label></th>
                 <th className="py-2 pr-3 text-left font-normal"><Label>player</Label></th>
                 <th className="py-2 pr-3 text-left font-normal hidden sm:table-cell"><Label>pattern</Label></th>
-                <th className="py-2 pr-3 text-right font-normal"><Label>guesses</Label></th>
-                <th className="py-2 text-right font-normal"><Label>accuracy</Label></th>
+                <th className="py-2 text-right font-normal"><Label>result</Label></th>
+                <Detail>
+                  <th className="py-2 pl-3 text-right font-normal">
+                    <Label><Hint term="accuracy">{TERMS.accuracy.name}</Hint></Label>
+                  </th>
+                </Detail>
               </tr>
             </thead>
             <tbody>
@@ -349,7 +362,7 @@ export default function ChallengePage() {
                           {entry.username}
                         </span>
                         {isMe && <Tag tone="ink">you</Tag>}
-                        {entry.is_creator && <Tag>creator</Tag>}
+                        {entry.is_creator && <Tag>picked the word</Tag>}
                       </div>
                       {entry.patterns && entry.patterns.length > 0 && (
                         <div className="sm:hidden mt-2">
@@ -364,12 +377,18 @@ export default function ChallengePage() {
                         <span className="font-mono text-xs text-text-tertiary">—</span>
                       )}
                     </td>
-                    <td className="py-3 pr-3 text-right font-mono tabular text-text-primary">
-                      {lost ? <span className="text-text-tertiary">X/6</span> : `${entry.num_guesses}/6`}
+                    <td className="py-3 text-right font-mono tabular text-text-primary whitespace-nowrap">
+                      {lost ? (
+                        <span className="text-text-tertiary">{resultSentence('lost')}</span>
+                      ) : (
+                        resultSentence(entry.status as GameStatus, entry.num_guesses)
+                      )}
                     </td>
-                    <td className="py-3 text-right font-mono tabular text-text-secondary">
-                      {entry.accuracy_score !== null ? `${Math.round(entry.accuracy_score)}%` : '—'}
-                    </td>
+                    <Detail>
+                      <td className="py-3 pl-3 text-right font-mono tabular text-text-secondary">
+                        {entry.accuracy_score !== null ? Math.round(entry.accuracy_score) : '—'}
+                      </td>
+                    </Detail>
                   </motion.tr>
                 );
               })}
@@ -383,10 +402,10 @@ export default function ChallengePage() {
         <div className="md:col-span-4">
           <Label className="block mb-1">share</Label>
           <h2 className="font-display text-display-sm text-text-primary">Send this link</h2>
-          <p className="text-sm text-text-secondary mt-1">Anyone with the link can play the same word.</p>
+          <p className="text-sm text-text-secondary mt-1">Everyone gets the same word.</p>
         </div>
         <div className="md:col-span-8 flex flex-col sm:flex-row gap-3 sm:items-end">
-          <div className="flex-1 min-w-0 border-b-2 border-border-default py-3 font-mono text-sm text-text-secondary truncate" aria-label="Share URL">
+          <div className="flex-1 min-w-0 border-b-2 border-border-default py-3 font-mono text-sm text-text-secondary truncate" aria-label="Link to share">
             {shareUrl}
           </div>
           <Button type="button" variant="secondary" onClick={handleCopyLink} className="shrink-0">

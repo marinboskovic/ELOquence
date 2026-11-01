@@ -2,14 +2,14 @@ import type { Module } from '../_components/challenges/types';
 
 export const MODULE_3: Module = {
   id: 'm3',
-  title: 'The first branch',
-  blurb: 'Turn opener results into a sharper guess 2.',
+  title: 'Your second guess',
+  blurb: 'Turn the clues from your first word into a sharper second guess.',
   lessons: [
     {
       id: 'm3l1',
       moduleId: 'm3',
-      title: 'After your opener',
-      subtitle: 'Read the constraints, narrow the pool.',
+      title: 'After your first word',
+      subtitle: 'Read the clues, shrink the list of possible answers.',
       challenges: [
         {
           kind: 'reveal',

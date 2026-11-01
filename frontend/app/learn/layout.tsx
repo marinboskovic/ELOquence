@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Learn',
-  description: 'Bite-sized lessons on information theory and Wordle strategy.',
+  description: 'Short lessons that make your Wordle guesses better — from reading the colours to hard mode.',
 };
 
 export default function LearnLayout({ children }: { children: React.ReactNode }) {
