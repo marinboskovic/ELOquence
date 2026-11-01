@@ -1,8 +1,7 @@
 'use client';
 import { useState, FormEvent } from 'react';
-import Link from 'next/link';
 import { authApi, errorMessage } from '@/lib/api';
-import { AuthError, AuthField, AuthShell, AuthSubmit, AuthSuccess } from '@/components/auth/AuthShell';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, AuthSuccess } from '@/components/auth/AuthShell';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -26,12 +25,10 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthShell
-      title="Reset Password"
-      footer={
-        <Link href="/login" className="text-text-secondary hover:text-text-primary font-medium underline underline-offset-2 transition-colors">
-          Back to sign in
-        </Link>
-      }
+      title="Reset password"
+      eyebrow="account · reset"
+      manifesto="Forgot the word? It happens to the best of us."
+      footer={<AuthLink href="/login">Back to sign in</AuthLink>}
     >
       {done ? (
         <div className="flex flex-col gap-4">
@@ -42,13 +39,13 @@ export default function ForgotPasswordPage() {
           </p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          <p className="text-sm text-text-secondary leading-relaxed -mt-3">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <p className="text-sm text-text-secondary leading-relaxed -mt-4">
             Enter the e-mail you signed up with and we&apos;ll send you a link to choose a new password.
           </p>
           <AuthField
             id="email"
-            label="Email"
+            label="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}

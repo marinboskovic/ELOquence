@@ -1,8 +1,9 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Info, AlertTriangle, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { announcementsApi } from '@/lib/api';
+import { Label } from '@/components/ui';
 
 interface ActiveAnnouncement {
   id: string;
@@ -34,6 +35,13 @@ function writeDismissedIds(ids: string[]): void {
   }
 }
 
+const SQUARE_BTN =
+  'w-7 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-ink hover:text-text-on-ink transition-colors duration-fast';
+
+/**
+ * A thin ochre strip under the nav: mono "notice" label, the message, a
+ * square close button. Warning/error announcements swap to the accent wash.
+ */
 export default function AnnouncementBanner() {
   const [announcements, setAnnouncements] = useState<ActiveAnnouncement[]>([]);
   const [index, setIndex] = useState(0);
@@ -90,8 +98,6 @@ export default function AnnouncementBanner() {
   const isWarning = current?.type === 'warning' || current?.type === 'error';
   const showNav = announcements.length > 1;
 
-  const iconColor = isWarning ? 'var(--red)' : 'var(--green)';
-
   return (
     <AnimatePresence>
       {visible && (
@@ -99,72 +105,44 @@ export default function AnnouncementBanner() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+          transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
           className="overflow-hidden"
         >
-          <div className="bg-bg-elevated border-b border-border-default px-4 py-2 flex items-center gap-3">
-            {/* Icon */}
-            {isWarning ? (
-              <AlertTriangle
-                size={13}
-                className="flex-shrink-0"
-                style={{ color: iconColor }}
-                aria-hidden="true"
-              />
-            ) : (
-              <Info
-                size={13}
-                className="flex-shrink-0"
-                style={{ color: iconColor }}
-                aria-hidden="true"
-              />
-            )}
+          <div className={`${isWarning ? 'bg-wash-accent' : 'bg-wash-ochre'} border-b border-border-subtle`}>
+            <div className="max-w-6xl mx-auto px-4 md:px-8 h-9 flex items-center gap-4">
+              <Label className="text-text-primary shrink-0">{isWarning ? 'warning' : 'notice'}</Label>
 
-            {/* Text */}
-            <AnimatePresence mode="wait">
-              <motion.p
-                key={index}
-                initial={{ opacity: 0, x: 8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.18 }}
-                className="flex-1 text-xs text-text-primary leading-relaxed"
-              >
-                {currentText}
-              </motion.p>
-            </AnimatePresence>
-
-            {/* Nav arrows (multiple announcements) */}
-            {showNav && (
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  onClick={handlePrev}
-                  className="p-0.5 rounded text-text-secondary hover:text-text-primary transition-colors duration-150"
-                  aria-label="Previous announcement"
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={index}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -8 }}
+                  transition={{ duration: 0.18 }}
+                  className="flex-1 min-w-0 truncate text-sm text-text-primary"
                 >
-                  <ChevronLeft size={14} />
-                </button>
-                <span className="text-[10px] text-text-secondary tabular-nums">
-                  {index + 1}/{announcements.length}
-                </span>
-                <button
-                  onClick={handleNext}
-                  className="p-0.5 rounded text-text-secondary hover:text-text-primary transition-colors duration-150"
-                  aria-label="Next announcement"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
+                  {currentText}
+                </motion.p>
+              </AnimatePresence>
 
-            {/* Dismiss */}
-            <button
-              onClick={handleDismiss}
-              className="flex-shrink-0 p-0.5 rounded text-text-secondary hover:text-text-primary transition-colors duration-150"
-              aria-label="Dismiss announcement"
-            >
-              <X size={14} />
-            </button>
+              {showNav && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={handlePrev} className={SQUARE_BTN} aria-label="Previous announcement">
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="font-mono text-[11px] text-text-secondary tabular">
+                    {index + 1}/{announcements.length}
+                  </span>
+                  <button onClick={handleNext} className={SQUARE_BTN} aria-label="Next announcement">
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+
+              <button onClick={handleDismiss} className={`${SQUARE_BTN} shrink-0`} aria-label="Dismiss announcement">
+                <X size={14} />
+              </button>
+            </div>
           </div>
         </motion.div>
       )}

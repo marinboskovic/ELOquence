@@ -3,10 +3,9 @@
 import { motion } from 'framer-motion';
 import { TileState } from '../TileRow';
 
-/* A single animated tile used inside challenges. Slightly larger + with
- * flip animation when state transitions, since challenges are the focal
- * point of the page (unlike review-page TileRow, where they're a side
- * indicator).
+/* A single interactive tile used inside challenges: a square of paper with a
+ * 2px ink rule, filled by the semantic tile colour when revealed. Highlight
+ * (the "look here" state) is an accent rule — no glow.
  */
 
 const COLOUR: Record<TileState, string> = {
@@ -30,30 +29,25 @@ export default function GameTile({
   highlight?: boolean;
 }) {
   const filled = state !== 'empty';
+  const fg = state === 'absent' ? 'var(--tile-absent-text)' : filled ? '#fff' : 'var(--text-primary)';
+  const borderColor = highlight ? 'var(--accent)' : filled ? COLOUR[state] : 'var(--border-default)';
   return (
     <motion.button
       type="button"
       onClick={onClick}
-      whileHover={onClick ? { scale: 1.05 } : undefined}
+      whileHover={onClick ? { y: -2 } : undefined}
       whileTap={onClick ? { scale: 0.95 } : undefined}
-      animate={{
-        backgroundColor: filled ? COLOUR[state] : 'transparent',
-        rotateX: filled ? 0 : 0,
-      }}
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      animate={{ backgroundColor: filled ? COLOUR[state] : 'rgba(0,0,0,0)' }}
+      transition={{ duration: 0.3, ease: [0.7, 0, 0.2, 1] }}
       style={{
         width: size,
         height: size,
-        borderRadius: 8,
-        border: highlight
-          ? '2.5px solid var(--cls-blue, #3b82f6)'
-          : filled
-            ? 'none'
-            : '2px solid var(--border-default)',
-        color: filled ? '#fff' : 'var(--text-primary)',
-        fontSize: size * 0.42,
-        fontWeight: 800,
-        fontFamily: 'var(--font-sans)',
+        borderRadius: 0,
+        border: `2px solid ${borderColor}`,
+        color: fg,
+        fontSize: size * 0.46,
+        fontWeight: 900,
+        fontFamily: 'var(--font-display)',
         textTransform: 'uppercase',
         display: 'flex',
         alignItems: 'center',
@@ -61,8 +55,8 @@ export default function GameTile({
         cursor: onClick ? 'pointer' : 'default',
         padding: 0,
         userSelect: 'none',
-        boxShadow: highlight ? '0 0 0 4px color-mix(in srgb, var(--cls-blue, #3b82f6) 18%, transparent)' : 'none',
-        transition: 'box-shadow 200ms ease, border-color 200ms ease',
+        lineHeight: 1,
+        transition: 'border-color var(--dur-fast) ease',
       }}
     >
       {letter}

@@ -1,9 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Skull, FlaskConical } from 'lucide-react';
-import { springs } from '@/lib/animations';
-import MiniWord from './MiniWord';
+import { Label, MiniTiles, Reveal, staggerChild, staggerParent } from '@/components/ui';
 
 export interface NemesisWord {
   word: string;
@@ -18,73 +16,71 @@ interface NemesisWordsProps {
   delay?: number;
 }
 
-function Shimmer({ className }: { className?: string }) {
-  return <div className={`skeleton rounded-md bg-bg-muted ${className ?? ''}`} />;
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`skeleton bg-bg-muted ${className ?? ''}`} />;
 }
 
+/**
+ * The words that keep beating the player. Each row: the word as absent-tone
+ * mini tiles, "lost ×N", its ELO in mono, and an ink-link into the lab.
+ */
 export default function NemesisWords({ words, loading = false, delay = 0 }: NemesisWordsProps) {
   const list = words ?? [];
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...springs.slide, delay }}
-      className="rounded-card-lg bg-bg-elevated border border-border-subtle p-5"
-      aria-label="Nemesis words"
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Skull size={14} className="text-text-ghost" />
-          <span className="font-sans font-semibold text-sm text-text-primary">Nemesis Words</span>
+    <Reveal as="section" delay={delay} aria-label="Nemesis words">
+      <div className="rule-top pt-3 flex items-end justify-between gap-4">
+        <div>
+          <Label className="block mb-1">nemesis</Label>
+          <h2 className="font-display text-display-sm text-text-primary">Words that beat you</h2>
         </div>
         {list.length > 0 && (
-          <span className="font-sans text-[10px] font-mono tabular-nums text-text-secondary">
+          <span className="font-mono text-xs tabular text-text-tertiary">
             {list.length} word{list.length !== 1 ? 's' : ''}
           </span>
         )}
       </div>
 
       {loading ? (
-        <div className="space-y-2.5">
+        <div className="mt-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <Shimmer className="h-5 w-[108px]" />
-              <Shimmer className="h-3 w-14" />
-              <Shimmer className="h-3 w-10 ml-auto" />
+            <div key={i} className="rule-hair flex items-center gap-4 py-3">
+              <Skeleton className="h-[22px] w-[122px]" />
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-3 w-12 ml-auto" />
             </div>
           ))}
         </div>
       ) : list.length === 0 ? (
-        <p className="font-sans text-sm text-text-secondary py-4 text-center">
-          No nemesis yet — you&apos;ve solved everything you&apos;ve met.
-        </p>
+        <div className="mt-4 bg-wash-green px-5 py-6">
+          <p className="font-display text-display-sm text-text-primary">No nemesis yet.</p>
+          <p className="text-sm text-text-secondary mt-1">You have solved everything you have met.</p>
+        </div>
       ) : (
-        <ul className="divide-y divide-border-subtle" role="list">
+        <motion.ul className="mt-2" role="list" variants={staggerParent} initial="hidden" animate="show">
           {list.map((n) => (
-            <li key={n.word} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-              <MiniWord word={n.word} />
-              <span className="font-sans text-xs text-text-secondary whitespace-nowrap">
-                lost{' '}
-                <span className="font-mono tabular-nums font-semibold" style={{ color: 'var(--red)' }}>
-                  ×{n.losses}
-                </span>
+            <motion.li
+              key={n.word}
+              variants={staggerChild}
+              className="rule-hair flex items-center gap-4 py-3 hover:bg-bg-elevated transition-colors duration-fast -mx-2 px-2"
+            >
+              <MiniTiles word={n.word.toUpperCase().slice(0, 5)} size={22} />
+              <span className="text-sm text-text-secondary whitespace-nowrap">
+                lost <span className="font-mono tabular font-semibold text-text-primary">×{n.losses}</span>
               </span>
-              <span className="ml-auto font-mono text-[11px] tabular-nums text-text-secondary whitespace-nowrap hidden sm:inline">
-                {n.difficulty != null ? `ELO ${n.difficulty}` : '—'}
+              <span className="ml-auto font-mono text-xs tabular text-text-tertiary whitespace-nowrap hidden sm:inline">
+                {n.difficulty != null ? `elo ${n.difficulty}` : '—'}
               </span>
               <Link
                 href={`/lab?word=${encodeURIComponent(n.word.toUpperCase())}`}
-                className="inline-flex items-center gap-1 shrink-0 text-[11px] font-semibold text-text-secondary hover:text-text-primary transition-colors rounded px-1.5 py-1 hover:bg-bg-muted"
+                className="ink-link shrink-0 font-mono text-label uppercase text-text-primary"
                 aria-label={`Replay ${n.word.toUpperCase()} in the Opener Lab`}
               >
-                <FlaskConical size={11} />
-                <span className="hidden sm:inline">Replay in Lab</span>
-                <span className="sm:hidden">Lab</span>
+                lab →
               </Link>
-            </li>
+            </motion.li>
           ))}
-        </ul>
+        </motion.ul>
       )}
-    </motion.section>
+    </Reveal>
   );
 }

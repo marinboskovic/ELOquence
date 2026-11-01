@@ -2,28 +2,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Palette,
-  Zap,
-  Trash2,
-  UserX,
-  AlertTriangle,
-  Settings,
-  Shield,
-  Moon,
-  Keyboard,
-  Bell,
-  BellOff,
-  KeyRound,
-  Smartphone,
-  Monitor,
-  LogOut,
-  Globe,
-  AtSign,
-  Download,
-  ExternalLink,
-  Check,
-} from 'lucide-react';
+import clsx from 'clsx';
+import { AlertCircle, Check, Smartphone, Monitor, ExternalLink } from 'lucide-react';
 import { usersApi, authApi, errorMessage } from '@/lib/api';
 import { THEME_OPTIONS, useSettings } from '@/lib/useSettings';
 import {
@@ -33,79 +13,39 @@ import {
   type PushState,
 } from '@/lib/push';
 import { pushApi, type PushPreferences, type SessionInfo } from '@/lib/api';
-import ScrollArea from '@/components/ScrollArea';
 import Dialog from '@/components/Dialog';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { getRefreshToken } from '@/lib/session';
+import { Button, Label, Reveal, SectionHead, SplitWords, Tag } from '@/components/ui';
 
 /* ------------------------------------------------------------------ */
 /*  Shared bits                                                         */
 /* ------------------------------------------------------------------ */
 
+/** Underline input — the one text-field style across Atelier forms. */
 const INPUT_CLS =
-  'w-full px-3.5 py-2.5 text-sm rounded-md bg-transparent border-2 border-border-default text-text-primary placeholder:text-text-ghost focus:border-tile-correct focus:outline-none transition-colors disabled:opacity-40';
-
-const DANGER_INPUT_CLS =
-  'w-full px-3.5 py-2.5 text-sm rounded-md bg-transparent border-2 border-border-default text-text-primary placeholder:text-text-ghost focus:outline-none transition-colors disabled:opacity-40';
-
-const PRIMARY_BTN =
-  'px-4 py-2 text-sm rounded-md font-semibold bg-tile-correct text-white hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2';
-
-const SECONDARY_BTN =
-  'px-4 py-2 text-sm rounded-md font-medium border-2 border-border-default hover:border-border-strong text-text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
-
-const GHOST_BTN =
-  'px-4 py-2 text-sm rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors disabled:opacity-40';
+  'w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-ghost outline-none transition-colors duration-fast disabled:opacity-40';
 
 function ErrorNote({ children }: { children: React.ReactNode }) {
   return (
-    <p
-      className="text-xs px-3 py-2 rounded-md border"
-      role="alert"
-      style={{
-        color: 'var(--red)',
-        backgroundColor: 'color-mix(in srgb, var(--red) 8%, transparent)',
-        borderColor: 'color-mix(in srgb, var(--red) 20%, transparent)',
-      }}
-    >
-      {children}
+    <p className="flex items-start gap-2 text-sm text-accent" role="alert">
+      <AlertCircle size={15} aria-hidden="true" className="shrink-0 mt-0.5" />
+      <span>{children}</span>
     </p>
   );
 }
 
 function SuccessNote({ children }: { children: React.ReactNode }) {
   return (
-    <p
-      className="text-xs px-3 py-2 rounded-md border inline-flex items-center gap-1.5"
-      role="status"
-      style={{
-        color: 'var(--green)',
-        backgroundColor: 'color-mix(in srgb, var(--tile-correct) 10%, transparent)',
-        borderColor: 'color-mix(in srgb, var(--tile-correct) 25%, transparent)',
-      }}
-    >
-      <Check size={12} />
-      {children}
-    </p>
-  );
-}
-
-function Spinner() {
-  return (
-    <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin opacity-70" />
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-2 px-1">
+    <p className="inline-flex items-center gap-1.5 text-sm text-text-primary" role="status">
+      <Check size={14} aria-hidden="true" style={{ color: 'var(--tile-correct)' }} />
       {children}
     </p>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Toggle switch                                                       */
+/*  Toggle — a 40×22 rectangle with a square knob, no radius           */
 /* ------------------------------------------------------------------ */
 
 function Toggle({
@@ -127,18 +67,45 @@ function Toggle({
       aria-checked={checked}
       aria-label={label}
       disabled={disabled}
-      className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--green)]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-elevated)] shrink-0 disabled:opacity-50 ${
-        checked
-          ? 'bg-[var(--green)]'
-          : 'bg-[var(--bg-muted)] border border-[var(--border-default)]'
-      }`}
+      className={clsx(
+        'relative shrink-0 w-10 h-[22px] border-2 transition-colors duration-fast disabled:opacity-40 disabled:cursor-not-allowed',
+        checked ? 'bg-accent border-accent' : 'bg-transparent border-border-default'
+      )}
     >
       <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-          checked ? 'translate-x-5' : 'translate-x-0'
-        }`}
+        aria-hidden="true"
+        className={clsx(
+          'absolute top-[2px] left-[2px] w-[14px] h-[14px] transition-transform duration-fast ease-out',
+          checked ? 'translate-x-[18px] bg-accent-ink' : 'translate-x-0 bg-border-default'
+        )}
       />
     </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Row — title · description · control, separated by hair rules       */
+/* ------------------------------------------------------------------ */
+
+function Row({
+  title,
+  description,
+  children,
+  align = 'center',
+}: {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  children?: React.ReactNode;
+  align?: 'center' | 'start';
+}) {
+  return (
+    <div className={clsx('rule-hair py-5 flex gap-6 justify-between', align === 'center' ? 'items-center' : 'items-start')}>
+      <div className="min-w-0">
+        <p className="text-base font-medium text-text-primary">{title}</p>
+        {description && <p className="text-sm text-text-secondary mt-1 leading-relaxed">{description}</p>}
+      </div>
+      {children && <div className="shrink-0 flex items-center gap-2">{children}</div>}
+    </div>
   );
 }
 
@@ -195,12 +162,12 @@ function DeleteGamesModal({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Delete All Game Data"
+      title="Delete all game data"
       accent="var(--red)"
       locked={loading}
       maxWidth="max-w-md"
     >
-      <div className="p-5 pt-3 flex flex-col gap-4">
+      <div className="p-5 pt-3 flex flex-col gap-5">
         <p className="text-sm text-text-secondary leading-relaxed">
           This will permanently delete{' '}
           <span className="text-text-primary font-medium">all your past games</span>. Your ELO
@@ -218,7 +185,7 @@ function DeleteGamesModal({
             type="checkbox"
             checked={confirmed}
             onChange={(e) => setConfirmed(e.target.checked)}
-            className="w-4 h-4 rounded cursor-pointer"
+            className="w-4 h-4 cursor-pointer"
             style={{ accentColor: 'var(--red)' }}
           />
           <span className="text-sm text-text-secondary">
@@ -228,20 +195,17 @@ function DeleteGamesModal({
         </label>
 
         <label className="block">
-          <span className="block text-xs text-text-secondary mb-1.5">
-            {hasPassword
-              ? 'Re-enter your password to confirm'
-              : `Type your username "${user?.username ?? ''}" to confirm`}
-          </span>
+          <Label className="block mb-1">
+            {hasPassword ? 'password' : `type "${user?.username ?? ''}"`}
+          </Label>
           {hasPassword ? (
             <input
               type="password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              className={DANGER_INPUT_CLS}
-              style={{ borderColor: password ? 'var(--red)' : undefined }}
+              placeholder="Re-enter your password to confirm"
+              className={INPUT_CLS}
             />
           ) : (
             <input
@@ -250,7 +214,7 @@ function DeleteGamesModal({
               value={confirmUsername}
               onChange={(e) => setConfirmUsername(e.target.value)}
               placeholder={user?.username ?? 'username'}
-              className={DANGER_INPUT_CLS}
+              className={INPUT_CLS}
             />
           )}
         </label>
@@ -258,25 +222,19 @@ function DeleteGamesModal({
         {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="flex gap-2 justify-end">
-          <button type="button" onClick={onClose} disabled={loading} className={GHOST_BTN}>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={loading}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="danger"
+            size="sm"
             onClick={handleDelete}
-            disabled={!confirmed || !stepUpReady || loading}
-            className="px-4 py-2 text-sm rounded-md font-medium text-white hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-            style={{ backgroundColor: 'var(--red)' }}
+            disabled={!confirmed || !stepUpReady}
+            loading={loading}
           >
-            {loading ? (
-              <>
-                <Spinner />
-                Deleting...
-              </>
-            ) : (
-              'Delete All Games'
-            )}
-          </button>
+            {loading ? 'Deleting…' : 'Delete all games'}
+          </Button>
         </div>
       </div>
     </Dialog>
@@ -336,52 +294,39 @@ function DeleteAccountModal({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Delete Account"
+      title="Delete account"
       accent="var(--red)"
       locked={loading}
       maxWidth="max-w-md"
     >
-      <div className="p-5 pt-3 flex flex-col gap-4">
-        <div
-          className="flex items-start gap-2.5 px-3 py-2.5 rounded-md border"
-          style={{
-            backgroundColor: 'color-mix(in srgb, var(--red) 8%, transparent)',
-            borderColor: 'color-mix(in srgb, var(--red) 20%, transparent)',
-          }}
-        >
-          <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: 'var(--red)' }} />
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--red)' }}>
+      <div className="p-5 pt-3 flex flex-col gap-5">
+        <div className="bg-wash-accent p-4 flex items-start gap-2.5">
+          <AlertCircle size={16} className="shrink-0 mt-0.5 text-accent" aria-hidden="true" />
+          <p className="text-sm leading-relaxed text-text-primary">
             Your account, all game data, ELO history, and achievements will be permanently
             deleted and <strong>cannot be recovered</strong>.
           </p>
         </div>
 
-        <p className="text-sm text-text-secondary">
-          Type{' '}
-          <span className="font-mono font-semibold text-text-primary tracking-widest">
-            DELETE
-          </span>{' '}
-          to confirm:
-        </p>
-
-        <input
-          data-autofocus
-          type="text"
-          value={confirmText}
-          onChange={(e) => setConfirmText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && canDelete) handleDelete();
-          }}
-          placeholder="DELETE"
-          disabled={loading}
-          className={`${DANGER_INPUT_CLS} font-mono tracking-wider`}
-        />
+        <label className="block">
+          <Label className="block mb-1">type DELETE to confirm</Label>
+          <input
+            data-autofocus
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canDelete) handleDelete();
+            }}
+            placeholder="DELETE"
+            disabled={loading}
+            className={`${INPUT_CLS} font-mono tracking-[0.14em]`}
+          />
+        </label>
 
         {hasPassword && (
           <label className="block">
-            <span className="block text-xs text-text-secondary mb-1.5">
-              Re-enter your password to confirm
-            </span>
+            <Label className="block mb-1">password</Label>
             <input
               type="password"
               autoComplete="current-password"
@@ -391,8 +336,8 @@ function DeleteAccountModal({
                 if (e.key === 'Enter' && canDelete) handleDelete();
               }}
               disabled={loading}
-              placeholder="Password"
-              className={DANGER_INPUT_CLS}
+              placeholder="Re-enter your password to confirm"
+              className={INPUT_CLS}
             />
           </label>
         )}
@@ -400,59 +345,15 @@ function DeleteAccountModal({
         {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="flex gap-2 justify-end">
-          <button type="button" onClick={onClose} disabled={loading} className={GHOST_BTN}>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={loading}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={!canDelete || loading}
-            className="px-4 py-2 text-sm rounded-md font-medium text-white hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-            style={{ backgroundColor: 'var(--red)' }}
-          >
-            {loading ? (
-              <>
-                <Spinner />
-                Deleting...
-              </>
-            ) : (
-              'Delete My Account'
-            )}
-          </button>
+          </Button>
+          <Button type="button" variant="danger" size="sm" onClick={handleDelete} disabled={!canDelete} loading={loading}>
+            {loading ? 'Deleting…' : 'Delete my account'}
+          </Button>
         </div>
       </div>
     </Dialog>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Setting row                                                         */
-/* ------------------------------------------------------------------ */
-
-function SettingRow({
-  icon,
-  title,
-  description,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: React.ReactNode;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 p-4 rounded-card bg-bg-elevated border border-border-subtle">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-text-primary">{title}</p>
-          <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{description}</p>
-        </div>
-      </div>
-      {children}
-    </div>
   );
 }
 
@@ -579,57 +480,42 @@ function NotificationsSection() {
   }
 
   return (
-    <section>
-      <SectionLabel>Notifications</SectionLabel>
-      <div className="flex flex-col gap-2">
-        <SettingRow
-          icon={isSubscribed ? <Bell size={17} /> : <BellOff size={17} />}
-          title="Push Notifications"
-          description={disabledReason || description}
+    <Reveal as="section" id="notifications" className="scroll-mt-20">
+      <SectionHead eyebrow="03" title="Notifications" className="mb-4" />
+      <Row title="Push notifications" description={disabledReason || description}>
+        <Button
+          type="button"
+          variant={isSubscribed ? 'secondary' : 'primary'}
+          size="sm"
+          onClick={handleToggle}
+          disabled={!!disabledReason}
+          loading={busy}
         >
-          <button
-            type="button"
-            onClick={handleToggle}
-            disabled={busy || !!disabledReason}
-            className="px-3 py-1.5 rounded-[8px] text-xs font-semibold transition-colors duration-150 disabled:opacity-50"
-            style={{
-              backgroundColor: isSubscribed ? 'var(--bg-muted)' : 'var(--tile-correct)',
-              color: isSubscribed ? 'var(--text-primary)' : '#ffffff',
-              border: isSubscribed ? '1px solid var(--border-default)' : '0',
-            }}
-          >
-            {busy ? '...' : isSubscribed ? 'Disable' : 'Enable'}
-          </button>
-        </SettingRow>
+          {isSubscribed ? 'Disable' : 'Enable'}
+        </Button>
+      </Row>
 
-        {isSubscribed && prefs && (
-          <div className="flex flex-col gap-2 px-4 py-3 rounded-card bg-bg-elevated border border-border-subtle">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-              Notify me about
-            </p>
-            {TRIGGER_LABELS.map(({ key, title, description }) => (
-              <div key={key} className="flex items-center justify-between gap-3 py-1.5">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-text-primary">{title}</p>
-                  <p className="text-xs text-text-secondary mt-0.5 leading-snug">{description}</p>
-                </div>
-                <Toggle
-                  checked={prefs[key]}
-                  onChange={() => togglePref(key)}
-                  label={`Toggle ${title}`}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+      {isSubscribed && prefs && (
+        <div className="pl-0 md:pl-6">
+          {TRIGGER_LABELS.map(({ key, title, description }) => (
+            <Row key={key} title={title} description={description}>
+              <Toggle
+                checked={prefs[key]}
+                onChange={() => togglePref(key)}
+                label={`Toggle ${title}`}
+                disabled={prefsBusy === key}
+              />
+            </Row>
+          ))}
+        </div>
+      )}
 
-        {feedback && (
-          <p className="text-xs px-3 py-2 rounded-[8px] bg-bg-muted border border-border-subtle text-text-secondary">
-            {feedback}
-          </p>
-        )}
-      </div>
-    </section>
+      {feedback && (
+        <p className="rule-hair pt-3 text-sm text-text-secondary" role="status">
+          {feedback}
+        </p>
+      )}
+    </Reveal>
   );
 }
 
@@ -713,27 +599,20 @@ function ChangePasswordForm() {
   };
 
   return (
-    <form onSubmit={submit} className="p-4 rounded-card bg-bg-elevated border border-border-subtle flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
-          <KeyRound size={17} />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-text-primary">
-            {hasPassword ? 'Change password' : 'Set a password'}
-          </p>
-          <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
-            {hasPassword
-              ? 'Every other device is signed out; this one stays signed in.'
-              : 'Your account uses Google sign-in. Add a password to also sign in with email.'}
-          </p>
-        </div>
+    <form onSubmit={submit} className="rule-hair py-5 grid grid-cols-1 md:grid-cols-12 gap-6">
+      <div className="md:col-span-5">
+        <p className="text-base font-medium text-text-primary">{hasPassword ? 'Change password' : 'Set a password'}</p>
+        <p className="text-sm text-text-secondary mt-1 leading-relaxed">
+          {hasPassword
+            ? 'Every other device is signed out; this one stays signed in.'
+            : 'Your account uses Google sign-in. Add a password to also sign in with email.'}
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div className="md:col-span-7 flex flex-col gap-5">
         {hasPassword && (
-          <label className="block sm:col-span-2">
-            <span className="block text-xs text-text-secondary mb-1">Current password</span>
+          <label className="block">
+            <Label className="block mb-1">current password</Label>
             <input
               type="password"
               autoComplete="current-password"
@@ -744,42 +623,42 @@ function ChangePasswordForm() {
             />
           </label>
         )}
-        <label className="block">
-          <span className="block text-xs text-text-secondary mb-1">New password</span>
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            className={INPUT_CLS}
-            placeholder="At least 8 characters"
-            disabled={busy}
-          />
-        </label>
-        <label className="block">
-          <span className="block text-xs text-text-secondary mb-1">Confirm new password</span>
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            className={INPUT_CLS}
-            style={mismatch ? { borderColor: 'var(--red)' } : undefined}
-            aria-invalid={mismatch || undefined}
-            disabled={busy}
-          />
-        </label>
-      </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <label className="block">
+            <Label className="block mb-1">new password</Label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              className={INPUT_CLS}
+              placeholder="At least 8 characters"
+              disabled={busy}
+            />
+          </label>
+          <label className="block">
+            <Label className="block mb-1">confirm new password</Label>
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className={clsx(INPUT_CLS, mismatch && 'border-accent')}
+              aria-invalid={mismatch || undefined}
+              disabled={busy}
+            />
+          </label>
+        </div>
 
-      {mismatch && <ErrorNote>Passwords don&apos;t match.</ErrorNote>}
-      {error && <ErrorNote>{error}</ErrorNote>}
-      {success && <SuccessNote>Password updated.</SuccessNote>}
+        {mismatch && <ErrorNote>Passwords don&apos;t match.</ErrorNote>}
+        {error && <ErrorNote>{error}</ErrorNote>}
+        {success && <SuccessNote>Password updated.</SuccessNote>}
 
-      <div className="flex justify-end">
-        <button type="submit" disabled={!canSubmit} className={PRIMARY_BTN}>
-          {busy && <Spinner />}
-          {hasPassword ? 'Update password' : 'Set password'}
-        </button>
+        <div className="flex justify-end">
+          <Button type="submit" variant="secondary" size="sm" disabled={!canSubmit} loading={busy}>
+            {hasPassword ? 'Update password' : 'Set password'}
+          </Button>
+        </div>
       </div>
     </form>
   );
@@ -840,79 +719,76 @@ function ActiveSessions() {
   };
 
   return (
-    <div className="rounded-card bg-bg-elevated border border-border-subtle overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border-subtle">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
-            <Monitor size={17} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-text-primary">Active sessions</p>
-            <p className="text-xs text-text-secondary mt-0.5">Devices currently signed in to your account.</p>
-          </div>
+    <div className="rule-hair py-5">
+      <div className="flex items-start justify-between gap-6 mb-4">
+        <div className="min-w-0">
+          <p className="text-base font-medium text-text-primary">Active sessions</p>
+          <p className="text-sm text-text-secondary mt-1">Devices currently signed in to your account.</p>
         </div>
-        <button
-          type="button"
-          onClick={signOutEverywhere}
-          disabled={signingOutAll}
-          className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 transition-colors disabled:opacity-40 inline-flex items-center gap-1.5"
-          style={{ borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)', color: 'var(--red)' }}
-        >
-          {signingOutAll ? <Spinner /> : <LogOut size={12} />}
+        <Button type="button" variant="danger" size="sm" onClick={signOutEverywhere} loading={signingOutAll} className="shrink-0">
           <span className="hidden sm:inline">Sign out everywhere</span>
           <span className="sm:hidden">All</span>
-        </button>
+        </Button>
       </div>
 
-      {error && (
-        <div className="px-4 pt-3">
-          <ErrorNote>{error}</ErrorNote>
-        </div>
-      )}
+      {error && <div className="mb-3"><ErrorNote>{error}</ErrorNote></div>}
 
       {sessions === null ? (
-        <div className="px-4 py-6 text-center text-xs text-text-secondary">Loading sessions…</div>
+        <div className="flex flex-col">
+          {[0, 1].map((i) => (
+            <div key={i} className="border-b border-border-subtle py-3 flex items-center gap-3">
+              <div className="skeleton bg-bg-muted h-4 w-40" />
+              <div className="skeleton bg-bg-muted h-3 w-24 ml-auto" />
+            </div>
+          ))}
+        </div>
       ) : sessions.length === 0 ? (
-        <div className="px-4 py-6 text-center text-xs text-text-secondary">No active sessions found.</div>
+        <p className="py-3 text-sm text-text-secondary">No active sessions found.</p>
       ) : (
-        <ul className="divide-y divide-border-subtle" role="list">
-          {sessions.map((s) => {
-            const ua = describeUserAgent(s.user_agent);
-            const Icon = ua.mobile ? Smartphone : Monitor;
-            return (
-              <li key={s.id} className="flex items-center gap-3 px-4 py-3">
-                <Icon size={16} className="text-text-secondary shrink-0" aria-hidden="true" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-text-primary truncate">{ua.label}</span>
-                    {s.current && (
-                      <span
-                        className="text-[10px] px-2 py-0.5 rounded-pill font-semibold"
-                        style={{
-                          color: 'var(--tile-correct)',
-                          background: 'color-mix(in srgb, var(--tile-correct) 15%, transparent)',
-                        }}
-                      >
-                        This device
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-text-secondary mt-0.5 font-mono tabular-nums truncate">
-                    {s.ip_address ?? 'IP unknown'} · last active {relativeTime(s.last_used_at)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => revoke(s)}
-                  disabled={revoking === s.id || signingOutAll}
-                  className="shrink-0 px-2.5 py-1 text-[11px] rounded-md border-2 border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors disabled:opacity-40"
-                >
-                  {revoking === s.id ? <Spinner /> : 'Sign out'}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="rule-top">
+              <th className="text-left py-2 font-normal"><Label>device</Label></th>
+              <th className="text-left py-2 font-normal hidden sm:table-cell"><Label>ip · last active</Label></th>
+              <th className="text-right py-2 font-normal"><Label>action</Label></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessions.map((s) => {
+              const ua = describeUserAgent(s.user_agent);
+              const Icon = ua.mobile ? Smartphone : Monitor;
+              return (
+                <tr key={s.id} className="border-b border-border-subtle hover:bg-bg-elevated transition-colors">
+                  <td className="py-3 pr-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Icon size={14} className="text-text-secondary shrink-0" aria-hidden="true" />
+                      <span className="font-medium text-text-primary">{ua.label}</span>
+                      {s.current && <Tag tone="green">This device</Tag>}
+                    </div>
+                    <p className="sm:hidden font-mono text-xs text-text-secondary tabular mt-1">
+                      {s.ip_address ?? 'IP unknown'} · {relativeTime(s.last_used_at)}
+                    </p>
+                  </td>
+                  <td className="py-3 pr-3 font-mono text-xs text-text-secondary tabular hidden sm:table-cell">
+                    {s.ip_address ?? 'IP unknown'} · {relativeTime(s.last_used_at)}
+                  </td>
+                  <td className="py-3 text-right">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => revoke(s)}
+                      disabled={signingOutAll}
+                      loading={revoking === s.id}
+                    >
+                      Sign out
+                    </Button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );
@@ -920,13 +796,11 @@ function ActiveSessions() {
 
 function SecuritySection() {
   return (
-    <section>
-      <SectionLabel>Security</SectionLabel>
-      <div className="flex flex-col gap-2">
-        <ChangePasswordForm />
-        <ActiveSessions />
-      </div>
-    </section>
+    <Reveal as="section" id="security" className="scroll-mt-20">
+      <SectionHead eyebrow="05" title="Security" className="mb-4" />
+      <ChangePasswordForm />
+      <ActiveSessions />
+    </Reveal>
   );
 }
 
@@ -1015,55 +889,50 @@ function PrivacySection() {
   };
 
   return (
-    <section>
-      <SectionLabel>Privacy</SectionLabel>
-      <div className="flex flex-col gap-2">
-        <SettingRow
-          icon={<Globe size={17} />}
-          title="Public profile"
-          description={
-            isPublic ? (
-              <>
-                Anyone can view your stats at{' '}
-                <Link
-                  href={`/u/${encodeURIComponent(user.username)}`}
-                  className="inline-flex items-center gap-0.5 font-medium text-text-primary hover:underline"
-                >
-                  /u/{user.username}
-                  <ExternalLink size={10} />
-                </Link>
-              </>
-            ) : (
-              'Your profile page and leaderboard links are hidden.'
-            )
-          }
-        >
-          <Toggle checked={isPublic} onChange={togglePublic} label="Toggle public profile" disabled={profileBusy} />
-        </SettingRow>
-        {profileError && <ErrorNote>{profileError}</ErrorNote>}
+    <Reveal as="section" id="privacy" className="scroll-mt-20">
+      <SectionHead eyebrow="06" title="Privacy" className="mb-4" />
+      <Row
+        title="Public profile"
+        description={
+          isPublic ? (
+            <>
+              Anyone can view your stats at{' '}
+              <Link
+                href={`/u/${encodeURIComponent(user.username)}`}
+                className="ink-link inline-flex items-center gap-0.5 font-medium text-text-primary"
+              >
+                /u/{user.username}
+                <ExternalLink size={10} aria-hidden="true" />
+              </Link>
+            </>
+          ) : (
+            'Your profile page and leaderboard links are hidden.'
+          )
+        }
+      >
+        <Toggle checked={isPublic} onChange={togglePublic} label="Toggle public profile" disabled={profileBusy} />
+      </Row>
+      {profileError && <div className="pb-3"><ErrorNote>{profileError}</ErrorNote></div>}
 
-        <div className="p-4 rounded-card bg-bg-elevated border border-border-subtle flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-bg-muted flex items-center justify-center shrink-0 text-text-secondary">
-                <AtSign size={17} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-text-primary">Username</p>
-                <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
-                  Currently <span className="font-semibold text-text-primary">{user.username}</span>. You can change it up to 3 times a day.
-                </p>
-              </div>
-            </div>
-            {!editingName && (
-              <button type="button" onClick={startEditName} className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 border-border-default hover:border-border-strong text-text-primary transition-colors">
-                Change
-              </button>
-            )}
+      <div className="rule-hair py-5">
+        <div className="flex items-center justify-between gap-6">
+          <div className="min-w-0">
+            <p className="text-base font-medium text-text-primary">Username</p>
+            <p className="text-sm text-text-secondary mt-1 leading-relaxed">
+              Currently <span className="font-display font-bold text-text-primary">{user.username}</span>. You can change it up to 3 times a day.
+            </p>
           </div>
+          {!editingName && (
+            <Button type="button" variant="secondary" size="sm" onClick={startEditName} className="shrink-0">
+              Change
+            </Button>
+          )}
+        </div>
 
-          {editingName && (
-            <form onSubmit={saveName} className="flex flex-col sm:flex-row gap-2">
+        {editingName && (
+          <form onSubmit={saveName} className="mt-4 flex flex-col sm:flex-row sm:items-end gap-3">
+            <label className="block flex-1">
+              <Label className="block mb-1">new username</Label>
               <input
                 type="text"
                 value={newName}
@@ -1075,38 +944,91 @@ function PrivacySection() {
                 disabled={nameBusy}
                 aria-label="New username"
               />
-              <div className="flex gap-2 shrink-0">
-                <button type="button" onClick={() => setEditingName(false)} disabled={nameBusy} className={SECONDARY_BTN}>
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={nameBusy || !newName.trim() || newName.trim() === user.username}
-                  className={PRIMARY_BTN}
-                >
-                  {nameBusy && <Spinner />}
-                  Save
-                </button>
-              </div>
-            </form>
-          )}
-          {nameError && <ErrorNote>{nameError}</ErrorNote>}
-          {nameSuccess && <SuccessNote>Username updated.</SuccessNote>}
-        </div>
-
-        <SettingRow
-          icon={<Download size={17} />}
-          title="Download my data"
-          description="Export your account, games and history as JSON."
-        >
-          <button type="button" onClick={downloadData} disabled={exporting} className={`${SECONDARY_BTN} shrink-0 text-xs px-3 py-1.5 inline-flex items-center gap-1.5`}>
-            {exporting ? <Spinner /> : <Download size={12} />}
-            Export
-          </button>
-        </SettingRow>
-        {exportError && <ErrorNote>{exportError}</ErrorNote>}
+            </label>
+            <div className="flex gap-2 shrink-0">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setEditingName(false)} disabled={nameBusy}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={!newName.trim() || newName.trim() === user.username}
+                loading={nameBusy}
+              >
+                Save
+              </Button>
+            </div>
+          </form>
+        )}
+        {nameError && <div className="mt-3"><ErrorNote>{nameError}</ErrorNote></div>}
+        {nameSuccess && <div className="mt-3"><SuccessNote>Username updated.</SuccessNote></div>}
       </div>
-    </section>
+
+      <Row title="Download my data" description="Export your account, games and history as JSON.">
+        <Button type="button" variant="secondary" size="sm" onClick={downloadData} loading={exporting}>
+          Export
+        </Button>
+      </Row>
+      {exportError && <div className="pb-3"><ErrorNote>{exportError}</ErrorNote></div>}
+    </Reveal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Sticky index                                                        */
+/* ------------------------------------------------------------------ */
+
+const SECTIONS = [
+  { id: 'game', label: 'Game' },
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'accessibility', label: 'Accessibility' },
+  { id: 'security', label: 'Security' },
+  { id: 'privacy', label: 'Privacy' },
+  { id: 'danger', label: 'Danger' },
+];
+
+function SettingsIndex() {
+  const [active, setActive] = useState<string>(SECTIONS[0].id);
+
+  useEffect(() => {
+    const els = SECTIONS.map((s) => document.getElementById(s.id)).filter((el): el is HTMLElement => !!el);
+    if (els.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActive(visible[0].target.id);
+      },
+      { rootMargin: '-20% 0px -65% 0px', threshold: 0 }
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <nav aria-label="Settings sections" className="md:sticky md:top-20">
+      <Label className="block mb-3">index</Label>
+      <ol className="flex md:flex-col gap-x-5 gap-y-2 flex-wrap">
+        {SECTIONS.map((s, i) => (
+          <li key={s.id}>
+            <a
+              href={`#${s.id}`}
+              aria-current={active === s.id ? 'location' : undefined}
+              className={clsx(
+                'ink-link inline-flex items-baseline gap-2 text-sm transition-colors duration-fast',
+                active === s.id ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'
+              )}
+              style={active === s.id ? { backgroundSize: '100% 2px' } : undefined}
+            >
+              <span className="font-mono text-[10px] text-text-tertiary tabular">{String(i + 1).padStart(2, '0')}</span>
+              {s.label}
+            </a>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
@@ -1136,41 +1058,26 @@ export default function SettingsPage() {
 
   return (
     <>
-      <div
-        style={{
-          background: 'var(--bg-base)',
-          height: 'calc(100dvh - 52px)',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <ScrollArea
-          style={{
-            width: '100%',
-            maxWidth: '36rem',
-            height: '100%',
-            scrollbarGutter: 'stable',
-            padding: '32px 16px 48px',
-          }}
-        >
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16">
         {/* Page header */}
-        <div className="flex items-center gap-2.5 mb-7">
-          <div className="p-2 rounded-lg bg-bg-elevated border border-border-subtle text-text-secondary">
-            <Settings size={18} />
-          </div>
-          <div>
-            <h1 className="font-display font-black text-xl tracking-tight text-text-primary">Settings</h1>
-          </div>
-        </div>
+        <header className="mb-10 md:mb-14">
+          <Label className="block mb-2">settings · account</Label>
+          <SplitWords text="Settings" as="h1" className="font-display text-display-lg text-text-primary" />
+        </header>
 
-        <div className="flex flex-col gap-6">
-          {/* Game section */}
-          <section>
-            <SectionLabel>Game</SectionLabel>
-            <div className="flex flex-col gap-2">
-              <SettingRow
-                icon={<Shield size={17} />}
-                title="Hard Mode"
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-12">
+          {/* Index — narrow column, sticky on desktop */}
+          <aside className="md:col-span-3 lg:col-span-3 order-first">
+            <SettingsIndex />
+          </aside>
+
+          {/* Content */}
+          <div className="md:col-span-9 lg:col-span-8 lg:col-start-5 flex flex-col gap-12 md:gap-16">
+            {/* Game */}
+            <Reveal as="section" id="game" className="scroll-mt-20">
+              <SectionHead eyebrow="01" title="Game" className="mb-4" />
+              <Row
+                title="Hard mode"
                 description="Any revealed hints must be used in subsequent guesses. Applies to games you start from now on."
               >
                 <Toggle
@@ -1178,11 +1085,9 @@ export default function SettingsPage() {
                   onChange={() => setSetting('hardMode', !settings.hardMode)}
                   label="Toggle hard mode"
                 />
-              </SettingRow>
-
-              <SettingRow
-                icon={<Keyboard size={17} />}
-                title="Onscreen Keyboard Only"
+              </Row>
+              <Row
+                title="Onscreen keyboard only"
                 description="Ignore physical keyboard input. Helpful for users with assistive devices."
               >
                 <Toggle
@@ -1190,207 +1095,114 @@ export default function SettingsPage() {
                   onChange={() => setSetting('keyboardOnly', !settings.keyboardOnly)}
                   label="Toggle onscreen keyboard only"
                 />
-              </SettingRow>
-            </div>
-          </section>
+              </Row>
+            </Reveal>
 
-          {/* Appearance section */}
-          <section>
-            <SectionLabel>Appearance</SectionLabel>
-            <div className="flex flex-col gap-2">
-              <SettingRow
-                icon={<Moon size={17} />}
-                title="Theme"
-                description="System follows your device; Dark is the OLED palette."
-              >
-                <div
-                  role="radiogroup"
-                  aria-label="Theme"
-                  className="flex shrink-0 rounded-pill bg-bg-muted p-0.5 border border-border-subtle"
-                >
+            {/* Appearance */}
+            <Reveal as="section" id="appearance" className="scroll-mt-20">
+              <SectionHead eyebrow="02" title="Appearance" className="mb-4" />
+              <Row title="Theme" description="System follows your device; Dark is the warm-black palette.">
+                <div role="radiogroup" aria-label="Theme" className="flex gap-1.5">
                   {THEME_OPTIONS.map((opt) => {
                     const active = settings.theme === opt;
                     return (
-                      <button
+                      <Button
                         key={opt}
                         type="button"
                         role="radio"
                         aria-checked={active}
+                        variant={active ? 'ink' : 'secondary'}
+                        size="sm"
                         onClick={() => setSetting('theme', opt)}
-                        className={`px-3 py-1 rounded-pill text-xs font-semibold capitalize transition-colors ${
-                          active ? 'bg-bg-base text-text-primary shadow-card' : 'text-text-secondary hover:text-text-primary'
-                        }`}
                       >
                         {opt}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
-              </SettingRow>
-            </div>
-          </section>
+              </Row>
+            </Reveal>
 
-          {/* Notifications section */}
-          <NotificationsSection />
+            {/* Notifications */}
+            <NotificationsSection />
 
-          {/* Accessibility section */}
-          <section>
-            <SectionLabel>Accessibility</SectionLabel>
-            <div className="flex flex-col gap-2">
-              <SettingRow
-                icon={<Palette size={17} />}
-                title="High Contrast Mode"
-                description="Contrast and colorblindness improvements"
-              >
+            {/* Accessibility */}
+            <Reveal as="section" id="accessibility" className="scroll-mt-20">
+              <SectionHead eyebrow="04" title="Accessibility" className="mb-4" />
+              <Row title="High contrast mode" description="Contrast and colour-blindness improvements.">
                 <Toggle
                   checked={settings.highContrast}
                   onChange={() => setSetting('highContrast', !settings.highContrast)}
                   label="Toggle high contrast mode"
                 />
-              </SettingRow>
-
-              <SettingRow
-                icon={<Zap size={17} />}
-                title="Reduced Motion"
-                description="Minimize animations throughout the app"
-              >
+              </Row>
+              <Row title="Reduced motion" description="Minimise animations throughout the app.">
                 <Toggle
                   checked={settings.reducedMotion}
                   onChange={() => setSetting('reducedMotion', !settings.reducedMotion)}
                   label="Toggle reduced motion"
                 />
-              </SettingRow>
+              </Row>
 
               {settings.highContrast && (
-                <div className="p-4 rounded-card bg-bg-elevated border border-border-subtle">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary mb-3">
-                    Color Preview
-                  </p>
+                <div className="rule-hair py-5">
+                  <Label className="block mb-3">colour preview</Label>
                   <div className="flex gap-2">
-                    <div
-                      className="w-10 h-10 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: 'var(--tile-correct)' }}
-                      aria-label="Correct position color: orange"
-                    >
-                      A
-                    </div>
-                    <div
-                      className="w-10 h-10 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: 'var(--tile-present)' }}
-                      aria-label="Wrong position color: blue"
-                    >
-                      B
-                    </div>
-                    <div
-                      className="w-10 h-10 rounded-md flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: 'var(--tile-absent)' }}
-                      aria-label="Not in word color: gray"
-                    >
-                      C
-                    </div>
+                    {([
+                      ['A', 'correct', 'Correct position colour: orange'],
+                      ['B', 'present', 'Wrong position colour: blue'],
+                      ['C', 'absent', 'Not in word colour: grey'],
+                    ] as const).map(([ch, st, label]) => (
+                      <div
+                        key={st}
+                        className="w-11 h-11 flex items-center justify-center font-display font-black text-base"
+                        style={{
+                          backgroundColor: `var(--tile-${st})`,
+                          color: st === 'absent' ? 'var(--tile-absent-text)' : '#fff',
+                        }}
+                        role="img"
+                        aria-label={label}
+                      >
+                        {ch}
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[10px] text-text-secondary mt-2.5">
-                    Orange = correct position · Blue = wrong position · Gray = not in word
+                  <p className="font-mono text-xs text-text-secondary mt-3">
+                    orange = correct position · blue = wrong position · grey = not in word
                   </p>
                 </div>
               )}
-            </div>
-          </section>
+            </Reveal>
 
-          {/* Security section */}
-          <SecuritySection />
+            {/* Security */}
+            <SecuritySection />
 
-          {/* Privacy section */}
-          <PrivacySection />
+            {/* Privacy */}
+            <PrivacySection />
 
-          {/* Danger zone section */}
-          <section>
-            <SectionLabel>Danger Zone</SectionLabel>
-
-            <div
-              className="rounded-card bg-bg-elevated overflow-hidden border"
-              style={{ borderColor: 'color-mix(in srgb, var(--red) 30%, transparent)' }}
-            >
-              {/* Header strip */}
-              <div
-                className="flex items-center gap-2.5 px-4 py-3 border-b"
-                style={{
-                  borderColor: 'color-mix(in srgb, var(--red) 20%, transparent)',
-                  backgroundColor: 'color-mix(in srgb, var(--red) 5%, transparent)',
-                }}
-              >
-                <AlertTriangle size={14} style={{ color: 'var(--red)' }} />
-                <span className="text-xs font-semibold" style={{ color: 'var(--red)' }}>
-                  Irreversible actions — proceed with caution
-                </span>
-              </div>
-
-              <div className="flex flex-col divide-y divide-border-subtle">
-                {/* Delete All Games */}
-                <div className="flex items-center justify-between px-4 py-4 gap-4">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ backgroundColor: 'color-mix(in srgb, var(--red) 10%, transparent)' }}
-                    >
-                      <Trash2 size={14} style={{ color: 'var(--red)' }} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text-primary">Delete All Game Data</p>
-                      <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
-                        Erase all past games. Your ELO rating will be preserved.
-                      </p>
-                      {gamesDeletedBanner && (
-                        <p className="text-xs mt-1.5 font-medium" style={{ color: 'var(--green)' }}>
-                          All game data deleted. ELO preserved.
-                        </p>
-                      )}
-                    </div>
+            {/* Danger zone — the one wash on the page */}
+            <Reveal as="section" id="danger" className="scroll-mt-20">
+              <SectionHead eyebrow="07" title="Danger" aside="Irreversible actions." className="mb-4" />
+              <div className="bg-wash-accent -mx-4 md:mx-0 px-4 md:px-6 py-2 mt-5">
+                <Row title="Delete all game data" description="Erase all past games. Your ELO rating will be preserved.">
+                  <Button type="button" variant="danger" size="sm" onClick={() => setShowDeleteGamesModal(true)}>
+                    Delete games
+                  </Button>
+                </Row>
+                {gamesDeletedBanner && (
+                  <div className="pb-3">
+                    <SuccessNote>All game data deleted. ELO preserved.</SuccessNote>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteGamesModal(true)}
-                    className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 transition-colors"
-                    style={{ borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)', color: 'var(--red)' }}
-                  >
-                    Delete Games
-                  </button>
-                </div>
-
-                {/* Delete Account */}
-                <div className="flex items-center justify-between px-4 py-4 gap-4">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ backgroundColor: 'color-mix(in srgb, var(--red) 10%, transparent)' }}
-                    >
-                      <UserX size={14} style={{ color: 'var(--red)' }} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text-primary">Delete Account</p>
-                      <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
-                        Permanently delete your account and all associated data.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteAccountModal(true)}
-                    className="shrink-0 px-3 py-1.5 text-xs rounded-md font-medium border-2 transition-colors"
-                    style={{
-                      borderColor: 'color-mix(in srgb, var(--red) 40%, transparent)',
-                      backgroundColor: 'color-mix(in srgb, var(--red) 15%, transparent)',
-                      color: 'var(--red)',
-                    }}
-                  >
-                    Delete Account
-                  </button>
-                </div>
+                )}
+                <Row title="Delete account" description="Permanently delete your account and all associated data.">
+                  <Button type="button" variant="danger" size="sm" onClick={() => setShowDeleteAccountModal(true)}>
+                    Delete account
+                  </Button>
+                </Row>
               </div>
-            </div>
-          </section>
+            </Reveal>
+          </div>
         </div>
-        </ScrollArea>
       </div>
 
       <DeleteGamesModal

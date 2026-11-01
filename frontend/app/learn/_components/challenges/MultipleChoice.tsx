@@ -29,7 +29,7 @@ export default function MultipleChoice({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, padding: '8px 0' }}>
-      <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.15, textWrap: 'balance' }}>
         {challenge.prompt}
       </p>
 
@@ -70,7 +70,7 @@ export default function MultipleChoice({
                         ? 'var(--tile-correct)'
                         : 'var(--border-subtle)'
                 }`,
-                borderRadius: 12,
+                borderRadius: 0,
                 padding: '14px 16px',
                 cursor: picked === null ? 'pointer' : 'default',
                 textAlign: 'left',
@@ -114,7 +114,7 @@ export default function MultipleChoice({
                     right: 8,
                     width: 22,
                     height: 22,
-                    borderRadius: '50%',
+                    borderRadius: 0,
                     background: 'var(--tile-correct)',
                     display: 'flex',
                     alignItems: 'center',
@@ -132,7 +132,7 @@ export default function MultipleChoice({
                     right: 8,
                     width: 22,
                     height: 22,
-                    borderRadius: '50%',
+                    borderRadius: 0,
                     background: 'var(--cls-red)',
                     display: 'flex',
                     alignItems: 'center',

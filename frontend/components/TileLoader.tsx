@@ -2,9 +2,10 @@
 
 import { motion } from 'framer-motion';
 
-/* Three small ELOquence tiles that flip in sequence through the Wordle
- * colour cycle (gray → yellow → green). Replaces the generic spinning
- * circle for full-page loading states so the wait still feels on-brand.
+/* Three small ELOquence tiles that cycle through the tile palette
+ * (absent → present → correct) with a square ink-fill rhythm. Replaces
+ * the generic spinning circle for full-page loading states so the wait
+ * still feels on-brand. Radius 0, like every tile (DESIGN.md §3).
  *
  * Reach for the plain spinner inside buttons or other compact CTAs —
  * this loader is centre-of-screen scale and would look out of place
@@ -36,7 +37,7 @@ export default function TileLoader({
   return (
     <div
       className={`flex items-center ${className}`}
-      style={{ gap, perspective: 200 }}
+      style={{ gap }}
       role="status"
       aria-label={label}
     >
@@ -47,13 +48,13 @@ export default function TileLoader({
           style={{
             width: size,
             height: size,
-            borderRadius: Math.max(2, Math.round(size / 5)),
+            borderRadius: 0,
             display: 'inline-block',
-            transformStyle: 'preserve-3d',
             backgroundColor: 'var(--tile-absent)',
+            transformOrigin: 'bottom center',
           }}
           animate={{
-            rotateY: [0, 180, 360, 360],
+            scaleY: [0.78, 1, 1, 0.78],
             backgroundColor: COLORS,
           }}
           transition={{

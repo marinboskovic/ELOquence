@@ -4,15 +4,17 @@
  * Learn page — Duolingo-style gamified mini-challenges.
  *
  * Two views:
- *   1. Module overview (default) — lesson cards in a grid, progress bar
- *      per lesson, locked-state for lessons that aren’t the next-up.
+ *   1. Module overview (default) — an editorial index: numbered modules,
+ *      lessons as hair-ruled rows, locked-state for lessons past the next-up.
  *   2. Active lesson — full LessonRunner takes over with a sequence of
  *      mini-challenges. Closing the runner returns to the overview.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Lock, Play } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
+import { Label, SplitWords, Reveal } from '@/components/ui';
+import clsx from 'clsx';
 import LessonRunner from './_components/challenges/LessonRunner';
 import ScrollArea from '@/components/ScrollArea';
 import { MODULES, TOTAL_LESSONS, findLesson, LESSON_ORDER } from './_lessons';
@@ -186,21 +188,14 @@ export default function LearnPage() {
 
   // Active lesson view — the scroll container is the inner bounded column,
   // not the outer page, so the scrollbar sits at the right edge of the
-  // content (next to the cards) rather than at the far right of the viewport.
+  // content rather than at the far right of the viewport.
   if (activeLesson) {
     return (
-      <div
-        style={{
-          background: 'var(--bg-base)',
-          height: 'calc(100dvh - 52px)',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
+      <div className="h-page bg-bg-base flex justify-center">
         <ScrollArea
           style={{
             width: '100%',
-            maxWidth: 680,
+            maxWidth: 720,
             height: '100%',
             scrollbarGutter: 'stable',
             padding: '24px 16px 48px',
@@ -216,270 +211,156 @@ export default function LearnPage() {
     );
   }
 
-  // Overview view — same trick: scroll happens on the bounded inner column
-  // so the scrollbar is anchored to the right of the card grid.
+  // Overview view — same trick: scroll happens on the bounded inner column.
+  const overallPct = TOTAL_LESSONS > 0 ? completedCount / TOTAL_LESSONS : 0;
+
   return (
-    <div
-      style={{
-        background: 'var(--bg-base)',
-        height: 'calc(100dvh - 52px)',
-        display: 'flex',
-        justifyContent: 'center',
-      }}
-    >
+    <div className="h-page bg-bg-base flex justify-center">
       <ScrollArea
         style={{
           width: '100%',
-          maxWidth: 760,
+          maxWidth: 1152,
           height: '100%',
           scrollbarGutter: 'stable',
-          padding: '24px 16px 60px',
         }}
       >
-        {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <h1
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 28,
-              fontWeight: 800,
-              color: 'var(--text-primary)',
-              margin: 0,
-              lineHeight: 1.15,
-            }}
-          >
-            Train your Wordle instincts
-          </h1>
-          <div style={{ display: 'flex', gap: 14, marginTop: 14, alignItems: 'center' }}>
-            <div
-              style={{
-                flex: 1,
-                maxWidth: 280,
-                height: 10,
-                borderRadius: 999,
-                background: 'var(--bg-muted)',
-                overflow: 'hidden',
-              }}
-            >
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${(completedCount / TOTAL_LESSONS) * 100}%` }}
-                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                style={{ height: '100%', background: 'var(--tile-correct)' }}
-              />
+        <div className="px-4 md:px-8 py-10 md:py-16">
+          {/* Header */}
+          <header className="grid md:grid-cols-12 gap-6 md:gap-8 mb-12 md:mb-16">
+            <div className="md:col-span-8">
+              <Label className="block mb-3">learn · {MODULES.length} modules · {TOTAL_LESSONS} lessons</Label>
+              <SplitWords text="Train your Wordle instincts" as="h1" className="font-display text-display-lg text-text-primary" />
             </div>
-            <span
-              style={{
-                fontSize: 12,
-                fontFamily: 'var(--font-display)',
-                fontWeight: 700,
-                color: 'var(--text-tertiary)',
-              }}
-            >
-              {completedCount} / {TOTAL_LESSONS}
-            </span>
-          </div>
-        </div>
-
-        {/* Modules */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
-          {MODULES.map((mod, mi) => {
-            // Aggregate challenge counts across the module: how many done, how many total.
-            const modChallengesDone = mod.lessons.reduce(
-              (sum, l) => sum + Math.min(progress[l.id] || 0, l.challenges.length),
-              0,
-            );
-            const modChallengesTotal = mod.lessons.reduce((sum, l) => sum + l.challenges.length, 0);
-            const lessonsFullyDone = mod.lessons.filter(
-              (l) => (progress[l.id] || 0) >= l.challenges.length,
-            ).length;
-            const totalInMod = mod.lessons.length;
-
-            // A module is locked when its *first* lesson is past the first
-            // incomplete one — i.e. the previous module isn't fully done.
-            const moduleLocked = !isLessonUnlocked(mod.lessons[0].id);
-
-            // Module label colour: gray = nothing done / locked, yellow = some
-            // done, green = all done.
-            const modColor =
-              modChallengesDone === 0
-                ? 'var(--text-ghost)'
-                : modChallengesDone >= modChallengesTotal
-                  ? 'var(--tile-correct)'
-                  : 'var(--tile-present)';
-
-            return (
-              <div key={mod.id} style={{ opacity: moduleLocked ? 0.55 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <div>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em',
-                        color: modColor,
-                      }}
-                    >
-                      Module {mi + 1}
-                    </span>
-                    <h2
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 19,
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        margin: '2px 0 0 0',
-                      }}
-                    >
-                      {mod.title}
-                    </h2>
-                    <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '2px 0 0 0' }}>
-                      {mod.blurb}
-                    </p>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontFamily: 'var(--font-display)',
-                      fontWeight: 700,
-                      color: modColor,
-                    }}
-                  >
-                    {lessonsFullyDone}/{totalInMod}
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-                  {mod.lessons.map((l, li) => {
-                    const challengesDone = Math.min(progress[l.id] || 0, l.challenges.length);
-                    const total = l.challenges.length;
-                    const done = challengesDone >= total;
-                    const inProgress = challengesDone > 0 && !done;
-                    const locked = !isLessonUnlocked(l.id);
-
-                    // Wordle colour convention based on challenges completed:
-                    //   gray   = 0 challenges done (or locked)
-                    //   yellow = some but not all
-                    //   green  = all done
-                    const stateColor = done
-                      ? 'var(--tile-correct)'
-                      : inProgress
-                        ? 'var(--tile-present)'
-                        : 'var(--border-subtle)';
-                    const circleBg = done
-                      ? 'var(--tile-correct)'
-                      : inProgress
-                        ? 'var(--tile-present)'
-                        : locked
-                          ? 'var(--bg-muted)'
-                          : 'var(--tile-present)'; // unlocked, not started yet
-                    const circleIconColor = locked && !done && !inProgress ? 'var(--text-ghost)' : '#fff';
-
-                    return (
-                      <motion.button
-                        key={l.id}
-                        type="button"
-                        onClick={() => !locked && handleStart(l.id)}
-                        disabled={locked}
-                        whileHover={!locked ? { y: -3 } : undefined}
-                        whileTap={!locked ? { scale: 0.97 } : undefined}
-                        style={{
-                          background: 'var(--bg-elevated)',
-                          border: `2px solid ${stateColor}`,
-                          borderRadius: 14,
-                          padding: '14px 16px',
-                          textAlign: 'left',
-                          cursor: locked ? 'not-allowed' : 'pointer',
-                          opacity: locked ? 0.6 : 1,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 10,
-                          position: 'relative',
-                          transition: 'border-color 200ms ease, opacity 200ms ease',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.08em',
-                              color: 'var(--text-ghost)',
-                              fontWeight: 700,
-                            }}
-                          >
-                            Lesson {li + 1}
-                          </span>
-                          <span
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: '50%',
-                              background: circleBg,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: circleIconColor,
-                            }}
-                          >
-                            {done ? (
-                              <Check size={14} strokeWidth={3} />
-                            ) : locked ? (
-                              <Lock size={12} />
-                            ) : (
-                              <Play size={12} fill="#fff" strokeWidth={0} />
-                            )}
-                          </span>
-                        </div>
-                        <div>
-                          <h3
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 700,
-                              color: 'var(--text-primary)',
-                              margin: 0,
-                              lineHeight: 1.3,
-                            }}
-                          >
-                            {l.title}
-                          </h3>
-                          {l.subtitle && (
-                            <p style={{ fontSize: 12, color: 'var(--text-tertiary)', margin: '4px 0 0 0', lineHeight: 1.4 }}>
-                              {l.subtitle}
-                            </p>
-                          )}
-                        </div>
-                        {/* Per-challenge progress dots */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-ghost)' }}>
-                          <div style={{ display: 'flex', gap: 3 }}>
-                            {l.challenges.map((_, ci) => (
-                              <span
-                                key={ci}
-                                style={{
-                                  width: 6,
-                                  height: 6,
-                                  borderRadius: 999,
-                                  background:
-                                    ci < challengesDone
-                                      ? 'var(--tile-correct)'
-                                      : 'var(--border-default)',
-                                  transition: 'background-color 200ms ease',
-                                }}
-                              />
-                            ))}
-                          </div>
-                          <span style={{ marginLeft: 4 }}>
-                            {challengesDone}/{total}
-                          </span>
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </div>
+            <Reveal delay={0.2} className="md:col-span-4 md:self-end">
+              <div className="flex items-baseline justify-between gap-4 mb-2">
+                <Label>progress</Label>
+                <span className="font-mono text-xs tabular text-text-secondary">
+                  {completedCount} / {TOTAL_LESSONS}
+                </span>
               </div>
-            );
-          })}
+              {/* Overall progress: a thin ink rule that grows */}
+              <div className="relative h-[2px] w-full">
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" aria-hidden="true" />
+                <motion.div
+                  className="absolute inset-y-0 left-0 w-full origin-left bg-bg-ink"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: overallPct }}
+                  transition={{ duration: 0.8, ease: [0.2, 0.8, 0.2, 1], delay: 0.3 }}
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={TOTAL_LESSONS}
+                  aria-valuenow={completedCount}
+                />
+              </div>
+            </Reveal>
+          </header>
+
+          {/* Modules: an editorial index */}
+          <div className="flex flex-col gap-12 md:gap-16">
+            {MODULES.map((mod, mi) => {
+              // Aggregate challenge counts across the module: how many done, how many total.
+              const modChallengesDone = mod.lessons.reduce(
+                (sum, l) => sum + Math.min(progress[l.id] || 0, l.challenges.length),
+                0,
+              );
+              const modChallengesTotal = mod.lessons.reduce((sum, l) => sum + l.challenges.length, 0);
+              const lessonsFullyDone = mod.lessons.filter(
+                (l) => (progress[l.id] || 0) >= l.challenges.length,
+              ).length;
+              const totalInMod = mod.lessons.length;
+              const modDone = modChallengesTotal > 0 && modChallengesDone >= modChallengesTotal;
+
+              // A module is locked when its *first* lesson is past the first
+              // incomplete one — i.e. the previous module isn't fully done.
+              const moduleLocked = !isLessonUnlocked(mod.lessons[0].id);
+
+              return (
+                <Reveal key={mod.id} as="section" delay={Math.min(mi * 0.04, 0.2)} className={clsx(moduleLocked && 'opacity-50')}>
+                  <div className="rule-top pt-4 grid md:grid-cols-12 gap-4 md:gap-8">
+                    {/* Module number + title */}
+                    <div className="md:col-span-5 flex gap-4 md:gap-6 items-start">
+                      <span className="font-display text-display-md tabular text-text-primary leading-none shrink-0" aria-hidden="true">
+                        {String(mi + 1).padStart(2, '0')}
+                      </span>
+                      <div className="min-w-0 pt-1">
+                        <Label className="block mb-1">module {mi + 1}</Label>
+                        <h2 className="font-display text-display-sm text-text-primary">{mod.title}</h2>
+                        <p className="font-sans text-sm text-text-secondary mt-1 leading-relaxed">{mod.blurb}</p>
+                        <span className="inline-block mt-3 font-mono text-xs tabular text-text-tertiary">
+                          {lessonsFullyDone}/{totalInMod} lessons
+                          {modDone ? ' · complete' : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Lessons as hair-ruled rows */}
+                    <ul className="md:col-span-7 flex flex-col list-none m-0 p-0">
+                      {mod.lessons.map((l, li) => {
+                        const challengesDone = Math.min(progress[l.id] || 0, l.challenges.length);
+                        const total = l.challenges.length;
+                        const done = challengesDone >= total;
+                        const inProgress = challengesDone > 0 && !done;
+                        const locked = !isLessonUnlocked(l.id);
+                        const isNext = !locked && !done && l.id === firstIncompleteId;
+
+                        return (
+                          <li key={l.id} className="border-b border-border-subtle first:border-t first:border-border-subtle md:first:border-t-0">
+                            <button
+                              type="button"
+                              onClick={() => !locked && handleStart(l.id)}
+                              disabled={locked}
+                              aria-label={`${locked ? 'Locked: ' : ''}Lesson ${li + 1}, ${l.title}, ${challengesDone} of ${total} challenges done`}
+                              className={clsx(
+                                'group w-full flex items-center gap-4 py-3 text-left transition-colors duration-fast',
+                                locked ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-bg-elevated'
+                              )}
+                            >
+                              {/* Progress square: filled ink when done, half when in progress */}
+                              <span
+                                className={clsx(
+                                  'relative w-4 h-4 shrink-0 border-2 overflow-hidden',
+                                  done ? 'bg-bg-ink border-border-default' : locked ? 'border-border-subtle' : 'border-border-default'
+                                )}
+                                aria-hidden="true"
+                              >
+                                {inProgress && (
+                                  <span
+                                    className="absolute left-0 bottom-0 w-full bg-bg-ink"
+                                    style={{ height: `${Math.round((challengesDone / total) * 100)}%` }}
+                                  />
+                                )}
+                                {done && <Check size={10} strokeWidth={3} className="absolute inset-0 m-auto text-text-on-ink" />}
+                              </span>
+
+                              <span className="font-mono text-xs tabular text-text-tertiary w-6 shrink-0">{String(li + 1).padStart(2, '0')}</span>
+
+                              <span className="flex-1 min-w-0">
+                                <span className={clsx('block font-sans font-semibold text-sm', locked ? 'text-text-secondary' : 'text-text-primary')}>
+                                  <span className={clsx(!locked && 'ink-link')}>{l.title}</span>
+                                </span>
+                                {l.subtitle && <span className="block font-sans text-xs text-text-tertiary mt-0.5">{l.subtitle}</span>}
+                              </span>
+
+                              <span className="flex items-center gap-3 shrink-0">
+                                {isNext && <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden="true" />}
+                                {locked ? (
+                                  <Lock size={12} className="text-text-ghost" aria-hidden="true" />
+                                ) : (
+                                  <span className="font-mono text-xs tabular text-text-tertiary">
+                                    {challengesDone}/{total}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
         </div>
       </ScrollArea>
     </div>

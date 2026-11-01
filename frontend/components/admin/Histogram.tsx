@@ -4,113 +4,76 @@ import { motion } from 'framer-motion';
 interface Props {
   buckets: Array<{ label: string; count: number }>;
   height?: number;
+  /** Bar colour token; defaults to ink. */
   color?: string;
+  /** Index of the bar to pick out in accent. */
   highlight?: number;
 }
 
-export default function Histogram({ buckets, height = 180, color = 'var(--tile-correct)', highlight }: Props) {
+/**
+ * Ink bars on a hair baseline. Square corners, no gradients; the one
+ * highlighted bucket (if any) is the accent.
+ */
+export default function Histogram({ buckets, height = 180, color = 'var(--text-primary)', highlight }: Props) {
   if (!buckets || buckets.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-text-secondary"
+        className="flex items-center justify-center font-mono text-label uppercase text-text-secondary bg-bg-muted"
         style={{ height }}
         role="img"
         aria-label="No data available"
       >
-        No data available
+        no data
       </div>
     );
   }
 
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
-  const barW = Math.max(4, Math.min(40, Math.floor(220 / buckets.length)));
-  const gap = Math.max(2, Math.min(6, Math.floor(60 / buckets.length)));
-  const labelRotate = buckets.length > 8;
+  const labelRotate = buckets.length > 10;
+  const plotH = height - 44;
 
   return (
-    <div
-      className="flex items-end justify-around gap-1 w-full"
-      style={{ height }}
-      role="img"
-      aria-label="Histogram chart"
-    >
-      {buckets.map((b, i) => {
-        const pct = maxCount > 0 ? (b.count / maxCount) * 100 : 0;
-        const isHighlighted = highlight === i;
-        const barColor = isHighlighted ? 'var(--tile-correct)' : color;
-        const barH = Math.max(2, (pct / 100) * (height - 48));
-        const showCountInside = barH > 18;
-
-        return (
-          <div
-            key={i}
-            className="flex flex-col items-center"
-            style={{ gap: 2, flex: `0 0 ${barW + gap}px`, maxWidth: barW + gap + 4 }}
-          >
-            {/* Count above bar (when bar is short) */}
-            {!showCountInside && b.count > 0 && (
-              <span
-                className="font-sans tabular-nums text-text-secondary"
-                style={{ fontSize: 9, lineHeight: 1 }}
-              >
-                {b.count}
-              </span>
-            )}
-            {showCountInside && <span style={{ height: 14 }} />}
-
-            {/* Bar */}
-            <motion.div
-              style={{
-                width: barW,
-                backgroundColor: barColor,
-                borderRadius: '3px 3px 0 0',
-                opacity: isHighlighted ? 1 : 0.75,
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'center',
-              }}
-              initial={{ height: 2 }}
-              animate={{ height: Math.max(2, barH) }}
-              transition={{
-                duration: 0.5,
-                delay: i * 0.04,
-                ease: [0.16, 1, 0.3, 1],
-              }}
-            >
-              {showCountInside && b.count > 0 && (
-                <span
-                  className="font-sans tabular-nums font-bold"
-                  style={{
-                    fontSize: 9,
-                    lineHeight: 1,
-                    color: '#fff',
-                    marginTop: 3,
-                  }}
-                >
+    <div role="img" aria-label="Histogram chart" style={{ height }} className="flex flex-col">
+      <div className="flex items-end gap-[3px] flex-1 border-b-2 border-border-default" style={{ height: plotH }}>
+        {buckets.map((b, i) => {
+          const pct = (b.count / maxCount) * 100;
+          const isHighlighted = highlight === i;
+          const barH = Math.max(2, (pct / 100) * (plotH - 16));
+          return (
+            <div key={i} className="flex-1 min-w-0 flex flex-col items-center justify-end gap-1">
+              {b.count > 0 && (
+                <span className="font-mono tabular text-text-secondary" style={{ fontSize: 9, lineHeight: 1 }}>
                   {b.count}
                 </span>
               )}
-            </motion.div>
-
-            {/* Label */}
-            <span
-              className="font-sans text-text-secondary overflow-hidden text-ellipsis"
-              style={{
-                fontSize: 8,
-                lineHeight: 1.2,
-                maxWidth: barW + 8,
-                textAlign: 'center',
-                transform: labelRotate ? 'rotate(-45deg)' : 'none',
-                transformOrigin: 'top center',
-                whiteSpace: labelRotate ? 'nowrap' : 'normal',
-              }}
-            >
-              {b.label}
-            </span>
-          </div>
-        );
-      })}
+              <motion.div
+                className="w-full"
+                style={{ backgroundColor: isHighlighted ? 'var(--accent)' : color, opacity: isHighlighted ? 1 : 0.9 }}
+                initial={{ height: 2 }}
+                animate={{ height: barH }}
+                transition={{ duration: 0.5, delay: i * 0.03, ease: [0.2, 0.8, 0.2, 1] }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex gap-[3px] mt-1.5">
+        {buckets.map((b, i) => (
+          <span
+            key={i}
+            className="flex-1 min-w-0 font-mono text-text-secondary text-center overflow-hidden text-ellipsis"
+            style={{
+              fontSize: 9,
+              lineHeight: 1.2,
+              transform: labelRotate ? 'rotate(-45deg) translateX(-4px)' : 'none',
+              transformOrigin: 'top center',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {b.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -15,8 +15,8 @@ import { motion } from 'framer-motion';
 const COLORS = [
   'var(--tile-correct)',
   'var(--tile-present)',
-  'var(--cls-blue, #3b82f6)',
-  '#ffffff',
+  'var(--text-primary)',
+  'var(--tile-absent)',
 ];
 
 function readReducedMotion(): boolean {
@@ -104,7 +104,7 @@ export default function Confetti({ trigger }: { trigger: number }) {
             width: 8,
             height: 8,
             background: p.color,
-            borderRadius: 2,
+            borderRadius: 0,
           }}
         />
       ))}

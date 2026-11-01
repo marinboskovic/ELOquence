@@ -50,7 +50,7 @@ export default function TilePaint({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, padding: '8px 0' }}>
-      <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.15, textWrap: 'balance' }}>
         {challenge.prompt}
       </p>
 
@@ -88,7 +88,7 @@ export default function TilePaint({
               alignItems: 'center',
               gap: 6,
               padding: '8px 16px',
-              borderRadius: 999,
+              borderRadius: 0,
               border: '1px solid var(--border-default)',
               background: 'transparent',
               color: 'var(--text-secondary)',
@@ -106,12 +106,12 @@ export default function TilePaint({
             onClick={submit}
             style={{
               padding: '8px 18px',
-              borderRadius: 999,
+              borderRadius: 0,
               border: 'none',
-              background: 'var(--tile-correct)',
-              color: '#fff',
-              fontSize: 13,
-              fontWeight: 700,
+              background: 'var(--accent)',
+              color: 'var(--accent-ink)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.14em',
               cursor: 'pointer',
             }}
           >
@@ -131,11 +131,11 @@ export default function TilePaint({
               alignItems: 'center',
               gap: 8,
               padding: '8px 16px',
-              borderRadius: 999,
+              borderRadius: 0,
               background:
                 outcome === 'correct'
-                  ? 'color-mix(in srgb, var(--tile-correct) 18%, transparent)'
-                  : 'color-mix(in srgb, var(--cls-red) 18%, transparent)',
+                  ? 'var(--wash-green)'
+                  : 'var(--wash-accent)',
               color: outcome === 'correct' ? 'var(--tile-correct)' : 'var(--cls-red)',
               fontWeight: 700,
               fontSize: 13,

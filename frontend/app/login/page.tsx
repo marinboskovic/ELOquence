@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { errorMessage } from '@/lib/api';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
-import { AuthError, AuthField, AuthShell, AuthSubmit, OrDivider, safeNext } from '@/components/auth/AuthShell';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, OrDivider, safeNext } from '@/components/auth/AuthShell';
 
 const GOOGLE_ERRORS: Record<string, string> = {
   google: 'Google sign-in failed. Please try again.',
@@ -38,25 +38,23 @@ function LoginInner() {
 
   return (
     <AuthShell
-      title="Sign In"
+      title="Sign in"
+      eyebrow="account · sign in"
       footer={
         <>
           No account?{' '}
-          <Link
-            href={next !== '/play' ? `/register?next=${encodeURIComponent(next)}` : '/register'}
-            className="text-text-secondary hover:text-text-primary font-medium transition-colors duration-150 underline underline-offset-2"
-          >
+          <AuthLink href={next !== '/play' ? `/register?next=${encodeURIComponent(next)}` : '/register'}>
             Create one free
-          </Link>
+          </AuthLink>
         </>
       }
     >
       <GoogleSignInButton next={next} />
       <OrDivider />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <AuthField
           id="email"
-          label="Email"
+          label="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -64,10 +62,10 @@ function LoginInner() {
           autoComplete="email"
           placeholder="you@example.com"
         />
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <AuthField
             id="password"
-            label="Password"
+            label="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -75,16 +73,13 @@ function LoginInner() {
             autoComplete="current-password"
             placeholder="••••••••"
           />
-          <Link
-            href="/forgot-password"
-            className="self-end text-xs text-text-secondary hover:text-text-primary underline underline-offset-2 transition-colors"
-          >
+          <Link href="/forgot-password" className="self-end ink-link text-xs text-text-secondary hover:text-text-primary">
             Forgot password?
           </Link>
         </div>
         <AuthError message={error} />
         <AuthSubmit loading={loading} loadingLabel="Signing in…">
-          Sign In
+          Sign in
         </AuthSubmit>
       </form>
     </AuthShell>

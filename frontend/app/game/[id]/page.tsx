@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Timer, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import GameBoard from '@/components/GameBoard';
 import Keyboard from '@/components/Keyboard';
 import GameOverModal from '@/components/GameOverModal';
@@ -16,6 +15,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useAbandonOnExit } from '@/lib/hooks/useAbandonOnExit';
 import { Game, GameStatus, TileState, patternToTiles } from '@/lib/types';
 import { useSettings } from '@/lib/useSettings';
+import { Button, Label, Tag } from '@/components/ui';
 
 /** Local date string (YYYY-MM-DD) matching the server's TZ. */
 function localDateStr(): string {
@@ -409,7 +409,7 @@ export default function GamePage() {
 
   if (loadingGame) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
+      <div className="flex items-center justify-center min-h-page">
         <TileSpinner size="lg" label="Loading game" />
       </div>
     );
@@ -422,7 +422,7 @@ export default function GamePage() {
     : 'Leave the daily?';
 
   return (
-    <div className="relative z-10 flex flex-col items-center h-[calc(100dvh-52px)] pt-2 pb-2 px-2 select-none">
+    <div className="relative z-10 flex flex-col items-center h-page pt-3 pb-2 px-2 select-none">
       <Toast message={toastMsg} visible={toastVisible} />
       <AchievementToast
         achievements={unlockedAchievements}
@@ -435,12 +435,10 @@ export default function GamePage() {
         {announcement}
       </div>
 
-      {/* ── Top bar ── */}
-      <div className="w-full max-w-lg flex items-center justify-between px-1 mb-2 shrink-0">
-        {/* Back button */}
-        <motion.button
+      {/* ── Top bar: back · mode + hard · timer ── */}
+      <div className="w-full max-w-lg grid grid-cols-[2.25rem_1fr_2.25rem] md:grid-cols-[2.25rem_1fr_5rem] items-center gap-2 px-1 pb-3 mb-2 shrink-0 border-b border-border-subtle">
+        <button
           type="button"
-          whileTap={{ scale: 0.92 }}
           onClick={() => {
             if (shouldConfirmBack) {
               setShowAbandonConfirm(true);
@@ -448,42 +446,31 @@ export default function GamePage() {
               router.push('/play');
             }
           }}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors"
+          className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors duration-fast"
           aria-label="Back to mode selection"
         >
           <ArrowLeft size={17} />
-        </motion.button>
+        </button>
 
-        {/* Mode pill badge (+ hard-mode pill) */}
-        <div className="flex items-center gap-1.5">
-          {modeLabel && (
-            <span className="rounded-pill bg-bg-muted text-text-secondary text-xs px-3 py-1 font-medium tracking-wide">
-              {modeLabel}
-            </span>
-          )}
+        <div className="flex items-center justify-center gap-2 min-w-0">
+          {modeLabel && <Label className="text-text-primary truncate">{modeLabel}</Label>}
           {hardMode && (
-            <span
-              className="rounded-pill text-xs px-2.5 py-1 font-semibold tracking-wide"
-              style={{
-                color: 'var(--tile-present)',
-                background: 'color-mix(in srgb, var(--tile-present) 15%, transparent)',
-              }}
-              title="Hard mode: revealed hints must be used"
-            >
-              Hard
-            </span>
+            <Tag tone="ochre" className="shrink-0">
+              <span title="Hard mode: revealed hints must be used">hard</span>
+            </Tag>
           )}
         </div>
 
         {/* Timer (competitive only) */}
         {game?.mode === 'competitive' ? (
-          <div className="flex items-center gap-1.5 text-text-secondary text-xs font-mono tabular-nums min-w-[44px] justify-end">
-            <Timer size={13} strokeWidth={1.8} />
-            <span>{formatTime(elapsed)}</span>
-          </div>
+          <span
+            className="font-mono text-xs tabular text-text-secondary text-right"
+            aria-label={`Elapsed ${formatTime(elapsed)}`}
+          >
+            {formatTime(elapsed)}
+          </span>
         ) : (
-          /* Spacer to keep pill centered when no timer */
-          <div className="w-8" />
+          <span aria-hidden="true" />
         )}
       </div>
 
@@ -519,57 +506,42 @@ export default function GamePage() {
         title={abandonTitle}
         accent="var(--red)"
         locked={abandoning}
-        maxWidth="max-w-xs"
+        maxWidth="max-w-sm"
         hideClose
       >
-        <div className="p-5 flex flex-col gap-4">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: 'color-mix(in srgb, var(--red) 12%, transparent)' }}
-            >
-              <AlertTriangle size={20} style={{ color: 'var(--red)' }} />
-            </div>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              {isRatedComp ? (
-                <>
-                  This counts as a{' '}
-                  <span className="font-semibold" style={{ color: 'var(--red)' }}>loss</span> and you
-                  will lose ELO.
-                </>
-              ) : isChallenge ? (
-                <>
-                  You won&apos;t be able to replay this challenge — the word will be{' '}
-                  <span className="font-semibold" style={{ color: 'var(--red)' }}>locked</span> for you.
-                </>
-              ) : (
-                <>
-                  Your current attempt will be marked abandoned. You can come back and
-                  try today&apos;s word again.
-                </>
-              )}
-            </p>
-          </div>
+        <div className="px-5 pb-5 pt-3 flex flex-col gap-5">
+          <p className="text-sm text-text-secondary leading-relaxed">
+            {isRatedComp ? (
+              <>
+                This counts as a{' '}
+                <span className="font-semibold" style={{ color: 'var(--red)' }}>loss</span> and you
+                will lose ELO.
+              </>
+            ) : isChallenge ? (
+              <>
+                You won&apos;t be able to replay this challenge — the word will be{' '}
+                <span className="font-semibold" style={{ color: 'var(--red)' }}>locked</span> for you.
+              </>
+            ) : (
+              <>
+                Your current attempt will be marked abandoned. You can come back and
+                try today&apos;s word again.
+              </>
+            )}
+          </p>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="secondary"
               data-autofocus
               onClick={() => setShowAbandonConfirm(false)}
               disabled={abandoning}
-              className="flex-1 py-2.5 rounded-md border-2 border-border-default hover:border-border-strong text-text-primary font-medium text-xs transition-colors disabled:opacity-50"
             >
               Keep playing
-            </button>
-            <button
-              type="button"
-              onClick={handleAbandon}
-              disabled={abandoning}
-              className="flex-1 py-2.5 rounded-md text-white font-medium text-xs transition-[filter] hover:brightness-110 disabled:opacity-60"
-              style={{ backgroundColor: 'var(--red)' }}
-            >
-              {abandoning ? 'Leaving...' : isRatedComp ? 'Abandon' : 'Leave'}
-            </button>
+            </Button>
+            <Button variant="danger" onClick={handleAbandon} loading={abandoning}>
+              {abandoning ? 'Leaving' : isRatedComp ? 'Abandon' : 'Leave'}
+            </Button>
           </div>
         </div>
       </Dialog>

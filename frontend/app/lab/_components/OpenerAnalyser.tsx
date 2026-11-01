@@ -6,21 +6,11 @@ import Keyboard from '@/components/Keyboard';
 import TileSpinner from '@/components/TileSpinner';
 import { analysisApi, errorMessage, OpenerReport } from '@/lib/api';
 import { springs } from '@/lib/animations';
+import { Label, MiniTiles, Tag } from '@/components/ui';
 import clsx from 'clsx';
 import WordInputRow from './WordInputRow';
 import { useWordInput } from './useWordInput';
-import {
-  AnswerDot,
-  Bar,
-  Chip,
-  ErrorLine,
-  LabCard,
-  MicroLabel,
-  MiniPattern,
-  MiniWord,
-  StatTile,
-  formatInt,
-} from './LabPrimitives';
+import { AnswerDot, Bar, Chip, ErrorLine, LabCard, MiniPattern, MiniWord, StatTile, formatInt } from './LabPrimitives';
 
 const QUICK_PICKS = ['SLATE', 'CRANE', 'TRACE', 'ADIEU', 'AUDIO'];
 const WORD_RE = /^[A-Z]{5}$/;
@@ -107,22 +97,22 @@ export default function OpenerAnalyser({ initialWord }: OpenerAnalyserProps) {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-12 md:gap-16">
       {/* ── Input: board row + quick picks + keyboard ───────────────────── */}
-      <div className="flex flex-col items-center gap-4">
+      <div className="flex flex-col items-center gap-5">
         <WordInputRow word={input.word} shaking={input.shaking} busy={loading} label="Opener to analyse" />
         <div className="h-5 flex items-center" aria-live="polite">
           {input.notice ? (
-            <span className="font-sans text-sm font-semibold text-text-primary">{input.notice}</span>
+            <span className="font-mono text-xs text-text-primary">{input.notice}</span>
           ) : (
-            <span className="font-sans text-xs text-text-ghost">Type a word and press Enter</span>
+            <span className="font-mono text-label uppercase text-text-tertiary">type a word · enter</span>
           )}
         </div>
 
         <div className="flex flex-wrap justify-center gap-2" aria-label="Quick picks">
           {QUICK_PICKS.map((w) => (
-            <Chip key={w} tone={report?.word === w ? 'green' : 'neutral'} active={report?.word === w} onClick={() => quickPick(w)}>
-              <span className="font-mono tracking-wider">{w}</span>
+            <Chip key={w} tone="neutral" active={report?.word === w} onClick={() => quickPick(w)}>
+              {w}
             </Chip>
           ))}
         </div>
@@ -135,15 +125,15 @@ export default function OpenerAnalyser({ initialWord }: OpenerAnalyserProps) {
       {loading && !report && (
         <div className="flex flex-col items-center gap-3 py-10">
           <TileSpinner size="md" label="Analysing opener" />
-          <span className="font-sans text-xs text-text-secondary">Splitting 2,309 answers into feedback buckets…</span>
+          <span className="font-mono text-xs text-text-secondary">splitting 2,309 answers into feedback buckets…</span>
         </div>
       )}
 
       {!loading && !report && !error && (
-        <div className="rounded-card-lg border border-dashed border-border-default px-6 py-10 text-center">
-          <p className="font-sans text-sm text-text-secondary">
-            Any legal five-letter word works — your favourite opener, a word you&apos;re curious about, or a guess
-            that went badly.
+        <div className="rule-top pt-6 grid md:grid-cols-12 gap-4">
+          <p className="md:col-span-7 font-display text-display-sm text-text-primary">
+            Any legal five-letter word works — your favourite opener, a word you&apos;re curious about, or a guess that
+            went badly.
           </p>
         </div>
       )}
@@ -167,6 +157,7 @@ function OpenerResults({
   const topShare = report.percentile >= 100 ? 0.1 : Math.max(0.1, 100 - report.percentile);
   const maxBucket = Math.max(...report.pattern_buckets.map((b) => b.probability), 0.0001);
   const best = report.best_openers[0];
+  const states = Array.from({ length: 5 }, () => verdict.state);
 
   return (
     <motion.div
@@ -174,63 +165,60 @@ function OpenerResults({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: dimmed ? 0.5 : 1, y: 0 }}
       transition={springs.slide}
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-12 md:gap-16"
     >
-      {/* Verdict header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <MiniWord word={report.word} state={verdict.state} size={34} />
-          <div className="flex flex-col">
-            <span className="font-display font-black tracking-tight text-xl text-text-primary leading-tight">{verdict.label}</span>
-            <span className="font-sans text-xs text-text-secondary">
+      {/* Verdict: the page's one ink block */}
+      <div className="bg-bg-ink text-text-on-ink px-5 md:px-8 py-6 md:py-8 grid md:grid-cols-12 gap-6 items-end">
+        <div className="md:col-span-7 flex flex-col gap-4">
+          <MiniTiles word={report.word} states={states} size={40} gap={4} />
+          <div>
+            <h2 className="font-display text-display-md text-text-on-ink">{verdict.label}</h2>
+            <span className="font-mono text-xs text-text-on-ink opacity-70 tabular">
               #{formatInt(report.rank)} of {formatInt(report.total_guesses)} legal guesses
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Chip tone={report.facts.is_possible_answer ? 'green' : 'neutral'}>
-            {report.facts.is_possible_answer ? 'Possible answer' : 'Not an answer word'}
-          </Chip>
-          <Chip tone="neutral">{report.facts.unique_letters} unique letters</Chip>
-          <Chip tone="neutral">
+        <div className="md:col-span-5 flex md:justify-end items-center gap-2 flex-wrap">
+          <Tag tone={report.facts.is_possible_answer ? 'green' : 'neutral'} className={clsx(!report.facts.is_possible_answer && 'border-current text-text-on-ink opacity-80')}>
+            {report.facts.is_possible_answer ? 'possible answer' : 'not an answer word'}
+          </Tag>
+          <Tag tone="neutral" className="border-current text-text-on-ink opacity-80">{report.facts.unique_letters} unique</Tag>
+          <Tag tone="neutral" className="border-current text-text-on-ink opacity-80">
             {report.facts.vowels} vowel{report.facts.vowels === 1 ? '' : 's'}
-          </Chip>
-          {report.facts.repeated_letters > 0 && <Chip tone="yellow">{report.facts.repeated_letters} repeated</Chip>}
-          <Chip tone="neutral">Difficulty {formatInt(report.facts.difficulty_elo)}</Chip>
+          </Tag>
+          {report.facts.repeated_letters > 0 && <Tag tone="ochre">{report.facts.repeated_letters} repeated</Tag>}
+          <Tag tone="neutral" className="border-current text-text-on-ink opacity-80">difficulty {formatInt(report.facts.difficulty_elo)}</Tag>
         </div>
       </div>
 
-      {/* Headline numbers */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* Headline numbers — count up on load */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-8">
         <StatTile
-          label="Information"
-          value={report.entropy.toFixed(2)}
+          label="information"
+          value={report.entropy}
+          decimals={2}
           unit="bits"
           sub={`best ${report.best_entropy.toFixed(2)} · ${Math.round(report.efficiency * 100)}% of max`}
           accent={verdict.state === 'absent' ? undefined : `var(--tile-${verdict.state})`}
           delay={0}
         />
-        <StatTile label="Rank" value={`#${formatInt(report.rank)}`} sub={`of ${formatInt(report.total_guesses)} guesses`} delay={0.04} />
-        <StatTile label="Percentile" value={`top ${topShare.toFixed(1)}%`} sub={`${report.percentile.toFixed(1)}th percentile`} delay={0.08} />
+        <StatTile label="rank" prefix="#" value={report.rank} decimals={0} sub={`of ${formatInt(report.total_guesses)} guesses`} delay={0.04} />
+        <StatTile label="percentile" prefix="top " value={topShare} decimals={1} unit="%" sub={`${report.percentile.toFixed(1)}th percentile`} delay={0.08} />
         <StatTile
-          label="Expected left"
-          value={report.expected_remaining.toFixed(1)}
+          label="expected left"
+          value={report.expected_remaining}
+          decimals={1}
           sub={`answers after this guess, of ${formatInt(report.answers_total)}`}
           delay={0.12}
         />
-        <StatTile
-          label="Worst case"
-          value={formatInt(report.worst_case_remaining)}
-          sub="answers in the largest bucket"
-          delay={0.16}
-        />
+        <StatTile label="worst case" value={report.worst_case_remaining} decimals={0} sub="answers in the largest bucket" delay={0.16} />
       </div>
 
       {/* Efficiency bar */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <MicroLabel>Efficiency vs best opener</MicroLabel>
-          <span className="font-mono text-[11px] tabular-nums text-text-secondary">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-4">
+          <Label>efficiency vs best opener</Label>
+          <span className="font-mono text-[11px] tabular text-text-secondary">
             {report.entropy.toFixed(2)} / {report.best_entropy.toFixed(2)} bits
             {best && best.word !== report.word && (
               <>
@@ -240,31 +228,32 @@ function OpenerResults({
             )}
           </span>
         </div>
-        <Bar fraction={report.efficiency} />
+        <Bar fraction={report.efficiency} height={4} delay={0.2} />
       </div>
 
       {/* Pattern spread */}
       <LabCard
         title="Pattern spread"
+        eyebrow="feedback buckets"
         aside={`${formatInt(report.distinct_patterns)} distinct patterns · top ${report.pattern_buckets.length} shown`}
         padded={false}
       >
-        <div className="divide-y divide-border-subtle">
+        <div>
           {report.pattern_buckets.map((b, i) => (
             <motion.div
               key={b.pattern}
               initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: Math.min(i * 0.03, 0.3), duration: 0.25 }}
-              className="flex items-center gap-3 px-4 py-2.5"
+              className="flex items-center gap-4 py-2.5 border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast"
             >
               <MiniPattern pattern={b.pattern} size={14} />
-              <div className="flex-1 min-w-0 flex flex-col gap-1">
-                <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                <div className="flex items-center gap-3">
                   <div className="flex-1">
-                    <Bar fraction={b.probability / maxBucket} height={6} />
+                    <Bar fraction={b.probability / maxBucket} delay={0.25 + Math.min(i * 0.04, 0.5)} />
                   </div>
-                  <span className="font-mono text-[11px] tabular-nums text-text-secondary w-12 text-right shrink-0">
+                  <span className="font-mono text-[11px] tabular text-text-secondary w-12 text-right shrink-0">
                     {(b.probability * 100).toFixed(1)}%
                   </span>
                 </div>
@@ -273,30 +262,28 @@ function OpenerResults({
                   {b.count > 3 && <span className="text-text-ghost"> · +{formatInt(b.count - 3)}</span>}
                 </span>
               </div>
-              <span className="font-mono text-sm font-semibold tabular-nums text-text-primary w-12 text-right shrink-0">
+              <span className="font-mono text-sm font-semibold tabular text-text-primary w-12 text-right shrink-0">
                 {formatInt(b.count)}
               </span>
             </motion.div>
           ))}
         </div>
-        <div className="px-4 py-2.5 border-t border-border-subtle">
-          <span className="font-sans text-[11px] text-text-ghost">
-            Each row is one feedback colouring and the answers that would produce it. Flatter spread = more bits.
-          </span>
-        </div>
+        <p className="pt-3 font-sans text-xs text-text-tertiary">
+          Each row is one feedback colouring and the answers that would produce it. Flatter spread = more bits.
+        </p>
       </LabCard>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-12 md:gap-8">
         {/* Best openers */}
-        <LabCard title="Best openers" aside="by information gained" padded={false} className="lg:col-span-3">
-          <div className="flex items-center gap-3 px-4 py-2 border-b border-border-subtle">
-            <MicroLabel className="w-7 text-right shrink-0">#</MicroLabel>
-            <MicroLabel className="flex-1">Word</MicroLabel>
-            <MicroLabel className="w-14 text-right shrink-0">Bits</MicroLabel>
-            <MicroLabel className="w-14 text-right shrink-0">Exp.</MicroLabel>
+        <LabCard title="Best openers" eyebrow="ranked" aside="by information gained" padded={false} className="md:col-span-7">
+          <div className="flex items-center gap-3 py-2 border-b border-border-subtle">
+            <Label className="w-7 text-right shrink-0">#</Label>
+            <Label className="flex-1">word</Label>
+            <Label className="w-14 text-right shrink-0">bits</Label>
+            <Label className="w-14 text-right shrink-0">exp.</Label>
             <span className="w-2 shrink-0" />
           </div>
-          <div className="divide-y divide-border-subtle">
+          <div>
             {report.best_openers.map((p) => {
               const isCurrent = p.word === report.word;
               return (
@@ -305,20 +292,20 @@ function OpenerResults({
                   type="button"
                   onClick={() => onPick(p.word)}
                   className={clsx(
-                    'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2',
-                    isCurrent ? 'bg-bg-elevated border-l-4 border-l-tile-correct' : 'hover:bg-bg-elevated/50'
+                    'w-full flex items-center gap-3 py-2.5 text-left border-b border-border-subtle transition-colors duration-fast',
+                    isCurrent ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'
                   )}
-                  style={{ outlineColor: 'var(--tile-correct)' }}
                   aria-label={`Analyse ${p.word}`}
+                  aria-current={isCurrent ? 'true' : undefined}
                 >
-                  <span className="font-display font-bold text-sm tabular-nums w-7 text-right shrink-0 text-text-ghost">{p.rank}</span>
+                  <span className={clsx('font-mono text-xs tabular w-7 text-right shrink-0', isCurrent ? 'text-accent' : 'text-text-tertiary')}>{p.rank}</span>
                   <div className="flex-1 min-w-0 flex items-center gap-2">
                     <MiniWord word={p.word} state={isCurrent ? 'correct' : 'absent'} size={18} />
                   </div>
-                  <span className="font-mono text-sm font-semibold tabular-nums text-text-primary w-14 text-right shrink-0">
+                  <span className="font-mono text-sm font-semibold tabular text-text-primary w-14 text-right shrink-0">
                     {p.entropy.toFixed(2)}
                   </span>
-                  <span className="font-mono text-xs tabular-nums text-text-secondary w-14 text-right shrink-0">
+                  <span className="font-mono text-xs tabular text-text-secondary w-14 text-right shrink-0">
                     {p.expected_remaining.toFixed(1)}
                   </span>
                   <AnswerDot on={p.is_possible_answer} />
@@ -326,16 +313,16 @@ function OpenerResults({
               );
             })}
           </div>
-          <div className="px-4 py-2.5 border-t border-border-subtle flex items-center gap-2">
+          <div className="pt-3 flex items-center gap-2">
             <AnswerDot on />
-            <span className="font-sans text-[11px] text-text-ghost">= also a possible answer. Tap a row to analyse it.</span>
+            <span className="font-sans text-xs text-text-tertiary">= also a possible answer. Tap a row to analyse it.</span>
           </div>
         </LabCard>
 
         {/* Neighbours + facts */}
-        <div className="lg:col-span-2 flex flex-col gap-5">
-          <LabCard title="Ranked nearby" aside="2 above · 2 below">
-            <div className="flex flex-col gap-1.5">
+        <div className="md:col-span-5 flex flex-col gap-12">
+          <LabCard title="Ranked nearby" eyebrow="context" aside="2 above · 2 below" padded={false}>
+            <div>
               {report.neighbours.map((n) => {
                 const isCurrent = n.word === report.word;
                 return (
@@ -344,34 +331,24 @@ function OpenerResults({
                     type="button"
                     onClick={() => !isCurrent && onPick(n.word)}
                     className={clsx(
-                      'flex items-center gap-3 px-3 py-2 rounded-card border transition-colors text-left focus-visible:outline-none focus-visible:ring-2',
-                      isCurrent
-                        ? 'border-tile-correct bg-bg-elevated cursor-default'
-                        : 'border-border-subtle hover:border-border-strong'
+                      'w-full flex items-center gap-3 py-2.5 border-b border-border-subtle text-left transition-colors duration-fast',
+                      isCurrent ? 'bg-bg-elevated cursor-default' : 'hover:bg-bg-elevated'
                     )}
-                    style={{ outlineColor: 'var(--tile-correct)' }}
                     aria-current={isCurrent ? 'true' : undefined}
                   >
-                    <span className="font-display font-bold text-xs tabular-nums w-14 shrink-0 text-text-ghost">
+                    <span className={clsx('font-mono text-xs tabular w-14 shrink-0', isCurrent ? 'text-accent' : 'text-text-tertiary')}>
                       #{formatInt(n.rank)}
                     </span>
-                    <span
-                      className={clsx(
-                        'font-mono text-sm font-semibold tracking-wider flex-1',
-                        isCurrent ? 'text-tile-correct' : 'text-text-primary'
-                      )}
-                    >
-                      {n.word}
-                    </span>
-                    <span className="font-mono text-xs tabular-nums text-text-secondary">{n.entropy.toFixed(3)}</span>
+                    <span className="font-display font-bold text-sm tracking-wide flex-1 text-text-primary">{n.word}</span>
+                    <span className="font-mono text-xs tabular text-text-secondary">{n.entropy.toFixed(3)}</span>
                   </button>
                 );
               })}
             </div>
           </LabCard>
 
-          <LabCard title="How to read this">
-            <ul className="flex flex-col gap-2 font-sans text-xs text-text-secondary leading-relaxed">
+          <LabCard title="How to read this" eyebrow="glossary">
+            <ul className="flex flex-col gap-3 font-sans text-sm text-text-secondary leading-relaxed">
               <li>
                 <span className="font-semibold text-text-primary">Bits</span> — information gained on average. One bit halves
                 the answer pool; {report.entropy.toFixed(1)} bits cuts {formatInt(report.answers_total)} down to about{' '}

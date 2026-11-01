@@ -1,9 +1,9 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MessageSquare, Send } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import { aiApi } from '@/lib/api';
-import { springs } from '@/lib/animations';
+import { Label } from '@/components/ui';
 import clsx from 'clsx';
 
 interface Message {
@@ -26,18 +26,13 @@ const SUGGESTED_QUESTIONS = [
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center gap-1 px-3 py-2.5">
+    <div className="flex items-center gap-1 py-1" aria-label="Coach is typing">
       {[0, 1, 2].map((i) => (
         <motion.span
           key={i}
-          className="block w-1.5 h-1.5 rounded-full bg-text-secondary"
-          animate={{ y: [0, -4, 0] }}
-          transition={{
-            duration: 0.6,
-            repeat: Infinity,
-            delay: i * 0.15,
-            ease: 'easeInOut',
-          }}
+          className="block w-1.5 h-1.5 bg-text-primary"
+          animate={{ opacity: [0.2, 1, 0.2] }}
+          transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15, ease: 'easeInOut' }}
         />
       ))}
     </div>
@@ -110,34 +105,27 @@ export default function CoachChat({ gameId, gameContext }: Props) {
   const limitReached = msgCount >= MAX_MESSAGES;
 
   return (
-    <div className="w-full h-full flex flex-col">
-      {/* Game context pill */}
+    <div className="w-full h-full flex flex-col bg-bg-elevated">
+      {/* Game context line */}
       {gameContext && (
-        <div className="px-4 pt-3 shrink-0">
-          <span className="text-[10px] text-text-secondary bg-bg-elevated border border-border-subtle px-2 py-0.5 rounded-full">
-            {gameContext}
-          </span>
+        <div className="px-4 pt-3 pb-2 shrink-0 border-b border-border-subtle">
+          <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-tertiary">{gameContext}</span>
         </div>
       )}
 
       {/* Messages area */}
-      <div
-        ref={scrollRef}
-        className="flex flex-col gap-2 overflow-y-auto px-4 py-3 flex-1 min-h-0"
-      >
+      <div ref={scrollRef} className="flex flex-col overflow-y-auto px-4 flex-1 min-h-0">
         {messages.length === 0 && !sending && (
-          <div className="flex flex-col gap-2">
-            <p className="text-xs text-text-secondary mb-1">
-              Ask anything about this game.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-col gap-3 py-4">
+            <p className="font-display text-display-sm text-text-primary">Ask anything about this game.</p>
+            <div className="flex flex-col">
               {SUGGESTED_QUESTIONS.map((q) => (
                 <button
                   key={q}
                   onClick={() => fillSuggestion(q)}
-                  className="text-xs px-2.5 py-1.5 rounded-lg bg-bg-elevated hover:bg-bg-muted border border-border-subtle text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+                  className="rule-hair py-2.5 text-left font-sans text-sm text-text-secondary hover:text-text-primary hover:bg-bg-base transition-colors duration-fast cursor-pointer"
                 >
-                  {q}
+                  <span className="ink-link">{q}</span>
                 </button>
               ))}
             </div>
@@ -150,72 +138,54 @@ export default function CoachChat({ gameId, gameContext }: Props) {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className={clsx(
-              'flex',
-              msg.role === 'user' ? 'justify-end' : 'justify-start'
-            )}
+            className={clsx('rule-hair py-3 flex flex-col gap-1', msg.role === 'user' ? 'items-end text-right' : 'items-start')}
           >
             {msg.role === 'user' ? (
-              <div className="text-sm text-text-primary px-4 py-2.5 max-w-[85%] rounded-2xl rounded-br-sm bg-bg-elevated border border-border-default">
-                {msg.content}
-              </div>
+              <Label className="text-text-tertiary">you</Label>
             ) : (
-              <div
-                className="text-sm text-text-primary px-4 py-2.5 max-w-[85%] rounded-2xl rounded-bl-sm border"
-                style={{
-                  background: 'rgb(from var(--tile-correct) r g b / 0.10)',
-                  borderColor: 'rgb(from var(--tile-correct) r g b / 0.30)',
-                }}
-              >
-                {msg.content}
-              </div>
+              <span className="font-display font-bold text-sm text-text-primary">Coach</span>
             )}
+            <p className={clsx('font-sans text-sm leading-relaxed text-text-primary max-w-[92%]', msg.role === 'user' && 'text-text-secondary')}>
+              {msg.content}
+            </p>
           </motion.div>
         ))}
 
         {sending && (
-          <div className="flex justify-start">
-            <div
-              className="rounded-2xl rounded-bl-sm border"
-              style={{
-                background: 'rgb(from var(--tile-correct) r g b / 0.10)',
-                borderColor: 'rgb(from var(--tile-correct) r g b / 0.30)',
-              }}
-            >
-              <TypingIndicator />
-            </div>
+          <div className="rule-hair py-3 flex flex-col gap-1">
+            <span className="font-display font-bold text-sm text-text-primary">Coach</span>
+            <TypingIndicator />
           </div>
         )}
       </div>
 
-      {/* Input area */}
-      <div className="flex items-center gap-2 px-4 py-3 border-t border-border-subtle shrink-0">
+      {/* Input area: underline style */}
+      <div className="px-4 py-3 shrink-0 rule-top">
         {limitReached ? (
-          <p className="flex-1 text-xs text-text-secondary text-center py-1">
-            Message limit reached ({MAX_MESSAGES}/{MAX_MESSAGES})
+          <p className="font-mono text-label uppercase text-text-tertiary py-2">
+            message limit reached · {MAX_MESSAGES}/{MAX_MESSAGES}
           </p>
         ) : (
-          <>
+          <div className="flex items-end gap-2 border-b-2 border-border-default focus-within:border-accent transition-colors duration-fast">
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about this game..."
+              placeholder="Ask about this game…"
               disabled={sending}
-              className="flex-1 bg-bg-elevated border border-border-default rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-border-strong transition-colors disabled:opacity-50"
+              className="flex-1 bg-transparent border-0 py-2 font-sans text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none disabled:opacity-50"
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim() || sending}
-              className="p-2 rounded-lg disabled:opacity-40 transition-colors shrink-0"
-              style={{ backgroundColor: 'var(--tile-correct)' }}
+              className="w-8 h-8 mb-1 inline-flex items-center justify-center bg-bg-ink text-text-on-ink disabled:opacity-30 transition-opacity duration-fast shrink-0"
               aria-label="Send message"
             >
-              <Send size={13} className="text-white" />
+              <ArrowUp size={14} aria-hidden="true" />
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>

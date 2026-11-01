@@ -1,9 +1,10 @@
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Flame, History } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { dailyApi } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { Button, Label, Reveal, SplitWords, Stat, Tag } from '@/components/ui';
 import clsx from 'clsx';
 
 interface ArchiveEntry {
@@ -17,12 +18,15 @@ interface ArchiveEntry {
   played_on_day?: boolean;
 }
 
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const WEEKDAYS = ['su', 'mo', 'tu', 'we', 'th', 'fr', 'sa'];
+
+function todayStr(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+}
 
 function isFutureDate(dateStr: string): boolean {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  return dateStr > todayStr;
+  return dateStr > todayStr();
 }
 
 function getFirstDayOfWeek(year: number, month: number): number {
@@ -33,129 +37,97 @@ function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-/** Inline style for a cell based on its status. Uses only CSS variables. */
-function getCellStyle(entry: ArchiveEntry | undefined, future: boolean): React.CSSProperties {
-  if (!entry || future) {
-    return {
-      backgroundColor: 'var(--tile-empty-bg)',
-      border: '2px solid var(--tile-empty-border)',
-      opacity: future ? 0.35 : 1,
-    };
-  }
-  if (!entry.played) {
-    return {
-      backgroundColor: 'var(--tile-empty-bg)',
-      border: '2px solid var(--tile-empty-border)',
-    };
-  }
-  if (entry.status === 'won') {
-    // Played-on-day wins get the saturated green. Archive-replay wins use
-    // a lighter mix so they're clearly distinguishable from the "real"
-    // daily solves that contributed to the user's streak.
-    if (entry.played_on_day === false) {
-      return {
-        backgroundColor: 'color-mix(in srgb, var(--tile-correct) 55%, var(--bg-elevated))',
-        border: '2px dashed var(--tile-correct)',
-      };
-    }
-    return {
-      backgroundColor: 'var(--tile-correct)',
-      border: '2px solid var(--tile-correct)',
-    };
-  }
-  if (entry.status === 'lost') {
-    return {
-      backgroundColor: 'var(--tile-absent)',
-      border: '2px solid var(--tile-absent)',
-    };
-  }
-  // in_progress
-  return {
-    backgroundColor: 'var(--tile-present)',
-    border: '2px solid var(--tile-present)',
-  };
-}
-
-function getCellTextColor(entry: ArchiveEntry | undefined, future: boolean): string {
-  if (!entry || future || !entry.played) return 'var(--text-primary)';
-  return '#ffffff';
+/**
+ * Tiny pattern-grid summarising a played day: one row per guess, the last
+ * row all-correct for a win. Deliberately abstract (we don't have the real
+ * per-guess patterns here) — it reads as "solved in N" at a glance.
+ */
+function DayGrid({ entry, replay }: { entry: ArchiveEntry; replay: boolean }) {
+  const n = entry.guesses ?? 0;
+  const rows = Math.max(1, Math.min(6, n || (entry.status === 'lost' ? 6 : 1)));
+  const won = entry.status === 'won';
+  const inProgress = entry.status === 'in_progress';
+  return (
+    <span className="flex flex-col items-start" style={{ gap: 1.5 }} aria-hidden="true">
+      {Array.from({ length: rows }).map((_, r) => {
+        const last = r === rows - 1;
+        const fill = won && last ? 'var(--tile-correct)' : inProgress && last ? 'var(--tile-present)' : 'var(--tile-absent)';
+        return (
+          <span key={r} className="flex" style={{ gap: 1.5 }}>
+            {Array.from({ length: 5 }).map((__, c) => (
+              <span
+                key={c}
+                style={{
+                  width: 4,
+                  height: 4,
+                  background: fill,
+                  opacity: replay && won && last ? 0.55 : 1,
+                  display: 'block',
+                }}
+              />
+            ))}
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 interface CalendarCellProps {
   day: number;
   entry: ArchiveEntry | undefined;
   future: boolean;
+  isToday: boolean;
   loading: boolean;
   inStreak: boolean;
   onClick: () => void;
 }
 
-function CalendarCell({ day, entry, future, loading, inStreak, onClick }: CalendarCellProps) {
+function CalendarCell({ day, entry, future, isToday, loading, inStreak, onClick }: CalendarCellProps) {
   const isPlayable = !future && !!entry && !loading;
-  const isRevealed = entry?.played && !future;
+  const isRevealed = !!entry?.played && !future;
   const wasReplay = entry?.status === 'won' && entry?.played_on_day === false;
 
   return (
     <button
+      type="button"
       disabled={!isPlayable}
       onClick={isPlayable ? onClick : undefined}
       aria-label={
         entry
-          ? `${entry.date}${entry.played ? `, ${entry.status === 'won' ? (wasReplay ? 'won via replay' : 'won') : entry.status === 'lost' ? 'lost' : 'in progress'} in ${entry.guesses} guess${entry.guesses !== 1 ? 'es' : ''}` : ', not played'}`
+          ? `${entry.date}${entry.played ? `, ${entry.status === 'won' ? (wasReplay ? 'won via replay' : 'won') : entry.status === 'lost' ? 'lost' : 'in progress'} in ${entry.guesses} guess${entry.guesses !== 1 ? 'es' : ''}` : ', not played'}${isToday ? ', today' : ''}`
           : `Day ${day}`
       }
+      aria-current={isToday ? 'date' : undefined}
       className={clsx(
-        'relative flex flex-col items-center justify-center rounded-tile select-none',
-        'transition-all duration-150',
-        isPlayable && !isRevealed && 'hover:brightness-[0.92] cursor-pointer',
-        isPlayable && isRevealed && 'hover:brightness-110 cursor-pointer',
+        'relative flex flex-col justify-between p-1.5 md:p-2 text-left select-none min-w-0 aspect-square',
+        'border-r border-b border-border-subtle transition-colors duration-fast',
+        inStreak && 'bg-wash-ochre',
+        isPlayable && 'cursor-pointer hover:bg-bg-elevated focus-visible:z-10',
         !isPlayable && 'cursor-default',
+        future && 'text-text-ghost',
+        loading && 'skeleton'
       )}
-      style={{
-        ...getCellStyle(entry, future),
-        aspectRatio: '1 / 1',
-        minWidth: 0,
-        // Outer flame ring on cells that are part of a multi-day streak run.
-        ...(inStreak
-          ? {
-              boxShadow:
-                '0 0 0 2px color-mix(in srgb, var(--tile-present) 70%, transparent)',
-            }
-          : {}),
-      }}
     >
-      {/* Streak flame in the top-left corner for cells in a multi-day run */}
-      {inStreak && (
-        <Flame
-          size={9}
-          className="absolute top-1 left-1"
-          style={{ color: 'var(--tile-present)' }}
-          aria-hidden="true"
-        />
-      )}
-      {/* Small history glyph in the corner of replay-won cells so the user
-          can see at a glance which wins were the original daily vs solved
-          later via archive replay. */}
-      {wasReplay && (
-        <History
-          size={9}
-          className="absolute top-1 right-1"
-          style={{ color: '#ffffff' }}
-          aria-hidden="true"
-        />
-      )}
+      {/* Today — outlined in accent (inset so the grid rules stay crisp) */}
+      {isToday && <span className="pointer-events-none absolute inset-0 border-2 border-accent" aria-hidden="true" />}
+
       <span
-        className="text-xs font-bold leading-none"
-        style={{ color: getCellTextColor(entry, future) }}
+        className={clsx(
+          'font-mono text-[11px] md:text-xs tabular leading-none',
+          future ? 'text-text-ghost' : isRevealed ? 'text-text-primary' : 'text-text-secondary'
+        )}
       >
-        {day}
+        {String(day).padStart(2, '0')}
       </span>
-      {isRevealed && entry?.guesses != null && (
-        <span
-          className="text-[9px] leading-none mt-0.5 font-sans tabular-nums"
-          style={{ color: getCellTextColor(entry, future), opacity: 0.85 }}
-        >
-          {entry.status === 'lost' ? 'X' : entry.guesses}/6
+
+      {isRevealed && entry && (
+        <span className="flex items-end justify-between gap-1 w-full">
+          <DayGrid entry={entry} replay={wasReplay} />
+          <span className={clsx('font-display font-bold text-[11px] md:text-xs tabular leading-none', entry.status === 'won' ? 'text-text-primary' : 'text-text-secondary')}>
+            {entry.status === 'lost' ? 'X' : entry.guesses}
+            {wasReplay && <span className="text-text-tertiary font-mono font-normal">*</span>}
+          </span>
         </span>
       )}
     </button>
@@ -295,302 +267,182 @@ export default function Archive() {
   const firstDow = getFirstDayOfWeek(year, month);
   const daysInMonth = getDaysInMonth(year, month);
   const entryMap = Object.fromEntries(entries.map((e) => [e.date, e]));
-
-  // Total cells: leading blanks + days
   const totalCells = firstDow + daysInMonth;
   const rows = Math.ceil(totalCells / 7);
+  const today = todayStr();
+
+  // Month summary for the stat row
+  const playedThisMonth = entries.filter((e) => e.played).length;
+  const wonThisMonth = entries.filter((e) => e.status === 'won').length;
+  const unplayedPast = entries.filter((e) => !e.played && !isFutureDate(e.date)).length;
+  const firstUnplayed = [...entries]
+    .filter((e) => !e.played && !isFutureDate(e.date))
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
 
   // Unauthenticated state
   if (!authLoading && !user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-56px)] px-4 gap-4">
-        <h2
-          className="text-xl font-bold font-display"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          Sign in to view the Archive
-        </h2>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Your play history is tracked per account.
-        </p>
-        <button
-          onClick={() => router.push('/login')}
-          className="px-5 py-2.5 rounded-xl text-white text-sm font-medium transition-colors"
-          style={{ backgroundColor: 'var(--tile-correct)' }}
-        >
-          Sign in
-        </button>
+      <div className="min-h-page flex items-center">
+        <div className="w-full bg-bg-ink text-text-on-ink">
+          <div className="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24 flex flex-col md:flex-row md:items-end justify-between gap-8">
+            <div>
+              <Label className="block mb-3 text-text-on-ink opacity-70">archive</Label>
+              <SplitWords text="Sign in to open the archive." as="h1" className="font-display text-display-lg" />
+              <p className="text-base opacity-80 mt-4">Your play history is tracked per account.</p>
+            </div>
+            <Button variant="primary" size="lg" onClick={() => router.push('/login')}>
+              sign in
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      className="flex flex-col items-center min-h-[calc(100dvh-56px)] px-4 py-8"
-      style={{ color: 'var(--text-primary)' }}
-    >
-      {/* Page header */}
-      <div className="w-full max-w-lg mb-6 flex flex-col items-center gap-1">
-        <h1
-          className="text-3xl font-display font-black tracking-tight"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          Archive
-        </h1>
-        <p className="text-sm font-sans" style={{ color: 'var(--text-secondary)' }}>
-          Replay any past daily puzzle
-        </p>
-      </div>
-
-      {/* Streak summary bar */}
-      <div
-        className="w-full max-w-lg mb-4 flex items-center justify-between gap-3 px-4 py-3 rounded-card"
-        style={{
-          backgroundColor: 'var(--bg-elevated)',
-          border: '1px solid var(--border-subtle)',
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <Flame
-            size={16}
-            style={{ color: 'var(--tile-present)' }}
-            aria-hidden="true"
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col gap-10 md:gap-12">
+      {/* ── Title ───────────────────────────────────────────────────────── */}
+      <header className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+        <div className="md:col-span-7">
+          <Label className="block mb-3">archive · daily</Label>
+          <SplitWords text="Every day, kept." as="h1" className="font-display text-display-lg text-text-primary" />
+          <p className="text-sm text-text-secondary mt-4 max-w-md">Replay any past daily puzzle. Replays do not count toward your streak.</p>
+        </div>
+        <div className="md:col-span-5 rule-top pt-1 grid grid-cols-3 gap-x-6">
+          <Stat size="sm" label="streak" value={user?.current_streak ?? 0} />
+          <Stat size="sm" label="longest" value={user?.max_streak ?? 0} />
+          <Stat
+            size="sm"
+            label="this month"
+            value={fetching && entries.length === 0 ? '—' : `${wonThisMonth}/${playedThisMonth}`}
+            sub="won / played"
           />
-          <div className="flex items-baseline gap-1.5">
-            <span
-              className="font-display font-bold tabular-nums"
-              style={{ fontSize: '1.25rem', color: 'var(--text-primary)' }}
-            >
-              {user?.current_streak ?? 0}
-            </span>
-            <span
-              className="font-sans text-xs"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              current
-            </span>
-          </div>
         </div>
-        <div className="flex items-baseline gap-1.5">
-          <span
-            className="font-display font-bold tabular-nums"
-            style={{ fontSize: '1.25rem', color: 'var(--text-primary)' }}
-          >
-            {user?.max_streak ?? 0}
-          </span>
-          <span
-            className="font-sans text-xs"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            longest
-          </span>
-        </div>
-        {pastStreaks.length > 0 ? (
-          <div
-            className="flex items-center gap-1 flex-wrap justify-end"
-            aria-label="Past streak runs this month"
-          >
-            <span
-              className="font-sans text-[10px] uppercase tracking-[0.06em] mr-1"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              this month
-            </span>
-            {pastStreaks.map((len, i) => (
-              <span
-                key={i}
-                className="font-mono text-[11px] tabular-nums px-2 py-0.5 rounded-pill"
-                style={{
-                  backgroundColor:
-                    'color-mix(in srgb, var(--tile-present) 18%, transparent)',
-                  color: 'var(--tile-present)',
-                  border:
-                    '1px solid color-mix(in srgb, var(--tile-present) 32%, transparent)',
-                }}
-                aria-label={`${len}-day streak`}
-              >
-                {len}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span
-            className="font-sans text-[11px]"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            no streaks this month
-          </span>
-        )}
-      </div>
+      </header>
 
-      {/* Month picker */}
-      <div className="w-full max-w-lg mb-6 flex items-center justify-between gap-2">
-        <button
-          onClick={handlePrev}
-          disabled={fetching}
-          aria-label="Previous month"
-          className="p-2 rounded-md transition-colors duration-150 disabled:opacity-40"
-          style={{
-            color: 'var(--text-secondary)',
-            backgroundColor: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
-          }}
-          onMouseEnter={(e) => {
-            if (!fetching) (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)';
-          }}
-        >
-          <ChevronLeft size={16} aria-hidden="true" />
-        </button>
-
-        <span
-          className="text-base font-bold font-sans tabular-nums"
-          style={{ color: 'var(--text-primary)' }}
-          aria-live="polite"
-        >
-          {MONTH_NAMES[month - 1]} {year}
-        </span>
-
-        <button
-          onClick={handleNext}
-          disabled={isNextDisabled || fetching}
-          aria-label="Next month"
-          className="p-2 rounded-md transition-colors duration-150 disabled:opacity-40"
-          style={{
-            color: 'var(--text-secondary)',
-            backgroundColor: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
-          }}
-          onMouseEnter={(e) => {
-            if (!isNextDisabled && !fetching)
-              (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)';
-          }}
-        >
-          <ChevronRight size={16} aria-hidden="true" />
-        </button>
-      </div>
-
-      {/* Error message */}
-      {error && (
-        <p
-          className="mb-4 text-sm rounded-lg px-4 py-2 w-full max-w-lg"
-          style={{
-            color: 'var(--red)',
-            backgroundColor: 'rgba(231,76,60,0.08)',
-            border: '1px solid rgba(231,76,60,0.18)',
-          }}
-          role="alert"
-        >
-          {error}
-        </p>
-      )}
-
-      {/* Calendar */}
-      <div
-        className="w-full max-w-lg rounded-card border"
-        style={{
-          backgroundColor: 'var(--bg-elevated)',
-          borderColor: 'var(--border-subtle)',
-        }}
-      >
-        {/* Weekday header */}
-        <div className="grid grid-cols-7 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-          {WEEKDAYS.map((d, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-center py-2 text-xs font-bold font-sans"
-              style={{ color: 'var(--text-secondary)' }}
-              aria-hidden="true"
-            >
-              {d}
+      {/* ── Calendar ────────────────────────────────────────────────────── */}
+      <Reveal as="section" aria-label="Daily archive calendar" className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-10">
+        <div className="md:col-span-8 min-w-0">
+          {/* Month nav */}
+          <div className="flex items-end justify-between gap-4 mb-4">
+            <h2 className="font-display text-display-md text-text-primary" aria-live="polite">
+              {MONTH_NAMES[month - 1]} <span className="text-text-tertiary">{year}</span>
+            </h2>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="secondary" size="sm" onClick={handlePrev} disabled={fetching} aria-label="Previous month" className="!px-2.5">
+                <ChevronLeft size={14} aria-hidden="true" />
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleNext} disabled={isNextDisabled || fetching} aria-label="Next month" className="!px-2.5">
+                <ChevronRight size={14} aria-hidden="true" />
+              </Button>
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Day grid */}
-        <div className="p-3">
-          {fetching && entries.length === 0 ? (
-            <div className="grid grid-cols-7 gap-1.5">
-              {Array.from({ length: 35 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="aspect-square rounded-tile skeleton"
-                  style={{ border: '2px solid var(--border-subtle)' }}
-                />
-              ))}
-            </div>
-          ) : (
-            <div
-              className="grid grid-cols-7 gap-1.5"
-              style={{ opacity: fetching ? 0.6 : 1, transition: 'opacity 0.15s ease' }}
-            >
-              {/* Leading blank cells */}
-              {Array.from({ length: firstDow }).map((_, i) => (
-                <div key={`blank-${i}`} />
-              ))}
-
-              {/* Day cells */}
-              {Array.from({ length: daysInMonth }).map((_, i) => {
-                const day = i + 1;
-                const paddedMonth = String(month).padStart(2, '0');
-                const paddedDay = String(day).padStart(2, '0');
-                const dateStr = `${year}-${paddedMonth}-${paddedDay}`;
-                const future = isFutureDate(dateStr);
-                const entry = entryMap[dateStr];
-
-                return (
-                  <CalendarCell
-                    key={dateStr}
-                    day={day}
-                    entry={entry}
-                    future={future}
-                    loading={replayingDate === dateStr}
-                    inStreak={streakDates.has(dateStr)}
-                    onClick={() => entry && handleCellClick(entry)}
-                  />
-                );
-              })}
-
-              {/* Trailing blank cells to complete last row */}
-              {Array.from({ length: rows * 7 - totalCells }).map((_, i) => (
-                <div key={`trail-${i}`} />
-              ))}
+          {error && (
+            <div className="mb-4 bg-wash-accent px-4 py-3 text-sm text-text-primary" role="alert">
+              {error}
             </div>
           )}
+
+          {/* Strict grid: 2px ink top rule, hair rules between every cell */}
+          <div className="rule-top border-l border-border-subtle" style={{ opacity: fetching && entries.length > 0 ? 0.6 : 1, transition: 'opacity 140ms ease' }}>
+            <div className="grid grid-cols-7" aria-hidden="true">
+              {WEEKDAYS.map((d, i) => (
+                <div key={i} className="py-2 px-1.5 md:px-2 border-r border-b border-border-subtle">
+                  <Label className="text-text-tertiary">{d}</Label>
+                </div>
+              ))}
+            </div>
+
+            {fetching && entries.length === 0 ? (
+              <div className="grid grid-cols-7">
+                {Array.from({ length: 35 }).map((_, i) => (
+                  <div key={i} className="aspect-square border-r border-b border-border-subtle skeleton" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-7">
+                {Array.from({ length: firstDow }).map((_, i) => (
+                  <div key={`blank-${i}`} className="aspect-square border-r border-b border-border-subtle bg-bg-muted" />
+                ))}
+
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const day = i + 1;
+                  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const future = isFutureDate(dateStr);
+                  const entry = entryMap[dateStr];
+                  return (
+                    <CalendarCell
+                      key={dateStr}
+                      day={day}
+                      entry={entry}
+                      future={future}
+                      isToday={dateStr === today}
+                      loading={replayingDate === dateStr}
+                      inStreak={streakDates.has(dateStr)}
+                      onClick={() => entry && handleCellClick(entry)}
+                    />
+                  );
+                })}
+
+                {Array.from({ length: rows * 7 - totalCells }).map((_, i) => (
+                  <div key={`trail-${i}`} className="aspect-square border-r border-b border-border-subtle bg-bg-muted" />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Legend */}
+          <div className="mt-3 flex items-center gap-5 flex-wrap font-mono text-label uppercase text-text-tertiary">
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-correct)' }} aria-hidden="true" />won</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-absent)' }} aria-hidden="true" />lost</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2" style={{ background: 'var(--tile-present)' }} aria-hidden="true" />in progress</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 bg-wash-ochre border border-border-subtle" aria-hidden="true" />streak</span>
+            <span>* replay</span>
+          </div>
         </div>
 
-        {/* Legend — stretched edge-to-edge with equidistant items */}
-        <div
-          className="grid items-center px-4 py-3 border-t text-xs font-sans"
-          style={{
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            borderColor: 'var(--border-subtle)',
-            color: 'var(--text-secondary)',
-            gap: 8,
-          }}
-        >
-          {[
-            { style: { backgroundColor: 'var(--tile-correct)', border: '2px solid var(--tile-correct)' }, label: 'Won on the day' },
-            { style: { backgroundColor: 'color-mix(in srgb, var(--tile-correct) 55%, var(--bg-elevated))', border: '2px dashed var(--tile-correct)' }, label: 'Won via replay' },
-            { style: { backgroundColor: 'var(--tile-absent)', border: '2px solid var(--tile-absent)' }, label: 'Lost' },
-            { style: { backgroundColor: 'var(--tile-present)', border: '2px solid var(--tile-present)' }, label: 'In progress' },
-          ].map(({ style, label }) => (
-            <div key={label} className="flex items-center justify-center gap-1.5 min-w-0">
-              <span
-                className="inline-block w-3.5 h-3.5 rounded-[3px] flex-shrink-0"
-                style={style}
-                aria-hidden="true"
-              />
-              <span className="truncate">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+        {/* ── Side column: streaks this month + replay CTA ─────────────── */}
+        <aside className="md:col-span-4 flex flex-col gap-8">
+          <div className="rule-top pt-3">
+            <Label className="block mb-2">streaks this month</Label>
+            {pastStreaks.length > 0 ? (
+              <div className="flex flex-wrap gap-2" aria-label="Past streak runs this month">
+                {pastStreaks.map((len, i) => (
+                  <span key={i} aria-label={`${len}-day streak`}>
+                    <Tag tone="ochre">{len} days</Tag>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-text-secondary">No runs of two or more days yet.</p>
+            )}
+          </div>
+
+          <div className="rule-top pt-3">
+            <Label className="block mb-2">unplayed</Label>
+            <p className="font-display text-display-md text-text-primary tabular">
+              {unplayedPast}
+              <span className="text-text-tertiary text-display-sm"> day{unplayedPast !== 1 ? 's' : ''}</span>
+            </p>
+            <p className="text-sm text-text-secondary mt-2">
+              {firstUnplayed ? 'Pick any open day in the grid, or jump to the latest one.' : 'Every day this month is accounted for.'}
+            </p>
+            {firstUnplayed && (
+              <Button
+                variant="primary"
+                size="md"
+                className="mt-5"
+                onClick={() => handleCellClick(firstUnplayed)}
+                loading={replayingDate === firstUnplayed.date}
+                disabled={!!replayingDate}
+              >
+                replay {firstUnplayed.date.slice(5).replace('-', '/')}
+              </Button>
+            )}
+          </div>
+        </aside>
+      </Reveal>
     </div>
   );
 }

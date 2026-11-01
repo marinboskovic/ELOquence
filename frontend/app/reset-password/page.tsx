@@ -1,10 +1,9 @@
 'use client';
 import { Suspense, useState, FormEvent } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { AuthError, AuthField, AuthShell, AuthSubmit } from '@/components/auth/AuthShell';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit } from '@/components/auth/AuthShell';
 
 function ResetInner() {
   const router = useRouter();
@@ -37,17 +36,15 @@ function ResetInner() {
 
   return (
     <AuthShell
-      title="New Password"
-      footer={
-        <Link href="/forgot-password" className="text-text-secondary hover:text-text-primary font-medium underline underline-offset-2 transition-colors">
-          Request a new link
-        </Link>
-      }
+      title="New password"
+      eyebrow="account · reset"
+      manifesto="A fresh start. Pick something you will remember."
+      footer={<AuthLink href="/forgot-password">Request a new link</AuthLink>}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <AuthField
           id="password"
-          label="New password"
+          label="new password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -59,7 +56,7 @@ function ResetInner() {
         />
         <AuthField
           id="confirm"
-          label="Confirm password"
+          label="confirm password"
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
@@ -73,7 +70,7 @@ function ResetInner() {
         <AuthSubmit loading={loading} loadingLabel="Saving…">
           Set password
         </AuthSubmit>
-        <p className="text-[11px] text-text-tertiary text-center">You&apos;ll be signed out of every other device.</p>
+        <p className="text-xs text-text-tertiary">You&apos;ll be signed out of every other device.</p>
       </form>
     </AuthShell>
   );

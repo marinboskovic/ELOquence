@@ -1,4 +1,5 @@
 'use client';
+import { Button } from '@/components/ui';
 
 interface Props {
   /** Relative path to return to after sign-in (default /play). */
@@ -36,11 +37,7 @@ export default function GoogleSignInButton({ next }: Props) {
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="w-full py-3 rounded-md bg-bg-base border-2 border-border-default hover:border-border-strong text-text-primary font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-3 cursor-pointer"
-    >
+    <Button type="button" variant="secondary" size="lg" onClick={handleClick} className="w-full">
       {/* Official Google "G" logo mark — colors are trademarked, must not be altered */}
       <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
         <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -49,6 +46,6 @@ export default function GoogleSignInButton({ next }: Props) {
         <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
       </svg>
       Continue with Google
-    </button>
+    </Button>
   );
 }

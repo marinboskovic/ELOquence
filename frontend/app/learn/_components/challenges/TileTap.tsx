@@ -39,7 +39,7 @@ export default function TileTap({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, padding: '8px 0' }}>
-      <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.15, textWrap: 'balance' }}>
         {challenge.prompt}
       </p>
 
@@ -88,11 +88,11 @@ export default function TileTap({
               alignItems: 'center',
               gap: 8,
               padding: '8px 16px',
-              borderRadius: 999,
+              borderRadius: 0,
               background:
                 outcome === 'correct'
-                  ? 'color-mix(in srgb, var(--tile-correct) 18%, transparent)'
-                  : 'color-mix(in srgb, var(--cls-red) 18%, transparent)',
+                  ? 'var(--wash-green)'
+                  : 'var(--wash-accent)',
               color: outcome === 'correct' ? 'var(--tile-correct)' : 'var(--cls-red)',
               fontWeight: 700,
               fontSize: 13,

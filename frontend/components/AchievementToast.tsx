@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { springs } from '@/lib/animations';
+import { Label } from '@/components/ui';
 
 export const ACHIEVEMENT_META: Record<
   string,
@@ -65,6 +65,11 @@ interface AchievementToastProps {
   onDismiss: () => void;
 }
 
+/**
+ * One unlocked badge as an ink strip: mono eyebrow, badge name in display
+ * type. The emoji in ACHIEVEMENT_META stays available to other screens but
+ * is not rendered here (DESIGN.md: no emoji as icons).
+ */
 function SingleToast({
   achievement,
   index,
@@ -84,77 +89,41 @@ function SingleToast({
     return () => clearTimeout(timer);
   }, [index]);
 
+  const description = ACHIEVEMENT_META[achievement.type]?.description;
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20, scale: 0.92 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -10, scale: 0.95 }}
-      transition={{ ...springs.snappy, delay: index * 0.12 }}
-      className="relative overflow-hidden flex items-center gap-3 rounded-card-lg cursor-pointer select-none bg-bg-base border border-border-default"
+    <motion.button
+      type="button"
+      initial={{ opacity: 0, y: -16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1], delay: index * 0.1 }}
+      className="w-full text-left flex items-stretch bg-bg-ink text-text-on-ink border-2 border-border-default shadow-ink cursor-pointer select-none"
       onClick={onDismiss}
       role="status"
       aria-live="polite"
-      style={{
-        boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-        padding: '12px 16px 12px 0',
-      }}
+      aria-label={`Achievement unlocked: ${achievement.name}`}
     >
-      {/* Gold left accent bar */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-card-lg"
-        style={{ backgroundColor: 'var(--gold)' }}
-      />
-
-      {/* Shimmer sweep */}
-      <motion.div
-        className="pointer-events-none absolute inset-0"
-        animate={{ x: ['-110%', '200%'] }}
-        transition={{ duration: 1.6, ease: 'easeInOut', delay: 0.25 }}
-        style={{
-          background:
-            'linear-gradient(105deg, transparent 35%, rgba(201,162,39,0.06) 50%, transparent 65%)',
-        }}
-        aria-hidden="true"
-      />
-
-      {/* Spacer for left bar */}
-      <div className="w-4 flex-shrink-0" aria-hidden="true" />
-
-      {/* Icon */}
-      <span
-        className="text-[22px] leading-none flex-shrink-0"
-        role="img"
-        aria-label={achievement.name}
-      >
-        {achievement.icon}
+      {/* accent stripe: the live indicator */}
+      <span className="w-1.5 shrink-0 bg-accent" aria-hidden="true" />
+      <span className="flex flex-col min-w-0 px-4 py-3">
+        <Label className="!text-text-on-ink opacity-70">achievement unlocked</Label>
+        <span className="font-display text-display-sm leading-none mt-1 truncate">{achievement.name}</span>
+        {description && (
+          <span className="font-mono text-[11px] mt-1.5 opacity-70 truncate">{description.toLowerCase()}</span>
+        )}
       </span>
-
-      {/* Text */}
-      <div className="flex flex-col min-w-0">
-        <span
-          className="text-[10px] uppercase tracking-widest font-bold"
-          style={{ color: 'var(--gold)' }}
-        >
-          Achievement Unlocked
-        </span>
-        <span className="font-display font-bold text-sm text-text-primary leading-tight truncate">
-          {achievement.name}
-        </span>
-      </div>
-    </motion.div>
+    </motion.button>
   );
 }
 
-export default function AchievementToast({
-  achievements,
-  onDismiss,
-}: AchievementToastProps) {
+export default function AchievementToast({ achievements, onDismiss }: AchievementToastProps) {
   return (
     <AnimatePresence>
       {achievements.length > 0 && (
         <div
-          className="pointer-events-none fixed top-[72px] left-1/2 -translate-x-1/2 z-[65] flex flex-col items-center gap-2"
-          style={{ width: 288 }}
+          className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-[65] flex flex-col items-stretch gap-2 w-[min(100vw-2rem,22rem)]"
+          style={{ top: 'calc(var(--nav-h) + 16px)' }}
         >
           {achievements.map((ach, i) => (
             <div key={ach.type} className="pointer-events-auto w-full">

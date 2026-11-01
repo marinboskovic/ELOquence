@@ -3,12 +3,13 @@
 import clsx from 'clsx';
 import { projectEloByOutcome } from '@/lib/elo';
 import type { Game } from '@/lib/types';
+import { Label } from '@/components/ui';
 
 /**
- * Renders a 7-cell grid showing the ELO delta the player WOULD have
+ * Renders a 7-cell ledger showing the ELO delta the player WOULD have
  * received for each possible game outcome (solved in 1..6 guesses, or
  * failed = X/6), holding their actual accuracy and time fixed. The cell
- * matching the actual result is highlighted.
+ * matching the actual result is marked with an accent rule.
  *
  * Only sensible for rated games where we have a player ELO + word ELO;
  * the parent should gate the render on `game.rated` and the presence
@@ -42,57 +43,31 @@ export default function EloProjection({
   });
 
   return (
-    <section
-      aria-label="ELO distribution"
-      className="rounded-card-lg overflow-hidden"
-      style={{
-        backgroundColor: 'var(--bg-base)',
-        border: '1px solid var(--border-subtle)',
-      }}
-    >
-      <div
-        className="px-4 pt-3 pb-2"
-        style={{ borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider font-display"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          ELO distribution
-        </span>
+    <section aria-label="ELO distribution" className="rule-top pt-3">
+      <div className="flex items-baseline justify-between gap-3 pb-2">
+        <Label>elo by outcome</Label>
+        <Label className="text-text-tertiary">same accuracy · same time</Label>
       </div>
 
-      <div className="grid grid-cols-7 gap-0">
-        {rows.map((row) => {
+      <div className="grid grid-cols-7 rule-hair">
+        {rows.map((row, i) => {
           const positive = row.delta > 0;
-          const negative = row.delta < 0;
-          const fillColor = positive
-            ? 'var(--tile-correct)'
-            : negative
-            ? 'var(--red)'
-            : 'var(--text-secondary)';
-
           return (
             <div
               key={row.label}
-              className={clsx('flex flex-col items-center justify-center py-2.5')}
-              style={{
-                backgroundColor: row.isActual
-                  ? 'color-mix(in srgb, var(--tile-correct) 8%, transparent)'
-                  : 'transparent',
-                borderLeft: row.label === '1/6' ? 'none' : '1px solid var(--border-subtle)',
-                borderTop: row.isActual ? '2px solid var(--tile-correct)' : '2px solid transparent',
-              }}
+              className={clsx(
+                'flex flex-col items-center justify-center py-2.5 border-t-2',
+                i > 0 && 'border-l border-border-subtle',
+                row.isActual ? 'border-t-accent bg-bg-elevated' : 'border-t-transparent'
+              )}
+              aria-current={row.isActual ? 'true' : undefined}
             >
+              <span className="font-mono text-[10px] tabular text-text-tertiary">{row.label}</span>
               <span
-                className="text-[10px] font-mono tabular-nums"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                {row.label}
-              </span>
-              <span
-                className="text-sm font-mono font-bold tabular-nums mt-0.5"
-                style={{ color: fillColor }}
+                className={clsx(
+                  'font-display font-bold text-sm tabular mt-0.5',
+                  row.isActual ? 'text-text-primary' : positive ? 'text-text-primary' : 'text-text-secondary'
+                )}
               >
                 {positive ? '+' : ''}
                 {row.delta}

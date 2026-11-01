@@ -87,12 +87,12 @@ export default function RevealCard({
           alignItems: 'center',
           gap: 6,
           padding: '10px 22px',
-          borderRadius: 999,
+          borderRadius: 0,
           border: 'none',
-          background: 'var(--tile-correct)',
-          color: '#fff',
-          fontSize: 14,
-          fontWeight: 700,
+          background: 'var(--accent)',
+          color: 'var(--accent-ink)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.14em',
           cursor: 'pointer',
         }}
       >

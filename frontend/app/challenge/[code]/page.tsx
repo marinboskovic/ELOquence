@@ -2,23 +2,23 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Swords,
-  Trophy,
-  Share2,
-  Check,
-  Crown,
-  ExternalLink,
-  Users,
-  Play,
-  Lock,
-} from 'lucide-react';
+import { Check, Copy, Lock, AlertCircle } from 'lucide-react';
+import clsx from 'clsx';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { challengesApi, errorMessage } from '@/lib/api';
-import { springs, stagger } from '@/lib/animations';
-import { patternToTiles } from '@/lib/types';
-import clsx from 'clsx';
 import TileSpinner from '@/components/TileSpinner';
+import {
+  Button,
+  ButtonLink,
+  Label,
+  MiniTiles,
+  PatternRow,
+  Reveal,
+  SplitWords,
+  Tag,
+  staggerChild,
+  staggerParent,
+} from '@/components/ui';
 
 interface ChallengeInfo {
   code: string;
@@ -52,410 +52,27 @@ interface ChallengeResultsResponse {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Mini pattern grid (letters never shown — safe to display to all)  */
+/*  Pattern grid (letters never shown — safe to display to all)        */
 /* ------------------------------------------------------------------ */
 
-const TILE_FILL: Record<string, string> = {
-  correct: 'var(--tile-correct)',
-  present: 'var(--tile-present)',
-  absent: 'var(--tile-absent)',
-};
-
-function PatternGrid({ patterns, size = 6 }: { patterns: number[]; size?: number }) {
+function PatternGrid({ patterns, size = 7 }: { patterns: number[]; size?: number }) {
   if (!patterns.length) return null;
   return (
-    <div
-      className="flex flex-col"
-      style={{ gap: 1 }}
-      role="img"
-      aria-label={`${patterns.length}-row guess pattern`}
-    >
+    <div className="flex flex-col" style={{ gap: 2 }} role="img" aria-label={`${patterns.length}-row guess pattern`}>
       {patterns.map((p, r) => (
-        <div key={r} className="flex" style={{ gap: 1 }}>
-          {patternToTiles(p).map((t, i) => (
-            <span
-              key={i}
-              style={{ width: size, height: size, borderRadius: 1, backgroundColor: TILE_FILL[t] }}
-            />
-          ))}
-        </div>
+        <PatternRow key={r} pattern={p} size={size} gap={2} />
       ))}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Atoms — guess dots, accuracy bar / pill                            */
-/* ------------------------------------------------------------------ */
-
-// 6-dot row encoding both count and quality. The colour gradient runs
-// from brilliant (single bright green) to risky (red on 6/6), mirroring
-// the in-app Wordle tile vocabulary.
-function GuessDots({
-  num,
-  status,
-  size = 'sm',
-}: {
-  num: number;
-  status: string;
-  size?: 'sm' | 'md';
-}) {
-  const lost = status === 'lost';
-  const dim = size === 'md' ? 7 : 5;
-  const gap = size === 'md' ? 2 : 1;
-
-  // Color for filled dots based on num_guesses — fewer = better.
-  const fillColor = (() => {
-    if (lost) return 'var(--tile-absent)';
-    if (num <= 2) return 'var(--tile-correct)';
-    if (num === 3) return 'color-mix(in srgb, var(--tile-correct) 75%, var(--tile-present))';
-    if (num === 4) return 'var(--tile-present)';
-    if (num === 5) return 'var(--cls-orange)';
-    return 'color-mix(in srgb, var(--red) 80%, transparent)';
-  })();
-
-  // Lost games render all 6 dots in --tile-absent (the in-app "absent"
-  // gray, more saturated than --border-default) at full opacity so they
-  // read clearly against any card background.
-  return (
-    <div
-      className="flex items-center"
-      style={{ gap: `${gap}px` }}
-      role="img"
-      aria-label={lost ? 'Did not solve in 6 guesses' : `Solved in ${num} of 6 guesses`}
-    >
-      {Array.from({ length: 6 }).map((_, i) => {
-        const filled = !lost && i < num;
-        return (
-          <span
-            key={i}
-            className="rounded-full"
-            style={{
-              width: dim,
-              height: dim,
-              backgroundColor: lost
-                ? 'var(--tile-absent)'
-                : filled
-                ? fillColor
-                : 'var(--border-default)',
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function accuracyFill(pct: number): string {
-  if (pct >= 75) return 'var(--tile-correct)';
-  if (pct >= 40) return 'var(--tile-present)';
-  return 'var(--tile-absent)';
-}
-
-function AccuracyBar({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-[10px] text-text-tertiary font-mono">—</span>;
-  const clamped = Math.max(0, Math.min(100, pct));
-  return (
-    <div className="flex items-center gap-1.5">
-      <div
-        className="rounded-full overflow-hidden shrink-0"
-        style={{
-          width: 64,
-          height: 6,
-          backgroundColor: 'var(--border-subtle)',
-        }}
-      >
-        <div
-          className="h-full rounded-full transition-[width]"
-          style={{
-            width: `${clamped}%`,
-            backgroundColor: accuracyFill(clamped),
-          }}
-        />
-      </div>
-      <span
-        className="text-[10px] font-mono tabular-nums text-right shrink-0"
-        style={{ color: 'var(--text-secondary)', width: 28 }}
-      >
-        {Math.round(clamped)}%
-      </span>
-    </div>
-  );
-}
-
-function AccuracyPill({ pct }: { pct: number | null }) {
-  if (pct === null) return null;
-  const clamped = Math.max(0, Math.min(100, pct));
-  const c = accuracyFill(clamped);
-  return (
-    <span
-      className="px-1.5 py-0.5 text-[10px] rounded-pill font-mono tabular-nums border"
-      style={{
-        color: c,
-        backgroundColor: `color-mix(in srgb, ${c} 12%, transparent)`,
-        borderColor: `color-mix(in srgb, ${c} 30%, transparent)`,
-      }}
-    >
-      {Math.round(clamped)}%
-    </span>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Podium                                                              */
-/* ------------------------------------------------------------------ */
-
-// Podium colors follow the Wordle tile palette (correct / present / absent)
-// rather than gold/silver/bronze medals — keeps the page visually anchored
-// in the same vocabulary as the rest of the app.
-const PODIUM_META: Record<
-  1 | 2 | 3,
-  { color: string; height: number; rankIcon: 'trophy' | 'numeral' }
-> = {
-  1: { color: 'var(--tile-correct)', height: 176, rankIcon: 'trophy' },
-  2: { color: 'var(--tile-present)', height: 144, rankIcon: 'numeral' },
-  3: { color: 'var(--tile-absent)', height: 112, rankIcon: 'numeral' },
-};
-
-function PodiumCell({
-  entry,
-  place,
-  isMe,
-}: {
-  entry: ChallengeResult;
-  place: 1 | 2 | 3;
-  isMe: boolean;
-}) {
-  const meta = PODIUM_META[place];
-  const lost = entry.status === 'lost';
-  const accentColor = isMe ? 'var(--tile-correct)' : meta.color;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: place === 1 ? -8 : place === 2 ? 0 : 0, x: place === 2 ? -8 : place === 3 ? 8 : 0 }}
-      animate={{ opacity: lost ? 0.72 : 1, x: 0, y: 0 }}
-      transition={{ delay: place === 2 ? 0.08 : place === 3 ? 0.16 : 0.24, ...springs.celebration }}
-      className="relative rounded-card overflow-hidden flex flex-col justify-end p-3"
-      style={{
-        height: meta.height,
-        backgroundColor: 'var(--bg-base)',
-        border: '2px solid',
-        borderColor: lost ? 'var(--border-default)' : accentColor,
-        borderLeftWidth: 4,
-      }}
-    >
-      {/* radial glow only for 1st */}
-      {place === 1 && !lost && (
-        <div
-          className="absolute inset-x-0 top-0 pointer-events-none"
-          style={{
-            height: '60%',
-            background: `radial-gradient(ellipse at 50% 0%, color-mix(in srgb, ${accentColor} 16%, transparent), transparent 70%)`,
-          }}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* rank ornament (top-center) */}
-      <div className="absolute left-0 right-0 flex justify-center" style={{ top: place === 1 ? 10 : 8 }}>
-        {meta.rankIcon === 'trophy' ? (
-          <Trophy size={16} style={{ color: lost ? 'var(--text-tertiary)' : accentColor }} />
-        ) : (
-          <span
-            className={clsx(
-              'font-display font-black',
-              place === 2 ? 'text-lg' : 'text-base',
-            )}
-            style={{ color: lost ? 'var(--text-tertiary)' : accentColor, lineHeight: 1 }}
-          >
-            {place}
-          </span>
-        )}
-      </div>
-
-      {/* Content (bottom-anchored) */}
-      <div className="relative z-10 flex flex-col gap-1.5">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <div className="flex items-start gap-1 min-w-0">
-            {entry.is_creator && (
-              <Crown
-                size={10}
-                role="img"
-                aria-label="Challenge creator"
-                style={{ color: 'var(--gold)', flexShrink: 0, marginTop: 2 }}
-              />
-            )}
-            {/* Wrap to 2 lines (break-words) instead of a hard truncate so a
-                full Google name like "Marin Boskovic" shows in the narrow
-                podium cell rather than clipping to "Marin Bos…". */}
-            <span
-              title={entry.username}
-              className={clsx(
-                'font-display font-bold leading-tight break-words line-clamp-2',
-                place === 1 ? 'text-xs' : 'text-[11px]',
-              )}
-              style={{
-                color: lost ? 'var(--text-secondary)' : 'var(--text-primary)',
-              }}
-            >
-              {entry.username}
-            </span>
-          </div>
-          {isMe && (
-            <span className="text-[9px] font-sans" style={{ color: 'var(--text-tertiary)' }}>
-              (you)
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-end gap-2">
-          <GuessDots num={entry.num_guesses} status={entry.status} size={place === 1 ? 'md' : 'sm'} />
-          {entry.patterns && entry.patterns.length > 0 && (
-            <PatternGrid patterns={entry.patterns} size={place === 1 ? 6 : 5} />
-          )}
-        </div>
-
-        {entry.accuracy_score !== null && <AccuracyPill pct={entry.accuracy_score} />}
-      </div>
-    </motion.div>
-  );
-}
-
-function Podium({
-  entries,
-  myUsername,
-}: {
-  entries: ChallengeResult[];
-  myUsername: string | null;
-}) {
-  const top3 = entries.slice(0, 3);
-  if (top3.length === 0) return null;
-
-  // Build a fixed 3-column layout: [2nd-slot, 1st-slot, 3rd-slot]. The
-  // 1st-place card always lives in the middle column, even when there
-  // are only 1 or 2 entries — empty side columns just hold a sized
-  // placeholder so the centre tile stays centred.
-  const layout: ({ entry: ChallengeResult; place: 1 | 2 | 3 } | null)[] = [
-    top3[1] ? { entry: top3[1], place: 2 } : null,
-    top3[0] ? { entry: top3[0], place: 1 } : null,
-    top3[2] ? { entry: top3[2], place: 3 } : null,
-  ];
-
-  return (
-    <div
-      className="rounded-card-lg p-3"
-      style={{
-        backgroundColor: 'var(--bg-elevated)',
-        border: '1px solid var(--border-subtle)',
-      }}
-    >
-      <div className="grid grid-cols-3 gap-2 items-end">
-        {layout.map((cell, idx) => {
-          if (!cell) {
-            // Placeholder height matches the slot's intrinsic height
-            // (left=144 for 2nd, center=176 for 1st, right=112 for 3rd)
-            // so the alignment of any filled cells stays correct.
-            const phHeight = idx === 0 ? 144 : idx === 1 ? 176 : 112;
-            return <div key={`ph-${idx}`} style={{ height: phHeight }} aria-hidden="true" />;
-          }
-          return (
-            <PodiumCell
-              key={`${cell.entry.username}-${cell.entry.rank}`}
-              entry={cell.entry}
-              place={cell.place}
-              isMe={cell.entry.is_me ?? cell.entry.username === myUsername}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Rows 4+                                                            */
-/* ------------------------------------------------------------------ */
-
-function LeaderboardRow({
-  entry,
-  isMe,
-  index,
-}: {
-  entry: ChallengeResult;
-  isMe: boolean;
-  index: number;
-}) {
-  const lost = entry.status === 'lost';
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: lost ? 0.85 : 1, y: 0 }}
-      transition={{ delay: 0.3 + index * 0.05, ...springs.snappy }}
-      className="flex items-center gap-3 px-4 py-2.5"
-      style={{
-        backgroundColor: isMe
-          ? 'color-mix(in srgb, var(--tile-correct) 6%, transparent)'
-          : 'transparent',
-        borderLeft: isMe ? '2px solid var(--tile-correct)' : '2px solid transparent',
-      }}
-      aria-label={lost ? `${entry.username} did not solve the puzzle` : undefined}
-    >
-      <span
-        className="font-mono font-bold text-xs w-5 text-right shrink-0 tabular-nums"
-        style={{ color: 'var(--text-tertiary)' }}
-      >
-        {entry.rank ?? '—'}
-      </span>
-
-      <div className="flex items-center gap-1 min-w-0 flex-1">
-        {entry.is_creator && (
-          <Crown
-            size={10}
-            style={{ color: 'var(--gold)', flexShrink: 0 }}
-            aria-label="Challenge creator"
-          />
-        )}
-        <span
-          title={entry.username}
-          className="text-sm truncate"
-          style={{
-            color: lost ? 'var(--text-secondary)' : 'var(--text-primary)',
-            fontWeight: isMe ? 600 : 500,
-          }}
-        >
-          {entry.username}
-        </span>
-        {isMe && (
-          <span className="text-[10px] font-sans shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-            (you)
-          </span>
-        )}
-      </div>
-
-      {entry.patterns && entry.patterns.length > 0 && (
-        <div className="shrink-0 hidden sm:block">
-          <PatternGrid patterns={entry.patterns} size={5} />
-        </div>
-      )}
-
-      <div className="shrink-0">
-        <GuessDots num={entry.num_guesses} status={entry.status} size="sm" />
-      </div>
-
-      <div className="shrink-0">
-        <AccuracyBar pct={entry.accuracy_score} />
-      </div>
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Loading / error                                                    */
+/*  Loading                                                            */
 /* ------------------------------------------------------------------ */
 
 function LoadingSpinner() {
   return (
-    <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
+    <div className="flex items-center justify-center min-h-page">
       <TileSpinner size="lg" label="Loading challenge" />
     </div>
   );
@@ -553,27 +170,21 @@ export default function ChallengePage() {
 
   if (error && !challenge) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-52px)] px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={springs.slide}
-          className="text-center"
-        >
-          <div className="w-16 h-16 rounded-card-lg bg-bg-elevated border border-border-subtle flex items-center justify-center mx-auto mb-5">
-            <Swords size={28} className="text-text-secondary" />
+      <div className="min-h-page flex items-center">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end">
+            <section className="md:col-span-8 bg-bg-ink text-text-on-ink p-6 md:p-12 flex flex-col gap-6">
+              <Label className="text-text-on-ink opacity-70">challenge · {code}</Label>
+              <h1 className="font-display text-display-lg text-balance">Challenge not found.</h1>
+              <p className="text-base opacity-80 max-w-md">{error}</p>
+            </section>
+            <div className="md:col-span-4">
+              <ButtonLink href="/play" size="lg" className="w-full">
+                Play a game
+              </ButtonLink>
+            </div>
           </div>
-          <h1 className="font-display font-bold text-xl text-text-primary mb-2">
-            Challenge not found
-          </h1>
-          <p className="font-sans text-text-secondary text-sm mb-6">{error}</p>
-          <button
-            onClick={() => router.push('/play')}
-            className="px-5 py-2.5 rounded-card bg-tile-correct text-white font-bold uppercase tracking-wider text-sm hover:brightness-110 transition-[filter,transform] active:scale-[0.98]"
-          >
-            Play a Game
-          </button>
-        </motion.div>
+        </div>
       </div>
     );
   }
@@ -584,314 +195,215 @@ export default function ChallengePage() {
   const iAmInProgress = myStatus === 'in_progress' && !!myGameId;
   const iAmFinished = myStatus === 'won' || myStatus === 'lost' || myStatus === 'abandoned';
   const showLeaderboard = hasResults && !!challenge?.already_played;
-  const remainingRows = finishedResults.slice(3);
   const myUsername = user?.username ?? null;
   const creatorHandle = challenge?.creator_username ? `@${challenge.creator_username}` : null;
 
+  const headline = iAmFinished
+    ? 'Results'
+    : iAmInProgress
+    ? 'Your attempt is waiting'
+    : challenge?.is_creator
+    ? 'Your challenge'
+    : 'You have been challenged';
+
+  const eyebrow = creatorHandle && !challenge?.is_creator ? `challenge from ${creatorHandle}` : `challenge · ${code}`;
+
   return (
-    <div className="flex flex-col items-center min-h-[calc(100dvh-52px)] px-4 py-8">
-      <motion.div
-        className="w-full max-w-md flex flex-col gap-4"
-        initial="hidden"
-        animate="visible"
-        variants={{
-          hidden: {},
-          visible: { transition: stagger.medium },
-        }}
-      >
-        {/* ── Hero — slim header card ─────────────────────────────────── */}
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 12 },
-            visible: { opacity: 1, y: 0, transition: springs.slide },
-          }}
-          className="rounded-card-lg overflow-hidden"
-          style={{
-            backgroundColor: 'var(--bg-base)',
-            border: '1px solid var(--border-default)',
-            borderLeft: '3px solid var(--tile-correct)',
-          }}
-        >
-          <div className="p-5 flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p
-                  className="font-sans text-[10px] uppercase tracking-[0.1em]"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  Challenge · {code}
-                </p>
-                <h1
-                  className="font-display font-black tracking-tight mt-0.5"
-                  style={{
-                    fontSize: '1.5rem',
-                    color: 'var(--text-primary)',
-                    lineHeight: 1.1,
-                  }}
-                >
-                  {iAmFinished
-                    ? 'Results'
-                    : iAmInProgress
-                    ? 'Your attempt is waiting'
-                    : challenge?.is_creator
-                    ? 'Your challenge'
-                    : "You've been challenged"}
-                </h1>
-                {creatorHandle && !challenge?.is_creator && (
-                  <p className="font-sans text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                    Challenge from{' '}
-                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {creatorHandle}
-                    </span>
-                  </p>
-                )}
-              </div>
-              {challengeWord && (
-                <span
-                  className="text-[11px] px-2.5 py-1 rounded-pill font-mono uppercase tracking-widest border shrink-0"
-                  style={{
-                    color: 'var(--tile-correct)',
-                    backgroundColor: 'color-mix(in srgb, var(--tile-correct) 12%, transparent)',
-                    borderColor: 'color-mix(in srgb, var(--tile-correct) 30%, transparent)',
-                  }}
-                >
-                  {challengeWord}
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              {challenge?.word_difficulty != null && (
-                <span
-                  className="text-[10px] px-2 py-0.5 rounded-pill border font-mono tabular-nums"
-                  style={{
-                    color: 'var(--cls-blue)',
-                    backgroundColor: 'color-mix(in srgb, var(--cls-blue) 12%, transparent)',
-                    borderColor: 'color-mix(in srgb, var(--cls-blue) 30%, transparent)',
-                  }}
-                >
-                  Word ELO {Math.round(challenge.word_difficulty)}
-                </span>
-              )}
-              {/* Player count is hidden until the user has played, so the
-                  hero card doesn't pre-leak engagement metadata to a fresh
-                  visitor — mirrors the spoiler-protection on the leaderboard. */}
-              {results.length > 0 && challenge?.already_played && (
-                <span
-                  className="text-[10px] px-2 py-0.5 rounded-pill border flex items-center gap-1"
-                  style={{
-                    color: 'var(--text-secondary)',
-                    backgroundColor: 'var(--bg-elevated)',
-                    borderColor: 'var(--border-subtle)',
-                  }}
-                >
-                  <Users size={9} />
-                  {results.length} {results.length === 1 ? 'player' : 'players'}
-                </span>
-              )}
-              {inProgressResults.length > 0 && challenge?.already_played && (
-                <span
-                  className="text-[10px] px-2 py-0.5 rounded-pill border"
-                  style={{
-                    color: 'var(--text-secondary)',
-                    backgroundColor: 'var(--bg-elevated)',
-                    borderColor: 'var(--border-subtle)',
-                  }}
-                >
-                  {inProgressResults.length} still playing
-                </span>
-              )}
-            </div>
-
-            {challenge?.already_played && !challengeWord && (
-              <p
-                className="flex items-center gap-1.5 text-[11px] font-sans"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                <Lock size={11} />
-                Finish your attempt to reveal the word
-              </p>
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col gap-12 md:gap-16">
+      {/* ── Hero: 7/5 split — statement left, action + word right ── */}
+      <header className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-end">
+        <div className="md:col-span-7">
+          <Label className="block mb-2">{eyebrow}</Label>
+          <SplitWords text={headline} as="h1" className="font-display text-display-lg text-text-primary" />
+          <div className="flex items-center gap-2 flex-wrap mt-5">
+            {challenge?.word_difficulty != null && (
+              <Tag>word elo {Math.round(challenge.word_difficulty)}</Tag>
             )}
-
-            {iAmInProgress ? (
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleResume}
-                className="w-full py-3 rounded-card text-white font-bold text-sm tracking-wide hover:brightness-110 transition-[filter,transform] flex items-center justify-center gap-2"
-                style={{ backgroundColor: 'var(--tile-correct)' }}
-              >
-                <Play size={16} />
-                Resume
-              </motion.button>
-            ) : !challenge?.already_played ? (
-              <motion.button
-                whileHover={{ scale: starting ? 1 : 1.02 }}
-                whileTap={{ scale: starting ? 1 : 0.98 }}
-                onClick={handlePlay}
-                disabled={starting}
-                className="w-full py-3 rounded-card disabled:opacity-60 text-white font-bold text-sm tracking-wide hover:brightness-110 transition-[filter,transform] flex items-center justify-center gap-2"
-                style={{ backgroundColor: 'var(--tile-correct)' }}
-              >
-                {starting ? (
-                  <div className="w-5 h-5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                ) : (
-                  <>
-                    <Swords size={16} />
-                    Accept challenge
-                  </>
-                )}
-              </motion.button>
-            ) : (
-              myGameId && (
-                <button
-                  onClick={() => router.push(`/review/${myGameId}`)}
-                  className="w-full py-2.5 rounded-card text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-                  style={{
-                    backgroundColor: 'var(--bg-elevated)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  <ExternalLink size={14} />
-                  Review your game
-                </button>
-              )
+            {/* Player count is hidden until the user has played, so the hero
+                doesn't pre-leak engagement metadata to a fresh visitor. */}
+            {results.length > 0 && challenge?.already_played && (
+              <Tag>
+                {results.length} {results.length === 1 ? 'player' : 'players'}
+              </Tag>
+            )}
+            {inProgressResults.length > 0 && challenge?.already_played && (
+              <Tag tone="ochre" dot="var(--accent)">
+                {inProgressResults.length} still playing
+              </Tag>
             )}
           </div>
-        </motion.div>
+        </div>
 
-        <AnimatePresence>
-          {error && challenge && (
-            <motion.p
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="text-sm rounded-card px-4 py-2 text-center"
-              style={{
-                color: 'var(--red)',
-                backgroundColor: 'rgba(231,76,60,0.08)',
-                border: '1px solid rgba(231,76,60,0.18)',
-              }}
-            >
-              {error}
-            </motion.p>
+        <div className="md:col-span-5 flex flex-col gap-4">
+          {iAmInProgress ? (
+            <Button size="lg" className="w-full" onClick={handleResume}>
+              Resume
+            </Button>
+          ) : !challenge?.already_played ? (
+            <Button size="lg" className="w-full" onClick={handlePlay} loading={starting}>
+              {starting ? 'Starting…' : 'Accept challenge'}
+            </Button>
+          ) : (
+            myGameId && (
+              <ButtonLink href={`/review/${myGameId}`} variant="secondary" size="lg" className="w-full">
+                Review your game
+              </ButtonLink>
+            )
           )}
-        </AnimatePresence>
 
-        {/* ── Podium + rest of leaderboard ──────────────────────────── */}
-        {showLeaderboard && (
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 12 },
-              visible: { opacity: 1, y: 0, transition: springs.slide },
-            }}
-            className="flex flex-col gap-2"
-          >
-            <Podium entries={finishedResults} myUsername={myUsername} />
+          {challenge?.already_played && !challengeWord && (
+            <p className="flex items-center gap-2 text-sm text-text-secondary">
+              <Lock size={13} aria-hidden="true" />
+              Finish your attempt to reveal the word
+            </p>
+          )}
 
-            {remainingRows.length > 0 && (
-              <div
-                className="rounded-card-lg overflow-hidden"
-                style={{
-                  backgroundColor: 'var(--bg-base)',
-                  border: '1px solid var(--border-default)',
-                }}
+          <AnimatePresence>
+            {error && challenge && (
+              <motion.p
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-start gap-2 text-sm text-accent"
+                role="alert"
               >
-                <div
-                  className="flex items-center gap-2 px-4 pt-3 pb-2"
-                  style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                >
-                  <Trophy size={11} style={{ color: 'var(--gold)' }} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider font-display"
-                        style={{ color: 'var(--text-secondary)' }}>
-                    Standings
-                  </span>
-                  <span className="ml-auto text-[10px] tabular-nums"
-                        style={{ color: 'var(--text-tertiary)' }}>
-                    {remainingRows.length} more
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  {remainingRows.map((entry, idx) => (
-                    <div
-                      key={`${entry.username}-${entry.rank}`}
-                      style={
-                        idx > 0
-                          ? { borderTop: '1px solid var(--border-subtle)' }
-                          : undefined
-                      }
-                    >
-                      <LeaderboardRow
-                        entry={entry}
-                        isMe={entry.is_me ?? entry.username === myUsername}
-                        index={idx}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+                <AlertCircle size={15} className="shrink-0 mt-0.5" aria-hidden="true" />
+                <span>{error}</span>
+              </motion.p>
             )}
-          </motion.div>
-        )}
+          </AnimatePresence>
+        </div>
+      </header>
 
-        {/* ── Share ────────────────────────────────────────────────── */}
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 12 },
-            visible: { opacity: 1, y: 0, transition: springs.slide },
-          }}
-          className="rounded-card-lg p-3.5"
-          style={{
-            backgroundColor: 'var(--bg-base)',
-            border: '1px solid var(--border-subtle)',
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2.5">
-            <Share2 size={12} style={{ color: 'var(--text-secondary)' }} />
-            <span className="text-[10px] font-bold uppercase tracking-wider font-display"
-                  style={{ color: 'var(--text-secondary)' }}>
-              Share Challenge
+      {/* ── The word — the one ink block on the page ───────────── */}
+      {challengeWord && (
+        <Reveal as="section" className="bg-bg-ink text-text-on-ink p-6 md:p-10 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          <div className="md:col-span-5">
+            <Label className="text-text-on-ink opacity-70 block mb-3">the word</Label>
+            <MiniTiles
+              word={challengeWord.toUpperCase()}
+              states={Array(challengeWord.length).fill('correct')}
+              size={52}
+              gap={6}
+            />
+          </div>
+          <p className="md:col-span-7 text-base opacity-80 max-w-md">
+            {iAmFinished
+              ? myStatus === 'won'
+                ? 'You found it. The table below shows how everyone else fared.'
+                : 'This was the answer. The table below shows how everyone else fared.'
+              : 'Revealed because your attempt is complete.'}
+          </p>
+        </Reveal>
+      )}
+
+      {/* ── Results table ──────────────────────────────────────── */}
+      {showLeaderboard && (
+        <Reveal as="section" delay={0.05}>
+          <div className="rule-top pt-3 flex items-end justify-between gap-4 mb-2">
+            <div>
+              <Label className="block mb-1">standings</Label>
+              <h2 className="font-display text-display-md text-text-primary">Results</h2>
+            </div>
+            <span className="font-mono text-xs text-text-secondary tabular">
+              {finishedResults.length} finished
             </span>
           </div>
 
-          <div className="flex gap-2">
-            <div
-              className="flex-1 min-w-0 py-2 px-3 rounded-md text-xs font-mono truncate"
-              style={{
-                backgroundColor: 'var(--bg-elevated)',
-                border: '1px solid var(--border-subtle)',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {shareUrl}
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleCopyLink}
-              className="shrink-0 px-3 py-2 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5"
-              style={{
-                backgroundColor: 'var(--bg-elevated)',
-                border: '1px solid var(--border-default)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              {copied ? (
-                <>
-                  <Check size={13} style={{ color: 'var(--tile-correct)' }} />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Share2 size={13} />
-                  Copy
-                </>
-              )}
-            </motion.button>
+          <motion.table
+            className="w-full text-sm"
+            variants={staggerParent}
+            initial="hidden"
+            animate="show"
+          >
+            <thead>
+              <tr className="rule-top">
+                <th className="py-2 pr-3 text-left font-normal w-12"><Label>#</Label></th>
+                <th className="py-2 pr-3 text-left font-normal"><Label>player</Label></th>
+                <th className="py-2 pr-3 text-left font-normal hidden sm:table-cell"><Label>pattern</Label></th>
+                <th className="py-2 pr-3 text-right font-normal"><Label>guesses</Label></th>
+                <th className="py-2 text-right font-normal"><Label>accuracy</Label></th>
+              </tr>
+            </thead>
+            <tbody>
+              {finishedResults.map((entry) => {
+                const isMe = entry.is_me ?? entry.username === myUsername;
+                const lost = entry.status === 'lost';
+                return (
+                  <motion.tr
+                    key={`${entry.username}-${entry.rank}`}
+                    variants={staggerChild}
+                    className={clsx(
+                      'border-b border-border-subtle hover:bg-bg-elevated transition-colors align-middle',
+                      isMe && 'bg-bg-elevated'
+                    )}
+                    style={isMe ? { boxShadow: 'inset 3px 0 0 0 var(--accent)' } : undefined}
+                    aria-label={lost ? `${entry.username} did not solve the puzzle` : undefined}
+                  >
+                    <td className={clsx('py-3 pr-3 font-display font-black text-display-sm tabular', lost ? 'text-text-tertiary' : 'text-text-primary', isMe && 'pl-3')}>
+                      {entry.rank ?? '—'}
+                    </td>
+                    <td className="py-3 pr-3">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className={clsx('font-display font-bold truncate', lost ? 'text-text-secondary' : 'text-text-primary')} title={entry.username}>
+                          {entry.username}
+                        </span>
+                        {isMe && <Tag tone="ink">you</Tag>}
+                        {entry.is_creator && <Tag>creator</Tag>}
+                      </div>
+                      {entry.patterns && entry.patterns.length > 0 && (
+                        <div className="sm:hidden mt-2">
+                          <PatternGrid patterns={entry.patterns} size={6} />
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 pr-3 hidden sm:table-cell">
+                      {entry.patterns && entry.patterns.length > 0 ? (
+                        <PatternGrid patterns={entry.patterns} />
+                      ) : (
+                        <span className="font-mono text-xs text-text-tertiary">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-3 text-right font-mono tabular text-text-primary">
+                      {lost ? <span className="text-text-tertiary">X/6</span> : `${entry.num_guesses}/6`}
+                    </td>
+                    <td className="py-3 text-right font-mono tabular text-text-secondary">
+                      {entry.accuracy_score !== null ? `${Math.round(entry.accuracy_score)}%` : '—'}
+                    </td>
+                  </motion.tr>
+                );
+              })}
+            </tbody>
+          </motion.table>
+        </Reveal>
+      )}
+
+      {/* ── Share ──────────────────────────────────────────────── */}
+      <Reveal as="section" delay={0.1} className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-12 rule-top pt-6">
+        <div className="md:col-span-4">
+          <Label className="block mb-1">share</Label>
+          <h2 className="font-display text-display-sm text-text-primary">Send this link</h2>
+          <p className="text-sm text-text-secondary mt-1">Anyone with the link can play the same word.</p>
+        </div>
+        <div className="md:col-span-8 flex flex-col sm:flex-row gap-3 sm:items-end">
+          <div className="flex-1 min-w-0 border-b-2 border-border-default py-3 font-mono text-sm text-text-secondary truncate" aria-label="Share URL">
+            {shareUrl}
           </div>
-        </motion.div>
-      </motion.div>
+          <Button type="button" variant="secondary" onClick={handleCopyLink} className="shrink-0">
+            {copied ? (
+              <>
+                <Check size={14} aria-hidden="true" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy size={14} aria-hidden="true" />
+                Copy
+              </>
+            )}
+          </Button>
+        </div>
+      </Reveal>
     </div>
   );
 }

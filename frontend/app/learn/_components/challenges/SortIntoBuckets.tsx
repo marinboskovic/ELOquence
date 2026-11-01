@@ -62,7 +62,7 @@ export default function SortIntoBuckets({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '8px 0' }}>
-      <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.15, textWrap: 'balance' }}>
         {challenge.prompt}
       </p>
 
@@ -75,7 +75,7 @@ export default function SortIntoBuckets({
           gap: 6,
           minHeight: 44,
           padding: '6px 8px',
-          borderRadius: 10,
+          borderRadius: 0,
           border: '1.5px dashed var(--border-default)',
           width: '100%',
           maxWidth: 520,
@@ -120,8 +120,8 @@ export default function SortIntoBuckets({
               disabled={submitted}
               style={{
                 background: 'var(--bg-elevated)',
-                border: `2px solid ${selectedId ? 'var(--cls-blue, #3b82f6)' : 'var(--border-subtle)'}`,
-                borderRadius: 12,
+                border: `2px solid ${selectedId ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+                borderRadius: 0,
                 padding: '10px 12px',
                 cursor: selectedId && !submitted ? 'pointer' : 'default',
                 minHeight: 110,
@@ -166,7 +166,7 @@ export default function SortIntoBuckets({
             onClick={reset}
             style={{
               padding: '8px 16px',
-              borderRadius: 999,
+              borderRadius: 0,
               border: '1px solid var(--border-default)',
               background: 'transparent',
               color: 'var(--text-secondary)',
@@ -185,12 +185,11 @@ export default function SortIntoBuckets({
             disabled={!allAssigned}
             style={{
               padding: '8px 22px',
-              borderRadius: 999,
+              borderRadius: 0,
               border: 'none',
-              background: allAssigned ? 'var(--tile-correct)' : 'var(--bg-muted)',
-              color: allAssigned ? '#fff' : 'var(--text-ghost)',
-              fontSize: 13,
-              fontWeight: 700,
+              background: allAssigned ? 'var(--accent)' : 'var(--bg-muted)',
+              color: allAssigned ? 'var(--accent-ink)' : 'var(--text-ghost)',
+              fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.14em',
               cursor: allAssigned ? 'pointer' : 'not-allowed',
               transition: 'all 200ms ease',
             }}
@@ -241,7 +240,7 @@ function ItemChip({
       whileTap={{ scale: 0.96 }}
       style={{
         padding: '6px 10px',
-        borderRadius: 8,
+        borderRadius: 0,
         border: '1px solid',
         borderColor:
           outcome === 'correct'
@@ -249,18 +248,18 @@ function ItemChip({
             : outcome === 'wrong'
               ? 'var(--cls-red)'
               : selected
-                ? 'var(--cls-blue, #3b82f6)'
+                ? 'var(--border-default)'
                 : 'var(--border-default)',
         background:
           outcome === 'correct'
-            ? 'color-mix(in srgb, var(--tile-correct) 14%, transparent)'
+            ? 'var(--wash-green)'
             : outcome === 'wrong'
-              ? 'color-mix(in srgb, var(--cls-red) 14%, transparent)'
+              ? 'var(--wash-accent)'
               : selected
-                ? 'color-mix(in srgb, var(--cls-blue, #3b82f6) 14%, transparent)'
+                ? 'var(--bg-muted)'
                 : 'var(--bg-base)',
         color: 'var(--text-primary)',
-        fontFamily: 'var(--font-sans)',
+        fontFamily: 'var(--font-display)',
         fontSize: 13,
         fontWeight: 700,
         textTransform: 'uppercase',

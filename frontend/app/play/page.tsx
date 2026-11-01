@@ -3,27 +3,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Sun,
-  Swords,
-  FlaskConical,
-  Flame,
-  Lock,
-  Share2,
-  Check,
-  X,
-  ArrowRight,
-  LogIn,
-  HelpCircle,
-  Beaker,
-} from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, Copy, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { gamesApi, dailyApi, challengesApi, errorMessage } from '@/lib/api';
 import { useSettings } from '@/lib/useSettings';
 import { getRatingTier, patternToTiles, TileState } from '@/lib/types';
-import { springs, stagger } from '@/lib/animations';
-import TileLoader from '@/components/TileLoader';
+import TileSpinner from '@/components/TileSpinner';
 import FirstTimeTutorial from '@/components/FirstTimeTutorial';
+import Dialog from '@/components/Dialog';
+import { Button, Label, SplitWords, Tag, staggerParent, staggerChild } from '@/components/ui';
+import clsx from 'clsx';
 
 /** Returns ms until local midnight (server TZ matches client TZ). */
 function msUntilMidnight(): number {
@@ -47,7 +36,7 @@ function DailyCountdown({ onMidnight }: { onMidnight?: () => void }) {
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${h}h ${m}m ${s}s`);
+      setTimeLeft(`${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`);
     }
     update();
     const interval = setInterval(update, 1000);
@@ -55,44 +44,94 @@ function DailyCountdown({ onMidnight }: { onMidnight?: () => void }) {
   }, [onMidnight]);
 
   return (
-    <span className="text-xs font-mono tabular-nums text-text-secondary">
-      Next puzzle in {timeLeft}
+    <span className="font-mono text-xs tabular text-text-secondary">
+      next in {timeLeft}
     </span>
   );
 }
 
-interface ModeCard {
-  id: string;
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  desc: string;
-  accentColor: string;
-  requiresAuth: boolean;
-  tag?: string;
-}
-
-// Decorative mini wordle tile row — uses CSS vars via inline style
-function MiniTileRow({ pattern }: { pattern: ('correct' | 'present' | 'absent')[] }) {
+/** Today's pattern grid, drawn with the tile vars so themes apply. */
+function MiniPatternGrid({ rows }: { rows: TileState[][] }) {
   return (
-    <div className="flex gap-1">
-      {pattern.map((state, i) => (
-        <div
-          key={i}
-          className="w-6 h-6 rounded-sm"
-          style={{
-            backgroundColor:
-              state === 'correct'
-                ? 'var(--tile-correct)'
-                : state === 'present'
-                ? 'var(--tile-present)'
-                : 'var(--tile-absent)',
-          }}
-        />
+    <div role="img" className="flex flex-col gap-[3px]" aria-label={`Today's game: ${rows.length} ${rows.length === 1 ? 'guess' : 'guesses'}`}>
+      {rows.map((row, i) => (
+        <div key={i} className="flex gap-[3px]">
+          {row.map((state, j) => (
+            <span
+              key={j}
+              className="block w-3.5 h-3.5"
+              style={{ backgroundColor: `var(--tile-${state === 'empty' || state === 'tbd' ? 'absent' : state})` }}
+            />
+          ))}
+        </div>
       ))}
     </div>
   );
 }
+
+function todayLabel(): string {
+  return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).toLowerCase();
+}
+
+/* ── Mode row ─────────────────────────────────────────────────────────────── */
+
+interface ModeRowProps {
+  title: string;
+  copy: string;
+  status: React.ReactNode;
+  tag?: React.ReactNode;
+  extra?: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  locked?: boolean;
+}
+
+function ModeRow({ title, copy, status, tag, extra, onClick, disabled, loading, locked }: ModeRowProps) {
+  return (
+    <motion.li variants={staggerChild} className="rule-hair">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        aria-busy={loading || undefined}
+        className={clsx(
+          'group w-full text-left grid grid-cols-1 md:grid-cols-12 items-center gap-x-6 gap-y-3 py-7 md:py-8',
+          'disabled:cursor-wait',
+          locked && 'opacity-70 hover:opacity-100'
+        )}
+      >
+        {/* Display label */}
+        <div className="md:col-span-5 flex items-center gap-4 min-w-0">
+          <span className="font-display text-display-md text-text-primary transition-transform duration-fast ease-out group-hover:-translate-y-0.5">
+            {title}
+          </span>
+          {tag}
+        </div>
+
+        {/* Copy + extra (pattern grid) */}
+        <div className="md:col-span-4 flex items-center gap-5 min-w-0">
+          {extra}
+          <p className="text-sm text-text-secondary leading-snug">{copy}</p>
+        </div>
+
+        {/* Status + arrow */}
+        <div className="md:col-span-3 flex items-center md:justify-end gap-3 min-w-0">
+          <span className="font-mono text-xs tabular text-text-secondary text-left md:text-right truncate">
+            {loading ? <TileSpinner size="sm" label="Starting" /> : status}
+          </span>
+          <ArrowRight
+            size={18}
+            className="shrink-0 text-text-ghost transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-1"
+            aria-hidden="true"
+          />
+        </div>
+      </button>
+    </motion.li>
+  );
+}
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
 
 export default function PlayPage() {
   const { user, loading, refreshUser } = useAuth();
@@ -151,7 +190,7 @@ export default function PlayPage() {
 
     if (user) {
       // Paint from cache immediately to avoid a flash, then always refresh
-      // from the API so the card reflects the latest move count (e.g.,
+      // from the API so the row reflects the latest move count (e.g.,
       // after a 6th guess submitted from the game page).
       const savedPatterns = localStorage.getItem(`eloquence_daily_patterns_${today}`);
       if (savedPatterns) {
@@ -213,40 +252,6 @@ export default function PlayPage() {
       }
     }
   }, [user, dailyRefreshKey]);
-
-  const modes: ModeCard[] = [
-    {
-      id: 'daily',
-      icon: <Sun size={20} />,
-      title: 'Daily',
-      subtitle: "Today's Puzzle",
-      desc: 'One word per day. Play against the community.',
-      accentColor: 'var(--tile-correct)',
-      requiresAuth: false,
-      tag: user?.current_streak
-        ? `${user.current_streak} day streak`
-        : undefined,
-    },
-    {
-      id: 'competitive',
-      icon: <Swords size={20} />,
-      title: 'Competitive',
-      subtitle: user ? `${Math.round(user.elo_rating)} ELO` : 'Rated',
-      desc: 'Random words from the full pool. ELO stakes.',
-      accentColor: tier?.color || 'var(--text-secondary)',
-      requiresAuth: true,
-      tag: user?.is_placement ? `Placement ${user.games_played}/5` : undefined,
-    },
-    {
-      id: 'practice',
-      icon: <FlaskConical size={20} />,
-      title: 'Practice',
-      subtitle: 'Unrated',
-      desc: 'Hone your skills with no ELO consequences.',
-      accentColor: 'var(--text-secondary)',
-      requiresAuth: true,
-    },
-  ];
 
   const handleModeSelect = async (modeId: string) => {
     if (creating) return;
@@ -351,639 +356,221 @@ export default function PlayPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
-        <TileLoader size={22} />
+      <div className="flex items-center justify-center min-h-page">
+        <TileSpinner size="lg" label="Loading" />
       </div>
     );
   }
+
+  const isDailyLoading = creating === 'daily';
+  const challengeUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}/challenge/${challengeCode}` : `/challenge/${challengeCode}`;
 
   // ── Challenge modal ───────────────────────────────────────────────────────────
   const challengeModal = (
-    <AnimatePresence>
-      {challengeCode && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
-            onClick={() => setChallengeCode(null)}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={springs.modal}
-              className="w-full max-w-sm rounded-card-lg border border-border-default bg-bg-base shadow-modal overflow-hidden"
-            >
-              {/* Wordle-green top rule */}
-              <div className="h-[3px] w-full bg-tile-correct" />
-              <div className="p-6 flex flex-col gap-5">
-                {/* Header */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-card border border-border-subtle bg-bg-elevated flex items-center justify-center">
-                      <Swords size={18} className="text-tile-correct" />
-                    </div>
-                    <div>
-                      <h2 className="text-base font-bold font-display text-text-primary">
-                        Challenge Created!
-                      </h2>
-                      <p className="text-xs mt-0.5 text-text-secondary">
-                        Share the link with a friend
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setChallengeCode(null)}
-                    className="p-1.5 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors"
-                    aria-label="Close challenge modal"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
+    <Dialog open={!!challengeCode} onClose={() => setChallengeCode(null)} title="Challenge created" maxWidth="max-w-md">
+      <div className="px-5 pb-5 pt-2 flex flex-col gap-5">
+        <p className="text-sm text-text-secondary">Share the link. Everyone who plays it gets the same word.</p>
 
-                {/* Share link */}
-                <div className="flex gap-2">
-                  <div className="flex-1 min-w-0 py-2 px-3 rounded-md border border-border-subtle bg-bg-elevated text-xs font-mono text-text-secondary truncate">
-                    {typeof window !== 'undefined'
-                      ? `${window.location.origin}/challenge/${challengeCode}`
-                      : `/challenge/${challengeCode}`}
-                  </div>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleCopyChallengeLink}
-                    className="shrink-0 px-3 py-2 rounded-md border border-border-default bg-bg-elevated text-xs font-medium text-text-primary hover:border-border-strong transition-colors flex items-center gap-1.5"
-                  >
-                    {challengeCopied ? (
-                      <>
-                        <Check size={13} className="text-tile-correct" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Share2 size={13} />
-                        Copy
-                      </>
-                    )}
-                  </motion.button>
-                </div>
-
-                {/* Actions */}
-                <div className="flex flex-col gap-2">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => router.push(`/challenge/${challengeCode}`)}
-                    className="w-full py-2.5 rounded-card bg-tile-correct text-white font-semibold text-sm uppercase tracking-wider hover:brightness-110 transition-[filter,transform] active:scale-[0.98] flex items-center justify-center gap-2"
-                  >
-                    <ArrowRight size={15} />
-                    Play it yourself first
-                  </motion.button>
-                  <button
-                    onClick={() => setChallengeCode(null)}
-                    className="text-xs text-center py-1 text-text-secondary hover:text-text-primary transition-colors"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            </motion.div>
+        <div className="rule-top pt-3">
+          <Label className="block mb-2">link</Label>
+          <div className="flex gap-2">
+            <code className="flex-1 min-w-0 h-11 px-3 flex items-center border border-border-subtle bg-bg-elevated font-mono text-xs text-text-secondary truncate">
+              {challengeUrl}
+            </code>
+            <Button variant="secondary" onClick={handleCopyChallengeLink} aria-label="Copy challenge link">
+              {challengeCopied ? <Check size={13} /> : <Copy size={13} />}
+              {challengeCopied ? 'Copied' : 'Copy'}
+            </Button>
           </div>
-        </>
-      )}
-    </AnimatePresence>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Button size="lg" onClick={() => router.push(`/challenge/${challengeCode}`)} className="w-full">
+            Play it yourself first
+            <ArrowRight size={14} />
+          </Button>
+          <Button variant="ghost" onClick={() => setChallengeCode(null)}>
+            Dismiss
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 
-  // ── GUEST VIEW ────────────────────────────────────────────────────────────────
-  if (!user) {
-    const dailyMode = modes[0];
-    const lockedModes = modes.slice(1);
-    const isDailyLoading = creating === 'daily';
+  // ── Daily row content (shared by guest and user) ───────────────────────────────
+  const dailyStatus = dailyAlreadyPlayed ? (
+    <span className="flex flex-col md:items-end gap-0.5">
+      <DailyCountdown onMidnight={handleMidnight} />
+      <span className="text-text-primary">view your game</span>
+    </span>
+  ) : dailyPatterns ? (
+    <span className="text-text-primary">continue</span>
+  ) : (
+    <span>free · unrated</span>
+  );
 
-    return (
-      <div
-        className="flex flex-col items-center justify-center min-h-[calc(100dvh-52px)] px-4"
-        style={{ paddingTop: '2.5rem', paddingBottom: '5rem' }}
-      >
-        {/* Page header */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className="w-full max-w-md mb-8"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="font-display font-black text-4xl tracking-tight text-text-primary">
-                Play
-              </h1>
-              <p className="font-sans text-base text-text-secondary mt-2">
-                One word per day — or practice anytime.
-              </p>
-            </div>
-            <button
-              onClick={() => setHelpSignal((s) => s + 1)}
-              className="mt-1 inline-flex items-center justify-center w-7 h-7 rounded-full border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-default transition-colors shrink-0"
-              aria-label="How to play"
-              title="How to play"
-            >
-              <HelpCircle size={15} />
-            </button>
-          </div>
-        </motion.div>
+  const dailyTag = user?.current_streak ? (
+    <Tag tone="ochre">{user.current_streak} day streak</Tag>
+  ) : !dailyAlreadyPlayed ? (
+    <Tag>today</Tag>
+  ) : (
+    <Tag tone="green">played</Tag>
+  );
 
-        {/* Error */}
-        <AnimatePresence>
-          {error && (
-            <motion.p
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="mb-6 text-sm rounded-card px-4 py-2 w-full max-w-md"
-              style={{
-                color: 'var(--red)',
-                backgroundColor: 'rgba(231,76,60,0.08)',
-                border: '1px solid rgba(231,76,60,0.18)',
-              }}
-            >
-              {error}
-            </motion.p>
-          )}
-        </AnimatePresence>
-
-        <motion.div
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: {},
-            visible: { transition: stagger.medium },
-          }}
-          className="w-full max-w-md flex flex-col gap-4"
-        >
-          {/* ── Hero daily card ── */}
-          <motion.button
-            variants={{
-              hidden: { opacity: 0, y: 24 },
-              visible: { opacity: 1, y: 0, transition: springs.slide },
-            }}
-            whileHover={isDailyLoading || !!creating ? {} : { y: -1.5 }}
-            whileTap={isDailyLoading || !!creating ? {} : { scale: 0.99 }}
-            onClick={() => handleModeSelect('daily')}
-            disabled={!!creating}
-            className="group relative w-full flex flex-col gap-4 text-left rounded-card-lg border-2 border-border-default bg-bg-base p-6 hover:border-tile-correct transition-colors shadow-card hover:shadow-card-hover cursor-pointer"
-          >
-            {/* Top row: icon + title + free badge */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-card border border-border-subtle bg-bg-elevated flex items-center justify-center text-tile-correct">
-                  {isDailyLoading ? (
-                    <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin border-tile-correct" />
-                  ) : (
-                    <Sun size={20} />
-                  )}
-                </div>
-                <div>
-                  <h2 className="font-display font-bold text-xl text-text-primary leading-tight">
-                    Daily Puzzle
-                  </h2>
-                  <p className="font-sans text-sm text-tile-correct">
-                    Today&apos;s Word
-                  </p>
-                </div>
-              </div>
-
-              {!dailyAlreadyPlayed && (
-                <span className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded-pill font-semibold tracking-wide border border-tile-correct/30 text-tile-correct bg-tile-correct/8">
-                  Free
-                </span>
-              )}
-            </div>
-
-            {/* Mini tile patterns */}
-            {dailyPatterns && (
-              <div className="flex flex-col gap-1.5 py-0.5">
-                {dailyPatterns.map((row, i) => (
-                  <MiniTileRow key={i} pattern={row as ('correct' | 'present' | 'absent')[]} />
-                ))}
-              </div>
-            )}
-
-            {/* Description */}
-            <p className="font-sans text-sm leading-relaxed text-text-secondary">
-              One word per day, shared across the community. No account needed.
-            </p>
-
-            {/* CTA row */}
-            {dailyAlreadyPlayed ? (
-              <div className="flex items-center justify-between">
-                <DailyCountdown onMidnight={handleMidnight} />
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-tile-correct">
-                  View your game
-                  <ArrowRight size={13} />
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-sm font-semibold text-tile-correct">
-                {dailyPatterns ? 'Continue' : 'Play now'}
-                <ArrowRight size={14} />
-              </div>
-            )}
-          </motion.button>
-
-          {/* ── Locked secondary cards ── */}
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 16 },
-              visible: { opacity: 1, y: 0, transition: springs.slide },
-            }}
-            className="grid grid-cols-2 gap-3"
-          >
-            {lockedModes.map((mode) => (
-              <motion.button
-                key={mode.id}
-                whileHover={{ y: -1 }}
-                whileTap={{ scale: 0.99 }}
-                onClick={() => router.push('/login')}
-                className="relative flex flex-col gap-3 p-4 rounded-card-lg border border-border-subtle bg-bg-base text-left transition-colors opacity-50 cursor-pointer"
-              >
-                <div className="flex items-center justify-between">
-                  <div
-                    className="w-9 h-9 rounded-card border border-border-subtle bg-bg-elevated flex items-center justify-center"
-                    style={{ color: mode.accentColor }}
-                  >
-                    {mode.icon}
-                  </div>
-                  <Lock size={12} className="text-text-secondary" />
-                </div>
-
-                <div>
-                  <h3 className="font-display font-bold text-sm text-text-primary">
-                    {mode.title}
-                  </h3>
-                  <p className="font-mono text-[11px] mt-0.5" style={{ color: mode.accentColor }}>
-                    {mode.subtitle}
-                  </p>
-                </div>
-
-                <p className="font-sans text-xs leading-relaxed text-text-secondary">
-                  {mode.desc}
-                </p>
-              </motion.button>
-            ))}
-          </motion.div>
-
-          {/* ── Opener Lab (public tool) ── */}
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 10 },
-              visible: { opacity: 1, y: 0, transition: springs.slide },
-            }}
-          >
-            <Link
-              href="/lab"
-              className="flex items-center gap-3 p-4 rounded-card-lg border border-border-subtle bg-bg-elevated hover:border-border-default hover:bg-bg-base transition-colors group"
-            >
-              <div className="w-9 h-9 rounded-card border border-border-subtle bg-bg-base flex items-center justify-center text-text-secondary shrink-0">
-                <Beaker size={18} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="font-display font-bold text-sm text-text-primary">Opener Lab</h3>
-                <p className="font-sans text-xs text-text-secondary leading-relaxed">
-                  Test any opener — no account needed.
-                </p>
-              </div>
-              <ArrowRight
-                size={14}
-                className="text-text-ghost group-hover:text-text-secondary transition-colors shrink-0"
-              />
-            </Link>
-          </motion.div>
-
-          {/* ── Sign-in nudge ── */}
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 10 },
-              visible: { opacity: 1, y: 0, transition: springs.slide },
-            }}
-            className="flex flex-col items-center gap-3 pt-1"
-          >
-            <p className="text-xs text-center text-text-secondary">
-              Sign in to unlock all modes and track your ELO rating
-            </p>
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => router.push('/login')}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-card bg-tile-correct text-white text-sm font-bold uppercase tracking-wider hover:brightness-110 transition-[filter,transform] active:scale-[0.98]"
-            >
-              <LogIn size={14} />
-              Sign in
-            </motion.button>
-          </motion.div>
-        </motion.div>
-
-        {challengeModal}
-        <FirstTimeTutorial openSignal={helpSignal} />
-      </div>
-    );
-  }
-
-  // ── AUTHENTICATED VIEW ────────────────────────────────────────────────────────
-  const dailyMode = modes[0];
-  const otherModes = modes.slice(1);
-  const isDailyLoading = creating === 'daily';
+  const helpButton = (
+    <Button size="sm" variant="secondary" onClick={() => setHelpSignal((s) => s + 1)} aria-label="How to play" title="How to play">
+      <HelpCircle size={13} />
+      how to play
+    </Button>
+  );
 
   return (
-    <div
-      className="flex flex-col items-center justify-center min-h-[calc(100dvh-52px)] px-4"
-      style={{ paddingTop: '2.5rem', paddingBottom: '5rem' }}
-    >
-      {/* Error */}
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16">
+      {/* ── Head ── */}
+      <header className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-end">
+        <div className="md:col-span-7">
+          <Label className="block mb-3">play · {todayLabel()}</Label>
+          <SplitWords text="Pick a board." as="h1" className="font-display text-display-lg text-text-primary" />
+        </div>
+
+        <div className="md:col-span-5 flex flex-col md:items-end gap-3">
+          {user ? (
+            <>
+              <div className="flex items-baseline gap-3 flex-wrap md:justify-end">
+                <span className="font-display font-black text-display-md tabular text-text-primary">
+                  {Math.round(user.elo_rating)}
+                </span>
+                <Tag tone={user.is_placement ? 'ochre' : 'neutral'} dot={tier?.color}>
+                  {user.is_placement ? `placement ${user.games_played}/5` : tier?.name}
+                </Tag>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="font-mono text-xs text-text-secondary">{user.username}</span>
+                {helpButton}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-base text-text-secondary md:text-right max-w-xs">
+                One word a day for everyone. Sign in for rated games.
+              </p>
+              {helpButton}
+            </>
+          )}
+        </div>
+      </header>
+
+      {/* ── Error ── */}
       <AnimatePresence>
         {error && (
           <motion.p
-            initial={{ opacity: 0, y: -8 }}
+            role="alert"
+            initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="mb-6 text-sm rounded-card px-4 py-2 w-full max-w-md"
-            style={{
-              color: 'var(--red)',
-              backgroundColor: 'rgba(231,76,60,0.08)',
-              border: '1px solid rgba(231,76,60,0.18)',
-            }}
+            className="mt-6 px-4 py-3 bg-wash-accent text-sm text-text-primary border-l-2"
+            style={{ borderColor: 'var(--red)' }}
           >
             {error}
           </motion.p>
         )}
       </AnimatePresence>
 
-      <motion.div
+      {/* ── Modes ── */}
+      <motion.ul
+        variants={staggerParent}
         initial="hidden"
-        animate="visible"
-        variants={{
-          hidden: {},
-          visible: { transition: stagger.medium },
-        }}
-        className="w-full max-w-md flex flex-col gap-4"
+        animate="show"
+        className="mt-10 md:mt-14 rule-top list-none m-0 p-0"
+        aria-label="Game modes"
       >
-        {/* ── Page header + user stats ── */}
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 12 },
-            visible: { opacity: 1, y: 0, transition: springs.slide },
-          }}
-        >
-          <h1 className="font-display font-black text-4xl tracking-tight text-text-primary">
-            Play
-          </h1>
-          <div className="flex items-center gap-3 mt-2 flex-wrap">
-            <span
-              className="font-display font-bold text-2xl tabular-nums"
-              style={{ color: tier?.color }}
-            >
-              {Math.round(user.elo_rating)}
-            </span>
-            <span
-              className="text-xs px-2 py-0.5 rounded-pill font-semibold border"
-              style={{
-                color: tier?.color,
-                backgroundColor: `${tier?.color}18`,
-                borderColor: `${tier?.color}30`,
-              }}
-            >
-              {tier?.name}
-            </span>
-            <span className="text-xs text-text-secondary font-sans">
-              {user.username}
-            </span>
-            {user.current_streak > 0 && (
-              <span
-                className="inline-flex items-center gap-1 text-xs font-semibold"
-                style={{ color: 'var(--yellow)' }}
-              >
-                <Flame size={11} />
-                {user.current_streak}
-              </span>
-            )}
-            <button
-              onClick={() => setHelpSignal((s) => s + 1)}
-              className="ml-auto inline-flex items-center justify-center w-7 h-7 rounded-full border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-default transition-colors shrink-0"
-              aria-label="How to play"
-              title="How to play"
-            >
-              <HelpCircle size={15} />
-            </button>
-          </div>
-        </motion.div>
-
-        {/* ── Hero daily card ── */}
-        <motion.button
-          variants={{
-            hidden: { opacity: 0, y: 24 },
-            visible: { opacity: 1, y: 0, transition: springs.slide },
-          }}
-          whileHover={isDailyLoading || !!creating ? {} : { y: -1.5 }}
-          whileTap={isDailyLoading || !!creating ? {} : { scale: 0.99 }}
+        <ModeRow
+          title="Daily"
+          copy={user ? 'One word per day. Play against the community.' : 'One word per day, shared across the community. No account needed.'}
+          status={dailyStatus}
+          tag={dailyTag}
+          extra={dailyPatterns ? <MiniPatternGrid rows={dailyPatterns} /> : undefined}
           onClick={() => handleModeSelect('daily')}
           disabled={!!creating}
-          className="group relative w-full flex flex-col gap-4 text-left rounded-card-lg border-2 border-border-default bg-bg-base p-6 hover:border-tile-correct transition-colors shadow-card hover:shadow-card-hover cursor-pointer"
-        >
-          {/* Top row: icon + title + streak/free tag */}
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-card border border-border-subtle bg-bg-elevated flex items-center justify-center text-tile-correct">
-                {isDailyLoading ? (
-                  <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin border-tile-correct" />
-                ) : (
-                  <Sun size={20} />
-                )}
-              </div>
-              <div>
-                <h2 className="font-display font-bold text-xl text-text-primary leading-tight">
-                  Daily Puzzle
-                </h2>
-                <p className="font-sans text-sm text-tile-correct">
-                  Today&apos;s Word
-                </p>
-              </div>
-            </div>
+          loading={isDailyLoading}
+        />
 
-            {dailyMode.tag && (
-              <span
-                className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded-pill font-semibold border"
-                style={{
-                  color: 'var(--yellow)',
-                  backgroundColor: 'rgba(201,180,88,0.12)',
-                  borderColor: 'rgba(201,180,88,0.25)',
-                }}
-              >
-                {dailyMode.tag}
-              </span>
-            )}
+        <ModeRow
+          title="Competitive"
+          copy="Random words from the full pool. Every result moves your rating."
+          status={user ? `rated · ±elo` : 'rated · sign in'}
+          tag={user?.is_placement ? <Tag tone="ochre">placement {user.games_played}/5</Tag> : user ? <Tag tone="ink">rated</Tag> : <Tag>locked</Tag>}
+          onClick={() => handleModeSelect('competitive')}
+          disabled={!!creating}
+          loading={creating === 'competitive'}
+          locked={!user}
+        />
 
-            {!dailyMode.tag && !dailyAlreadyPlayed && (
-              <span className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded-pill font-semibold border border-tile-correct/30 text-tile-correct">
-                Free
-              </span>
-            )}
-          </div>
+        <ModeRow
+          title="Practice"
+          copy="The same words, no stakes. Nothing is recorded against your rating."
+          status={user ? 'unrated' : 'unrated · sign in'}
+          tag={!user ? <Tag>locked</Tag> : undefined}
+          onClick={() => handleModeSelect('practice')}
+          disabled={!!creating}
+          loading={creating === 'practice'}
+          locked={!user}
+        />
 
-          {/* Mini tile patterns */}
-          {dailyPatterns && (
-            <div className="flex flex-col gap-1.5 py-0.5">
-              {dailyPatterns.map((row, i) => (
-                <MiniTileRow key={i} pattern={row as ('correct' | 'present' | 'absent')[]} />
-              ))}
-            </div>
-          )}
+        <ModeRow
+          title="Challenge"
+          copy="Pick a word for a friend. Same word, separate boards, one leaderboard."
+          status={user ? 'friends · link' : 'friends · sign in'}
+          tag={!user ? <Tag>locked</Tag> : undefined}
+          onClick={() => (user ? handleCreateChallenge() : router.push('/login'))}
+          disabled={creatingChallenge || !!creating}
+          loading={creatingChallenge}
+          locked={!user}
+        />
 
-          {/* Description */}
-          <p className="font-sans text-sm leading-relaxed text-text-secondary">
-            One word per day. Play against the community.
-          </p>
-
-          {/* CTA row */}
-          {dailyAlreadyPlayed ? (
-            <div className="flex items-center justify-between">
-              <DailyCountdown onMidnight={handleMidnight} />
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-tile-correct">
-                View your game
-                <ArrowRight size={13} />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-sm font-semibold text-tile-correct">
-              Play now
-              <ArrowRight size={14} />
-            </div>
-          )}
-        </motion.button>
-
-        {/* ── Competitive & Practice cards ── */}
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 16 },
-            visible: { opacity: 1, y: 0, transition: springs.slide },
-          }}
-          className="grid grid-cols-2 gap-3"
-        >
-          {otherModes.map((mode) => {
-            const isLoading = creating === mode.id;
-            return (
-              <motion.button
-                key={mode.id}
-                whileHover={isLoading || !!creating ? {} : { y: -1 }}
-                whileTap={isLoading || !!creating ? {} : { scale: 0.99 }}
-                onClick={() => handleModeSelect(mode.id)}
-                disabled={!!creating}
-                className="relative flex flex-col gap-3 p-4 rounded-card-lg border border-border-subtle bg-bg-base text-left transition-colors hover:border-border-default hover:shadow-card cursor-pointer disabled:opacity-60"
-              >
-                {/* Mode tag */}
-                {mode.tag && (
-                  <span
-                    className="absolute top-3 right-3 text-[10px] px-2 py-0.5 rounded-pill font-semibold border"
-                    style={{
-                      color: mode.accentColor,
-                      backgroundColor: `${mode.accentColor}18`,
-                      borderColor: `${mode.accentColor}30`,
-                    }}
-                  >
-                    {mode.tag}
-                  </span>
-                )}
-
-                {/* Icon */}
-                <div
-                  className="w-9 h-9 rounded-card border border-border-subtle bg-bg-elevated flex items-center justify-center"
-                  style={{ color: mode.accentColor }}
-                >
-                  {isLoading ? (
-                    <div
-                      className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-                      style={{
-                        borderColor: `${mode.accentColor}40`,
-                        borderTopColor: mode.accentColor,
-                      }}
-                    />
-                  ) : (
-                    mode.icon
-                  )}
-                </div>
-
-                <div>
-                  <h3 className="font-display font-bold text-sm text-text-primary">
-                    {mode.title}
-                  </h3>
-                  <p className="font-mono text-[11px] mt-0.5" style={{ color: mode.accentColor }}>
-                    {mode.subtitle}
-                  </p>
-                </div>
-
-                <p className="font-sans text-xs leading-relaxed text-text-secondary">
-                  {mode.desc}
-                </p>
-              </motion.button>
-            );
-          })}
-        </motion.div>
-
-        {/* ── Opener Lab (tool, not a mode) ── */}
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 10 },
-            visible: { opacity: 1, y: 0, transition: springs.slide },
-          }}
-        >
+        {/* Opener Lab — a tool, not a mode: a quieter secondary row */}
+        <motion.li variants={staggerChild} className="rule-hair">
           <Link
             href="/lab"
-            className="flex items-center gap-3 p-4 rounded-card-lg border border-border-subtle bg-bg-elevated hover:border-border-default hover:bg-bg-base transition-colors group"
+            className="group grid grid-cols-1 md:grid-cols-12 items-center gap-x-6 gap-y-1 py-5"
           >
-            <div className="w-9 h-9 rounded-card border border-border-subtle bg-bg-base flex items-center justify-center text-text-secondary shrink-0">
-              <Beaker size={18} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-display font-bold text-sm text-text-primary">Opener Lab</h3>
-              <p className="font-sans text-xs text-text-secondary leading-relaxed">
-                Test any opener and explore positions — no stakes.
-              </p>
-            </div>
-            <ArrowRight
-              size={14}
-              className="text-text-ghost group-hover:text-text-secondary transition-colors shrink-0"
-            />
+            <span className="md:col-span-5 flex items-center gap-3">
+              <span className="font-display font-bold text-display-sm text-text-primary transition-transform duration-fast ease-out group-hover:-translate-y-0.5">
+                Opener Lab
+              </span>
+              <Tag>tool</Tag>
+            </span>
+            <span className="md:col-span-4 text-sm text-text-secondary">
+              See how any opener splits the word list. No account needed.
+            </span>
+            <span className="md:col-span-3 flex items-center md:justify-end gap-3 font-mono text-xs text-text-secondary">
+              entropy · bits
+              <ArrowUpRight
+                size={16}
+                className="text-text-ghost transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                aria-hidden="true"
+              />
+            </span>
           </Link>
-        </motion.div>
+        </motion.li>
+        <li className="rule-hair" aria-hidden="true" />
+      </motion.ul>
 
-        {/* ── Challenge a Friend ── */}
-        <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 10 },
-            visible: { opacity: 1, y: 0, transition: springs.slide },
-          }}
-        >
-          <button
-            onClick={handleCreateChallenge}
-            disabled={creatingChallenge || !!creating}
-            className="w-full py-2.5 rounded-card-lg border border-border-subtle bg-bg-base text-sm font-semibold text-text-secondary hover:border-border-default hover:text-text-primary transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {creatingChallenge ? (
-              <>
-                <div className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin border-text-secondary" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Swords size={15} />
-                Challenge a Friend
-              </>
-            )}
-          </button>
-        </motion.div>
-      </motion.div>
+      {/* ── Guest: sign-in nudge ── */}
+      {!user && (
+        <div className="mt-12 md:mt-16 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          <p className="md:col-span-8 font-display text-display-md text-text-primary">
+            Sign in to play rated, keep a streak and review every game.
+          </p>
+          <div className="md:col-span-4 flex md:justify-end">
+            <Button size="lg" onClick={() => router.push('/login')}>
+              Sign in
+              <ArrowRight size={14} />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {challengeModal}
       <FirstTimeTutorial openSignal={helpSignal} />

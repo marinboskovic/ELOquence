@@ -1,10 +1,11 @@
 'use client';
-import { useState, useId } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 
 interface SeriesDef {
   key: string;
   label: string;
+  /** A token: ink (`var(--text-primary)`), a tile var or `var(--accent)`. */
   color: string;
 }
 
@@ -18,30 +19,35 @@ interface Props {
   yLabel?: string;
 }
 
+const MONO = 'var(--font-mono), ui-monospace, monospace';
+
 function formatDateLabel(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Print-style line chart: hair grid, ink/tile/accent strokes, square hover
+ * markers, no area fills or gradients (DESIGN.md §7).
+ */
 export default function TimeSeriesChart({ data, series, height = 220, yLabel }: Props) {
   const [hoverX, setHoverX] = useState<number | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const gradId = useId().replace(/:/g, '');
 
   if (!data || data.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-text-secondary"
+        className="flex items-center justify-center font-mono text-label uppercase text-text-secondary bg-bg-muted"
         style={{ height }}
         role="img"
         aria-label="No data available"
       >
-        No data available
+        no data
       </div>
     );
   }
 
-  const pad = { top: 20, right: 20, bottom: 32, left: yLabel ? 52 : 44 };
+  const pad = { top: 16, right: 12, bottom: 28, left: yLabel ? 52 : 40 };
   const viewW = 600;
   const plotW = viewW - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
@@ -99,191 +105,185 @@ export default function TimeSeriesChart({ data, series, height = 220, yLabel }: 
     setHoverIdx(idx);
   };
 
-  const tooltipW = 140;
-  const tooltipH = 20 + series.length * 16 + 8;
+  const tooltipW = 150;
+  const tooltipH = 22 + series.length * 16 + 10;
   const hovered = hoverIdx !== null ? data[hoverIdx] : null;
-  let tooltipLeft = hoverX !== null ? hoverX - tooltipW / 2 : 0;
-  tooltipLeft = Math.max(pad.left, Math.min(tooltipLeft, viewW - pad.right - tooltipW));
+  let tooltipLeft = hoverX !== null ? hoverX + 10 : 0;
+  if (tooltipLeft + tooltipW > viewW - pad.right) tooltipLeft = (hoverX ?? 0) - tooltipW - 10;
+  tooltipLeft = Math.max(pad.left, tooltipLeft);
   const tooltipTop = pad.top;
 
   return (
-    <svg
-      viewBox={`0 0 ${viewW} ${height}`}
-      className="w-full"
-      role="img"
-      aria-label={`Time series chart${yLabel ? `: ${yLabel}` : ''}`}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => { setHoverX(null); setHoverIdx(null); }}
-    >
-      <defs>
-        {series.map((s, i) => (
-          <linearGradient key={i} id={`ts-grad-${gradId}-${i}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={s.color} stopOpacity="0.12" />
-            <stop offset="100%" stopColor={s.color} stopOpacity="0" />
-          </linearGradient>
-        ))}
-      </defs>
+    <div>
+      <svg
+        viewBox={`0 0 ${viewW} ${height}`}
+        className="w-full"
+        role="img"
+        aria-label={`Time series chart${yLabel ? `: ${yLabel}` : ''}`}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => { setHoverX(null); setHoverIdx(null); }}
+      >
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+          const y = pad.top + plotH * (1 - frac);
+          const val = yMin + (yMax - yMin) * frac;
+          return (
+            <g key={frac}>
+              <line
+                x1={pad.left}
+                y1={y}
+                x2={pad.left + plotW}
+                y2={y}
+                stroke={frac === 0 ? 'var(--border-default)' : 'var(--border-subtle)'}
+                strokeWidth={frac === 0 ? 1.5 : 1}
+              />
+              <text
+                x={pad.left - 6}
+                y={y + 3}
+                fontSize={9}
+                fontFamily={MONO}
+                fill="var(--text-tertiary)"
+                textAnchor="end"
+              >
+                {Number.isInteger(val) ? val : val.toFixed(1)}
+              </text>
+            </g>
+          );
+        })}
 
-      {/* Grid lines */}
-      {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-        const y = pad.top + plotH * (1 - frac);
-        const val = yMin + (yMax - yMin) * frac;
-        return (
-          <g key={frac}>
-            <line
-              x1={pad.left}
-              y1={y}
-              x2={pad.left + plotW}
-              y2={y}
-              stroke="var(--border-subtle)"
-              strokeWidth={1}
-            />
-            <text
-              x={pad.left - 4}
-              y={y + 4}
-              fontSize={9}
-              fontFamily="sans-serif"
-              fill="var(--text-tertiary)"
-              textAnchor="end"
-            >
-              {Number.isInteger(val) ? val : val.toFixed(1)}
-            </text>
-          </g>
-        );
-      })}
+        {/* Y-axis label */}
+        {yLabel && (
+          <text
+            x={8}
+            y={pad.top + plotH / 2}
+            fontSize={9}
+            fontFamily={MONO}
+            fill="var(--text-secondary)"
+            textAnchor="middle"
+            transform={`rotate(-90, 8, ${pad.top + plotH / 2})`}
+            style={{ textTransform: 'uppercase', letterSpacing: '0.14em' }}
+          >
+            {yLabel}
+          </text>
+        )}
 
-      {/* Y-axis label */}
-      {yLabel && (
-        <text
-          x={8}
-          y={pad.top + plotH / 2}
-          fontSize={9}
-          fontFamily="sans-serif"
-          fill="var(--text-secondary)"
-          textAnchor="middle"
-          transform={`rotate(-90, 8, ${pad.top + plotH / 2})`}
-        >
-          {yLabel}
-        </text>
-      )}
-
-      {/* Series paths */}
-      {series.map((s, i) => {
-        const d = buildPath(s.key);
-        if (!d) return null;
-        // Build area path
-        const firstPt = data.findIndex((row) => typeof row[s.key] === 'number');
-        const lastPt = data.length - 1 - [...data].reverse().findIndex((row) => typeof row[s.key] === 'number');
-        const areaClose = ` L ${xScale(lastPt).toFixed(1)},${yScale(yMin).toFixed(1)} L ${xScale(firstPt).toFixed(1)},${yScale(yMin).toFixed(1)} Z`;
-        return (
-          <g key={s.key}>
+        {/* Series paths — strokes only */}
+        {series.map((s, i) => {
+          const d = buildPath(s.key);
+          if (!d) return null;
+          return (
             <motion.path
-              d={d + areaClose}
-              fill={`url(#ts-grad-${gradId}-${i})`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: i * 0.1 }}
-            />
-            <motion.path
+              key={s.key}
               d={d}
               fill="none"
               stroke={s.color}
-              strokeWidth={1.75}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              strokeWidth={i === 0 ? 2 : 1.5}
+              strokeLinecap="square"
+              strokeLinejoin="miter"
               initial={{ pathLength: 0 }}
               animate={{ pathLength: 1 }}
-              transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: i * 0.1 }}
+              transition={{ duration: 0.9, ease: [0.2, 0.8, 0.2, 1], delay: i * 0.08 }}
             />
-          </g>
-        );
-      })}
+          );
+        })}
 
-      {/* X-axis labels */}
-      {xLabelIndices.map((idx) => (
-        <text
-          key={idx}
-          x={xScale(idx)}
-          y={height - 6}
-          fontSize={9}
-          fontFamily="sans-serif"
-          fill="var(--text-secondary)"
-          textAnchor={idx === 0 ? 'start' : idx === data.length - 1 ? 'end' : 'middle'}
-        >
-          {formatDateLabel(data[idx].date)}
-        </text>
-      ))}
-
-      {/* Hover guide */}
-      {hoverX !== null && hoverIdx !== null && hovered && (
-        <>
-          <line
-            x1={hoverX}
-            y1={pad.top}
-            x2={hoverX}
-            y2={pad.top + plotH}
-            stroke="var(--border-default)"
-            strokeWidth={1}
-            strokeDasharray="3 3"
-            pointerEvents="none"
-          />
-          {series.map((s) => {
-            const v = hovered[s.key];
-            if (typeof v !== 'number') return null;
-            return (
-              <circle
-                key={s.key}
-                cx={hoverX}
-                cy={yScale(v)}
-                r={3.5}
-                fill={s.color}
-                stroke="var(--bg-base)"
-                strokeWidth={1.5}
-                pointerEvents="none"
-              />
-            );
-          })}
-          <foreignObject
-            x={tooltipLeft}
-            y={Math.max(pad.top, tooltipTop)}
-            width={tooltipW}
-            height={tooltipH}
-            style={{ overflow: 'visible' }}
+        {/* X-axis labels */}
+        {xLabelIndices.map((idx) => (
+          <text
+            key={idx}
+            x={xScale(idx)}
+            y={height - 8}
+            fontSize={9}
+            fontFamily={MONO}
+            fill="var(--text-secondary)"
+            textAnchor={idx === 0 ? 'start' : idx === data.length - 1 ? 'end' : 'middle'}
           >
-            <div
-              className="rounded-md border border-border-default bg-bg-base shadow-md px-3 py-2 pointer-events-none"
-              style={{ fontSize: 11, lineHeight: 1.5 }}
+            {formatDateLabel(data[idx].date)}
+          </text>
+        ))}
+
+        {/* Hover guide */}
+        {hoverX !== null && hoverIdx !== null && hovered && (
+          <>
+            <line
+              x1={hoverX}
+              y1={pad.top}
+              x2={hoverX}
+              y2={pad.top + plotH}
+              stroke="var(--border-default)"
+              strokeWidth={1}
+              pointerEvents="none"
+            />
+            {series.map((s) => {
+              const v = hovered[s.key];
+              if (typeof v !== 'number') return null;
+              return (
+                <rect
+                  key={s.key}
+                  x={hoverX - 3.5}
+                  y={yScale(v) - 3.5}
+                  width={7}
+                  height={7}
+                  fill={s.color}
+                  stroke="var(--bg-base)"
+                  strokeWidth={1.5}
+                  pointerEvents="none"
+                />
+              );
+            })}
+            <foreignObject
+              x={tooltipLeft}
+              y={Math.max(pad.top, tooltipTop)}
+              width={tooltipW}
+              height={tooltipH}
+              style={{ overflow: 'visible' }}
             >
-              <div className="font-sans text-text-secondary mb-1" style={{ fontSize: 10 }}>
-                {formatDateLabel(hovered.date)}
+              <div
+                className="border-2 border-border-default bg-bg-base shadow-ink-sm px-3 py-2 pointer-events-none"
+                style={{ fontSize: 11, lineHeight: 1.5 }}
+              >
+                <div className="font-mono uppercase tracking-[0.14em] text-text-secondary mb-1" style={{ fontSize: 9 }}>
+                  {formatDateLabel(hovered.date)}
+                </div>
+                {series.map((s) => {
+                  const v = hovered[s.key];
+                  return (
+                    <div key={s.key} className="flex items-center gap-1.5">
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: 7,
+                          height: 7,
+                          backgroundColor: s.color,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span className="font-sans text-text-secondary" style={{ fontSize: 10, flex: 1 }}>
+                        {s.label}
+                      </span>
+                      <span className="font-mono font-semibold text-text-primary tabular" style={{ fontSize: 11 }}>
+                        {typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(1)) : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-              {series.map((s) => {
-                const v = hovered[s.key];
-                return (
-                  <div key={s.key} className="flex items-center gap-1.5">
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        backgroundColor: s.color,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span className="font-sans text-text-secondary" style={{ fontSize: 10, flex: 1 }}>
-                      {s.label}
-                    </span>
-                    <span className="font-mono font-bold text-text-primary tabular-nums" style={{ fontSize: 11 }}>
-                      {typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(1)) : '—'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </foreignObject>
-        </>
+            </foreignObject>
+          </>
+        )}
+      </svg>
+
+      {/* Legend */}
+      {series.length > 1 && (
+        <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+          {series.map((s) => (
+            <li key={s.key} className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-text-secondary">
+              <span style={{ width: 14, height: 2, background: s.color, display: 'inline-block' }} aria-hidden="true" />
+              {s.label}
+            </li>
+          ))}
+        </ul>
       )}
-    </svg>
+    </div>
   );
 }

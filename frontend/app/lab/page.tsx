@@ -1,10 +1,8 @@
 'use client';
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { FlaskConical } from 'lucide-react';
 import TileSpinner from '@/components/TileSpinner';
-import { springs } from '@/lib/animations';
+import { Label, Reveal, SplitWords } from '@/components/ui';
 import clsx from 'clsx';
 import OpenerAnalyser from './_components/OpenerAnalyser';
 import PositionExplorer from './_components/PositionExplorer';
@@ -25,50 +23,53 @@ function LabInner() {
   const active = TABS.find((t) => t.key === tab) ?? TABS[0];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16">
       {/* Title */}
-      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={springs.slide} className="flex items-center gap-3 mb-1">
-        <FlaskConical size={22} className="text-text-ghost shrink-0" aria-hidden="true" />
-        <h1 className="font-display font-black tracking-tight text-4xl text-text-primary">Opener Lab</h1>
-      </motion.div>
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ ...springs.slide, delay: 0.08 }}
-        className="font-sans text-sm text-text-secondary mb-5 max-w-2xl leading-relaxed"
-      >
-        Information theory, interactive. Every guess splits the 2,309 possible answers into feedback buckets — the
-        more evenly, the more bits you earn. This is the same engine that grades your games, opened up so you can poke
-        at it: test any opener, or rebuild a board you played and ask what the best next guess was.
-      </motion.p>
+      <header className="grid md:grid-cols-12 gap-6 md:gap-8 mb-10 md:mb-12">
+        <div className="md:col-span-7">
+          <Label className="block mb-3">lab · information theory</Label>
+          <SplitWords text="Opener Lab" as="h1" className="font-display text-display-lg text-text-primary" />
+        </div>
+        <Reveal delay={0.2} className="md:col-span-5 md:pt-8">
+          <p className="font-sans text-sm md:text-base text-text-secondary leading-relaxed">
+            Every guess splits the 2,309 possible answers into feedback buckets — the more evenly, the more bits you
+            earn. This is the engine that grades your games, opened up: test any opener, or rebuild a board you
+            played and ask what the best next guess was.
+          </p>
+        </Reveal>
+      </header>
 
-      {/* Tabs */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ ...springs.slide, delay: 0.09 }}
-        role="tablist"
-        aria-label="Lab sections"
-        className="flex gap-1 mb-2 border-b border-border-subtle"
-      >
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            role="tab"
-            type="button"
-            aria-selected={tab === t.key}
-            onClick={() => setTab(t.key)}
-            className={clsx(
-              'px-4 py-2 font-sans text-sm font-medium border-b-2 -mb-px transition-colors focus-visible:outline-none focus-visible:ring-2 rounded-t',
-              tab === t.key ? 'border-tile-correct text-text-primary' : 'border-transparent text-text-secondary hover:text-text-primary'
-            )}
-            style={{ outlineColor: 'var(--tile-correct)' }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </motion.div>
-      <p className="font-sans text-xs text-text-ghost mb-6">{active.blurb}</p>
+      {/* Tabs: underline strip */}
+      <Reveal delay={0.1}>
+        <div role="tablist" aria-label="Lab sections" className="rule-top flex gap-6">
+          {TABS.map((t) => {
+            const on = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                type="button"
+                aria-selected={on}
+                onClick={() => setTab(t.key)}
+                className={clsx(
+                  'relative py-3 font-mono text-label uppercase transition-colors duration-fast',
+                  on ? 'text-text-primary' : 'text-text-tertiary hover:text-text-primary'
+                )}
+              >
+                {t.label}
+                <span
+                  aria-hidden="true"
+                  className={clsx(
+                    'absolute left-0 right-0 -top-[2px] h-[2px] bg-accent origin-left transition-transform duration-med ease-ink',
+                    on ? 'scale-x-100' : 'scale-x-0'
+                  )}
+                />
+              </button>
+            );
+          })}
+        </div>
+        <p className="font-sans text-sm text-text-tertiary mt-2 mb-10">{active.blurb}</p>
+      </Reveal>
 
       <div role="tabpanel" key={tab}>
         {tab === 'opener' ? <OpenerAnalyser initialWord={initialWord} /> : <PositionExplorer />}
@@ -81,7 +82,7 @@ export default function LabPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
+        <div className="flex items-center justify-center min-h-page">
           <TileSpinner size="md" label="Loading lab" />
         </div>
       }

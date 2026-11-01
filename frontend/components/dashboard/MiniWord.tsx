@@ -1,13 +1,6 @@
 'use client';
 import { TileState } from '@/lib/types';
-
-const FILL: Record<TileState, string> = {
-  correct: 'var(--tile-correct)',
-  present: 'var(--tile-present)',
-  absent: 'var(--tile-absent)',
-  empty: 'var(--tile-empty-bg)',
-  tbd: 'var(--tile-empty-bg)',
-};
+import { MiniTiles } from '@/components/ui';
 
 interface MiniWordProps {
   word: string;
@@ -17,36 +10,18 @@ interface MiniWordProps {
 }
 
 /**
- * A 5-letter word rendered as a row of mini Wordle tiles (letters included).
- * Used by the dashboard cards for nemesis words and the favourite opener.
+ * A 5-letter word rendered as a row of mini tiles (letters included).
+ * Thin wrapper over the UI kit's `MiniTiles` so the dashboard, profile and
+ * leaderboard share one tile vocabulary.
  */
-export default function MiniWord({ word, states, size = 20 }: MiniWordProps) {
-  const letters = word.toUpperCase().slice(0, 5).split('');
+export default function MiniWord({ word, states, size = 22 }: MiniWordProps) {
+  const upper = word.toUpperCase().slice(0, 5);
+  const mapped = states?.map((s) => (s === 'tbd' ? 'empty' : s)) as
+    | ('correct' | 'present' | 'absent' | 'empty')[]
+    | undefined;
   return (
-    <span
-      className="inline-flex items-center gap-0.5"
-      role="img"
-      aria-label={word.toUpperCase()}
-    >
-      {letters.map((ch, i) => {
-        const state = states?.[i] ?? 'absent';
-        return (
-          <span
-            key={i}
-            aria-hidden="true"
-            className="inline-flex items-center justify-center rounded-sm font-sans font-bold uppercase text-white"
-            style={{
-              width: size,
-              height: size,
-              fontSize: Math.max(9, Math.round(size * 0.55)),
-              backgroundColor: FILL[state],
-              lineHeight: 1,
-            }}
-          >
-            {ch}
-          </span>
-        );
-      })}
+    <span role="img" aria-label={upper} className="inline-flex">
+      <MiniTiles word={upper} states={mapped} size={size} />
     </span>
   );
 }

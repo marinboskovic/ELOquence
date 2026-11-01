@@ -1,13 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import type { Variants } from 'framer-motion';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, CalendarDays, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { leaderboardApi, type SeasonBoard, type SeasonEntry } from '@/lib/api';
 import { getRatingTier } from '@/lib/types';
-import { springs, stagger } from '@/lib/animations';
+import { Button, Label, MiniTiles, Reveal, SplitWords, Tag, staggerChild, staggerParent } from '@/components/ui';
 import clsx from 'clsx';
 
 interface LeaderboardEntry {
@@ -19,124 +18,89 @@ interface LeaderboardEntry {
   wins: number;
 }
 
-// ─── Tier dot ────────────────────────────────────────────────────────────────
+// ─── Small pieces ─────────────────────────────────────────────────────────────
 function TierDot({ elo }: { elo: number }) {
   const tier = getRatingTier(elo);
   return (
     <span
-      className="inline-block w-2 h-2 rounded-full shrink-0"
+      className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
       style={{ backgroundColor: tier.color }}
       aria-label={tier.name}
+      title={tier.name}
     />
   );
 }
 
-// ─── Rank badge — no medal fill, accent border approach ──────────────────────
-// Top 3 use accent color text; rest use muted text
-// Mirrors the Wordle-tile palette used elsewhere in the app:
-// blue = best (#1), green = good (#2), yellow = okay (#3).
-const TOP3_COLORS: Record<number, string> = {
-  1: 'var(--cls-blue)',
-  2: 'var(--tile-correct)',
-  3: 'var(--tile-present)',
-};
-
-function RankBadge({ rank }: { rank: number }) {
+/** Rank numeral: oversized display type for the podium, mono for the rest. */
+function Rank({ rank }: { rank: number | null }) {
+  if (rank == null) return <span className="font-mono text-sm text-text-ghost">—</span>;
   if (rank <= 3) {
     return (
-      <span
-        className="font-display text-sm font-bold w-7 text-right tabular-nums shrink-0"
-        style={{ color: TOP3_COLORS[rank] }}
-        aria-label={`Rank ${rank}`}
-      >
+      <span className="font-display text-display-md text-text-primary tabular leading-none" aria-label={`Rank ${rank}`}>
         {rank}
       </span>
     );
   }
   return (
-    <span
-      className="font-display text-sm font-bold w-7 text-right tabular-nums text-text-ghost shrink-0"
-      aria-label={`Rank ${rank}`}
-    >
-      {rank}
+    <span className="font-mono text-sm tabular text-text-tertiary" aria-label={`Rank ${rank}`}>
+      {String(rank).padStart(2, '0')}
     </span>
   );
 }
 
-// ─── Top-3 podium cards ───────────────────────────────────────────────────────
-function PodiumCard({ entry, isCurrentUser }: { entry: LeaderboardEntry; isCurrentUser: boolean }) {
-  const rank = entry.rank as 1 | 2 | 3;
-  const accentColor = TOP3_COLORS[rank];
-  const winRate =
-    entry.games_played > 0
-      ? Math.round((entry.wins / entry.games_played) * 100)
-      : 0;
+/** Row background: wash for the top three, accent left rule for "you". */
+function rowClass(rank: number | null, isMe: boolean, pinned = false) {
+  return clsx(
+    'border-b border-border-subtle transition-colors duration-fast',
+    rank === 1 && 'bg-wash-green',
+    (rank === 2 || rank === 3) && 'bg-wash-ochre',
+    rank != null && rank > 3 && !isMe && 'hover:bg-bg-elevated',
+    isMe && 'border-l-4 border-l-accent',
+    pinned && 'border-t-2 border-t-border-default'
+  );
+}
 
+function Name({ username, isMe }: { username: string; isMe: boolean }) {
   return (
-    <div
-      className={clsx(
-        'flex flex-col gap-1.5 p-4 rounded-card border transition-colors',
-        rank === 1 ? 'bg-bg-elevated' : 'bg-bg-base'
-      )}
-      style={{
-        borderColor: accentColor,
-        borderLeftWidth: rank === 1 ? '3px' : '1px',
-      }}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <TierDot elo={Math.round(entry.elo_rating)} />
-          <Link
-            href={`/u/${encodeURIComponent(entry.username)}`}
-            title={entry.username}
-            className={clsx(
-              'font-display font-bold text-sm truncate hover:underline',
-              isCurrentUser ? 'text-tile-correct' : 'text-text-primary'
-            )}
-          >
-            {entry.username}
-          </Link>
-          {isCurrentUser && (
-            <span className="font-sans text-[10px] text-text-ghost shrink-0">(you)</span>
-          )}
-        </div>
-        <RankBadge rank={entry.rank} />
-      </div>
-      <div className="flex items-baseline gap-3">
-        <span
-          className="font-display text-2xl font-bold tabular-nums leading-none"
-          style={{ color: accentColor }}
-        >
-          {Math.round(entry.elo_rating)}
-        </span>
-        <span className="font-sans text-xs text-text-ghost tabular-nums">
-          {winRate}% WR
-        </span>
-      </div>
+    <span className="inline-flex items-center gap-2 min-w-0">
+      <Link
+        href={`/u/${encodeURIComponent(username)}`}
+        title={username}
+        className="ink-link font-display font-bold text-base text-text-primary truncate"
+      >
+        {username}
+      </Link>
+      {isMe && <Label className="text-text-tertiary shrink-0">you</Label>}
+    </span>
+  );
+}
+
+function SkeletonRows({ count, cols }: { count: number; cols: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <tr key={i} className="border-b border-border-subtle">
+          <td className="py-3 pl-3 pr-2 w-14"><div className="skeleton bg-bg-muted h-3 w-6" /></td>
+          <td className="py-3 pr-4"><div className="skeleton bg-bg-muted h-4 w-32" /></td>
+          {Array.from({ length: cols - 2 }).map((__, j) => (
+            <td key={j} className="py-3 pr-4"><div className="skeleton bg-bg-muted h-3 w-10 ml-auto" /></td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function EmptyBand({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-bg-ink text-text-on-ink px-6 py-10 md:px-10 md:py-12">
+      <p className="font-display text-display-md max-w-lg">{children}</p>
     </div>
   );
 }
 
-// ─── Skeleton row ─────────────────────────────────────────────────────────────
-function SkeletonRow({ index }: { index: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: index * 0.04, duration: 0.3 }}
-      className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle last:border-0"
-    >
-      <div className="w-7 h-4 rounded bg-bg-muted shrink-0 animate-pulse" />
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full bg-bg-muted animate-pulse" />
-        <div className="h-3.5 w-28 rounded bg-bg-muted animate-pulse" />
-      </div>
-      <div className="h-3.5 w-10 rounded bg-bg-muted animate-pulse ml-auto" />
-      <div className="h-3 w-8 rounded bg-bg-muted animate-pulse" />
-      <div className="h-3 w-7 rounded bg-bg-muted animate-pulse" />
-    </motion.div>
-  );
-}
+const TH = 'py-2 text-left';
+const TH_R = 'py-2 text-right';
 
 // ─── Openers tab ──────────────────────────────────────────────────────────────
 interface OpenerRow {
@@ -166,53 +130,61 @@ function OpenersPanel() {
       .finally(() => setLoading(false));
   }, []);
 
+  const maxPop = Math.max(1, ...rows.map((r) => r.popularity_pct));
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...springs.slide, delay: 0.1 }}
-      className="bg-bg-base border border-border-default rounded-card-lg overflow-hidden"
-    >
-      <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle">
-        <span className="w-7 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">#</span>
-        <span className="flex-1 font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider">Opener</span>
-        <span className="w-14 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Used</span>
-        <span className="w-14 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Solve%</span>
-        <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Avg</span>
-      </div>
-      <div className="overflow-y-auto" style={{ maxHeight: 'max(280px, calc(100dvh - 420px))', scrollbarGutter: 'stable' }}>
-        {loading ? (
-          <div className="py-12 text-center font-sans text-sm text-text-secondary">Loading…</div>
-        ) : rows.length === 0 ? (
-          <div className="py-12 text-center font-sans text-sm text-text-secondary">No completed games yet.</div>
-        ) : (
-          rows.map((r) => (
-            <div
-              key={r.opener}
-              className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-elevated/50 transition-colors"
-            >
-              <span className="w-7 text-right font-display font-bold text-sm tabular-nums shrink-0 text-text-ghost">{r.rank}</span>
-              <span className="flex-1 font-mono text-sm font-semibold text-text-primary tracking-wider">{r.opener}</span>
-              <span className="w-14 text-right font-mono text-xs text-text-secondary tabular-nums shrink-0">{r.popularity_pct}%</span>
-              <span className="w-14 text-right font-mono text-xs text-text-secondary tabular-nums shrink-0">{r.solve_rate}%</span>
-              <span className="w-12 text-right font-mono text-xs text-text-secondary tabular-nums shrink-0">
-                {r.avg_guesses_win != null ? r.avg_guesses_win.toFixed(1) : '—'}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
+    <Reveal>
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="rule-top">
+            <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
+            <th scope="col" className={clsx(TH, 'pr-4')}><Label>opener</Label></th>
+            <th scope="col" className={clsx(TH, 'pr-4 hidden md:table-cell w-[28%]')}><Label>share</Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>used</Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>solve</Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label>avg</Label></th>
+          </tr>
+        </thead>
+        <tbody>
+          {loading ? (
+            <SkeletonRows count={10} cols={6} />
+          ) : rows.length === 0 ? (
+            <tr><td colSpan={6} className="pt-6"><EmptyBand>No completed games yet.</EmptyBand></td></tr>
+          ) : (
+            rows.map((r) => (
+              <tr key={r.opener} className="border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast">
+                <td className="py-3 pl-3 pr-2"><Rank rank={r.rank} /></td>
+                <td className="py-3 pr-4"><MiniTiles word={r.opener.toUpperCase().slice(0, 5)} size={22} /></td>
+                <td className="py-3 pr-4 hidden md:table-cell">
+                  <div className="relative h-4 w-full">
+                    <motion.span
+                      className="absolute left-0 top-1/2 h-0.5 bg-bg-ink"
+                      style={{ marginTop: -1 }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(r.popularity_pct / maxPop) * 100}%` }}
+                      transition={{ duration: 0.48, ease: [0.7, 0, 0.2, 1], delay: Math.min(r.rank * 0.03, 0.4) }}
+                      aria-hidden="true"
+                    />
+                  </div>
+                </td>
+                <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{r.popularity_pct}%</td>
+                <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-primary">{r.solve_rate}%</td>
+                <td className="py-3 pr-3 text-right font-mono text-xs tabular text-text-secondary">
+                  {r.avg_guesses_win != null ? r.avg_guesses_win.toFixed(1) : '—'}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
       {!loading && total > 0 && (
-        <div className="px-4 py-2.5 border-t border-border-subtle">
-          <span className="font-sans text-[11px] text-text-ghost">
-            From {total.toLocaleString()} completed games. Avg = guesses to win when this opener led.
-          </span>
-        </div>
+        <p className="mt-3 font-mono text-label uppercase text-text-tertiary">
+          from {total.toLocaleString()} completed games · avg = guesses to win when this opener led
+        </p>
       )}
-    </motion.div>
+    </Reveal>
   );
 }
-
 
 // ─── Season tab ───────────────────────────────────────────────────────────────
 const MONTH_NAMES = [
@@ -222,69 +194,31 @@ const MONTH_NAMES = [
 
 function EloGain({ gain }: { gain: number }) {
   const rounded = Math.round(gain);
-  const color =
-    rounded > 0 ? 'var(--tile-correct)' : rounded < 0 ? 'var(--red)' : 'var(--text-secondary)';
   const text = rounded > 0 ? `+${rounded}` : rounded < 0 ? `−${Math.abs(rounded)}` : '0';
   return (
-    <span className="font-mono text-sm font-bold tabular-nums" style={{ color }}>
+    <span className={clsx('font-display font-bold text-base tabular', rounded > 0 ? 'text-accent' : rounded < 0 ? 'text-text-tertiary' : 'text-text-secondary')}>
       {text}
     </span>
   );
 }
 
-function SeasonRow({
-  entry,
-  isMe,
-  pinned = false,
-}: {
-  entry: SeasonEntry;
-  isMe: boolean;
-  pinned?: boolean;
-}) {
+function SeasonRow({ entry, isMe, pinned = false }: { entry: SeasonEntry; isMe: boolean; pinned?: boolean }) {
   return (
-    <div
-      className={clsx(
-        'flex items-center gap-3 px-4 py-3 border-b border-border-subtle last:border-0 transition-colors duration-150',
-        isMe ? 'bg-bg-elevated border-l-4 border-l-tile-correct' : 'hover:bg-bg-elevated/50',
-        pinned && 'border-t border-t-border-default'
-      )}
-    >
-      <div className="w-7 flex items-center justify-end shrink-0">
-        {entry.rank != null ? (
-          <RankBadge rank={entry.rank} />
-        ) : (
-          <span className="font-display text-sm font-bold text-text-ghost">—</span>
-        )}
-      </div>
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <TierDot elo={Math.round(entry.elo_rating)} />
-        <Link
-          href={`/u/${encodeURIComponent(entry.username)}`}
-          title={entry.username}
-          className={clsx(
-            'font-sans text-sm font-semibold truncate hover:underline',
-            isMe ? 'text-tile-correct' : 'text-text-primary'
-          )}
-        >
-          {entry.username}
-        </Link>
-        {isMe && (
-          <span className="font-sans text-[10px] text-text-ghost font-normal shrink-0">(you)</span>
-        )}
-      </div>
-      <span className="w-12 text-right shrink-0">
-        <EloGain gain={entry.elo_gain} />
-      </span>
-      <span className="font-mono text-xs text-text-secondary w-12 text-right shrink-0 tabular-nums">
-        {entry.games}
-      </span>
-      <span className="font-mono text-xs text-text-secondary w-10 text-right shrink-0 tabular-nums">
-        {entry.wins}
-      </span>
-      <span className="font-mono text-xs text-text-secondary w-12 text-right shrink-0 tabular-nums hidden sm:inline">
+    <motion.tr variants={staggerChild} className={rowClass(entry.rank, isMe, pinned)}>
+      <td className={clsx('py-3 pr-2 w-14', isMe ? 'pl-2' : 'pl-3')}><Rank rank={entry.rank} /></td>
+      <td className="py-3 pr-4">
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <TierDot elo={Math.round(entry.elo_rating)} />
+          <Name username={entry.username} isMe={isMe} />
+        </span>
+      </td>
+      <td className="py-3 pr-4 text-right"><EloGain gain={entry.elo_gain} /></td>
+      <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.games}</td>
+      <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.wins}</td>
+      <td className="py-3 pr-3 text-right font-mono text-xs tabular text-text-secondary hidden sm:table-cell">
         {entry.peak_elo != null ? Math.round(entry.peak_elo) : '—'}
-      </span>
-    </div>
+      </td>
+    </motion.tr>
   );
 }
 
@@ -343,107 +277,87 @@ function SeasonPanel({ currentUserId }: { currentUserId: string | null }) {
   const me = board?.me ?? null;
   const meInList = !!me && entries.some((e) => e.user_id === me.user_id);
   const showPinnedMe = !!me && !meInList;
-  const title = `${MONTH_NAMES[month - 1]} ${year}`;
-
-  const navBtn =
-    'p-1.5 rounded-md border-2 border-border-default text-text-secondary hover:text-text-primary hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...springs.slide, delay: 0.1 }}
-      className="flex flex-col gap-3"
-    >
-      {/* Season header + month navigation */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <CalendarDays size={14} className="text-text-ghost shrink-0" />
-          <h2 className="font-display font-bold text-base text-text-primary truncate">{title}</h2>
+    <Reveal className="flex flex-col gap-6">
+      {/* Season header */}
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div className="flex items-end gap-4 flex-wrap min-w-0">
+          <h2 className="font-display text-display-md text-text-primary" aria-live="polite">
+            {MONTH_NAMES[month - 1]} <span className="text-text-tertiary">{year}</span>
+          </h2>
           {board && (
-            <span className="font-sans text-xs text-text-secondary whitespace-nowrap hidden sm:inline">
-              {board.season.is_current
-                ? ` · ${board.season.days_left} day${board.season.days_left !== 1 ? 's' : ''} left`
-                : ' · ended'}
-              {' · '}
-              <Users size={10} className="inline -mt-0.5" /> {board.total_players.toLocaleString()} player
-              {board.total_players !== 1 ? 's' : ''}
-            </span>
+            <div className="flex items-center gap-2 pb-1">
+              {board.season.is_current ? (
+                <Tag tone="accent" dot="var(--accent)">
+                  {board.season.days_left} day{board.season.days_left !== 1 ? 's' : ''} left
+                </Tag>
+              ) : (
+                <Tag tone="neutral">ended</Tag>
+              )}
+              <span className="font-mono text-xs tabular text-text-tertiary">
+                {board.total_players.toLocaleString()} player{board.total_players !== 1 ? 's' : ''}
+              </span>
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={prevMonth}
-            className={navBtn}
-            style={{ outlineColor: 'var(--tile-correct)' }}
-            aria-label="Previous month"
-          >
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="secondary" size="sm" onClick={prevMonth} aria-label="Previous month" className="!px-2.5">
             <ChevronLeft size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={nextMonth}
-            disabled={isCurrentMonth}
-            className={navBtn}
-            style={{ outlineColor: 'var(--tile-correct)' }}
-            aria-label="Next month"
-          >
+          </Button>
+          <Button variant="secondary" size="sm" onClick={nextMonth} disabled={isCurrentMonth} aria-label="Next month" className="!px-2.5">
             <ChevronRight size={14} />
-          </button>
+          </Button>
         </div>
       </div>
-      {board && (
-        <p className="font-sans text-xs text-text-secondary -mt-1 sm:hidden">
-          {board.season.is_current
-            ? `${board.season.days_left} day${board.season.days_left !== 1 ? 's' : ''} left`
-            : 'Season ended'}
-          {' · '}
-          {board.total_players.toLocaleString()} player{board.total_players !== 1 ? 's' : ''}
-        </p>
-      )}
 
-      <div className="bg-bg-base border border-border-default rounded-card-lg overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle">
-          <span className="w-7 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">#</span>
-          <span className="flex-1 font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider">Player</span>
-          <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Gained</span>
-          <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Games</span>
-          <span className="w-10 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">Wins</span>
-          <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0 hidden sm:inline">Peak</span>
-        </div>
-        <div className="overflow-y-auto" style={{ maxHeight: 'max(280px, calc(100dvh - 440px))', scrollbarGutter: 'stable' }}>
+      <div>
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="rule-top">
+              <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
+              <th scope="col" className={clsx(TH, 'pr-4')}><Label>player</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label>gained</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>games</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-4 w-14')}><Label>wins</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-3 w-16 hidden sm:table-cell')}><Label>peak</Label></th>
+            </tr>
+          </thead>
           {loading ? (
-            <div>
-              {Array.from({ length: 8 }).map((_, i) => (
-                <SkeletonRow key={i} index={i} />
-              ))}
-            </div>
+            <tbody><SkeletonRows count={8} cols={6} /></tbody>
           ) : error ? (
-            <div className="py-12 text-center font-sans text-sm" style={{ color: 'var(--red)' }}>{error}</div>
+            <tbody>
+              <tr><td colSpan={6} className="pt-6"><EmptyBand>{error}</EmptyBand></td></tr>
+            </tbody>
           ) : entries.length === 0 ? (
-            <div className="py-12 text-center font-sans text-sm text-text-secondary">
-              No rated games this month yet.
-            </div>
+            <tbody>
+              <tr><td colSpan={6} className="pt-6"><EmptyBand>No rated games this month yet.</EmptyBand></td></tr>
+            </tbody>
           ) : (
-            entries.map((e) => (
-              <SeasonRow key={e.user_id} entry={e} isMe={!!currentUserId && e.user_id === currentUserId} />
-            ))
+            <motion.tbody variants={staggerParent} initial="hidden" animate="show" key={`${year}-${month}`}>
+              {entries.map((e) => (
+                <SeasonRow key={e.user_id} entry={e} isMe={!!currentUserId && e.user_id === currentUserId} />
+              ))}
+              {showPinnedMe && me && <SeasonRow entry={me} isMe pinned />}
+            </motion.tbody>
           )}
-        </div>
-        {!loading && showPinnedMe && me && (
-          <SeasonRow entry={me} isMe pinned />
-        )}
+        </table>
+        <p className="mt-3 font-mono text-label uppercase text-text-tertiary">
+          ranked by elo gained from rated games this month · peak = highest rating reached
+        </p>
       </div>
-      <p className="font-sans text-[11px] text-text-ghost px-1">
-        Ranked by ELO gained from rated games played this month. Peak = highest rating reached in the season.
-      </p>
-    </motion.div>
+    </Reveal>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 type LeaderboardTab = 'players' | 'season' | 'openers';
+
+const TABS: { key: LeaderboardTab; label: string; blurb: string }[] = [
+  { key: 'players', label: 'players', blurb: 'Every player, ranked by rating.' },
+  { key: 'season',  label: 'season',  blurb: 'Who climbed the most this month.' },
+  { key: 'openers', label: 'openers', blurb: 'The most-played opening words across all completed games.' },
+];
 
 export default function LeaderboardPage() {
   const { user } = useAuth();
@@ -468,249 +382,112 @@ export default function LeaderboardPage() {
       .finally(() => setLoading(false));
   }, [page, tab]);
 
-  const rowVariants: Variants = {
-    hidden:  { opacity: 0, y: 6 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
-  };
-
-  const containerVariants: Variants = {
-    hidden:  {},
-    visible: { transition: stagger.fast },
-  };
-
-  const topThree = entries.filter((e) => e.rank <= 3);
-  const rest     = entries.filter((e) => e.rank > 3);
-
-  const renderRow = (entry: LeaderboardEntry, isCurrentUser: boolean) => {
-    const winRate =
-      entry.games_played > 0
-        ? Math.round((entry.wins / entry.games_played) * 100)
-        : 0;
-    const tierColor = getRatingTier(entry.elo_rating).color;
-
-    return (
-      <motion.div
-        key={entry.user_id}
-        variants={rowVariants}
-        layout
-        className={clsx(
-          'flex items-center gap-3 px-4 py-3.5 border-b border-border-subtle last:border-0 transition-colors duration-150',
-          isCurrentUser
-            ? 'bg-bg-elevated border-l-4 border-l-tile-correct'
-            : 'hover:bg-bg-elevated/50'
-        )}
-      >
-        {/* Rank */}
-        <div className="w-7 flex items-center justify-end shrink-0">
-          <RankBadge rank={entry.rank} />
-        </div>
-
-        {/* Username + tier dot */}
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <TierDot elo={Math.round(entry.elo_rating)} />
-          <Link
-            href={`/u/${encodeURIComponent(entry.username)}`}
-            title={entry.username}
-            className={clsx(
-              'font-sans text-sm font-semibold truncate hover:underline',
-              isCurrentUser ? 'text-tile-correct' : 'text-text-primary'
-            )}
-          >
-            {entry.username}
-          </Link>
-          {isCurrentUser && (
-            <span className="font-sans text-[10px] text-text-ghost font-normal shrink-0">
-              (you)
-            </span>
-          )}
-        </div>
-
-        {/* ELO */}
-        <span
-          className="font-mono text-sm font-bold w-14 text-right shrink-0 tabular-nums"
-          style={{ color: tierColor }}
-        >
-          {Math.round(entry.elo_rating)}
-        </span>
-
-        {/* Games */}
-        <span className="font-mono text-xs text-text-secondary w-12 text-right shrink-0 tabular-nums">
-          {entry.games_played}
-        </span>
-
-        {/* Win rate */}
-        <span className="font-mono text-xs text-text-secondary w-10 text-right shrink-0 tabular-nums">
-          {winRate}%
-        </span>
-      </motion.div>
-    );
-  };
+  const monthName = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col gap-10 md:gap-12">
 
-      {/* Page title */}
-      <motion.h1
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={springs.slide}
-        className="font-display font-black text-4xl text-text-primary mb-1"
-      >
-        Leaderboard
-      </motion.h1>
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ ...springs.slide, delay: 0.08 }}
-        className="font-sans text-sm text-text-secondary mb-4"
-      >
-        {tab === 'players'
-          ? 'Top players ranked by ELO rating'
-          : tab === 'season'
-          ? 'Who climbed the most this month'
-          : 'Most-played opening words across all completed games'}
-      </motion.p>
+      {/* Title */}
+      <header className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+        <div className="md:col-span-8">
+          <Label className="block mb-3">leaderboard · {monthName}</Label>
+          <SplitWords text="The ladder" as="h1" className="font-display text-display-lg text-text-primary" />
+        </div>
+        <p className="md:col-span-4 text-sm text-text-secondary md:pb-2" aria-live="polite">
+          {TABS.find((t) => t.key === tab)?.blurb}
+        </p>
+      </header>
 
-      {/* Tab switcher */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ ...springs.slide, delay: 0.09 }}
-        className="flex gap-1 mb-5 border-b border-border-subtle"
-      >
-        {(['players', 'season', 'openers'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={clsx(
-              'px-4 py-2 font-sans text-sm font-medium border-b-2 -mb-px transition-colors',
-              tab === t
-                ? 'border-tile-correct text-text-primary'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
-            )}
-          >
-            {t === 'players' ? 'Players' : t === 'season' ? 'Season' : 'Openers'}
-          </button>
-        ))}
-      </motion.div>
+      {/* Tab strip */}
+      <div role="tablist" aria-label="Leaderboard views" className="flex gap-8 border-b border-border-subtle">
+        {TABS.map((t) => {
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              role="tab"
+              type="button"
+              aria-selected={active}
+              onClick={() => setTab(t.key)}
+              className={clsx(
+                'relative pb-3 -mb-px font-mono text-label uppercase transition-colors duration-fast',
+                active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'
+              )}
+            >
+              {t.label}
+              {active && (
+                <motion.span
+                  layoutId="lb-tab-underline"
+                  className="absolute left-0 right-0 bottom-0 h-0.5 bg-accent"
+                  transition={{ duration: 0.26, ease: [0.7, 0, 0.2, 1] }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {tab === 'openers' && <OpenersPanel />}
       {tab === 'season' && <SeasonPanel currentUserId={user?.id ?? null} />}
 
-      {/* Top-3 podium — accent-bordered cards. The grid uses exactly as many
-          columns as there are podium entries (1–3) so a lone #1 or top-2 gets a
-          full-width card; a fixed grid-cols-3 crushed a single long Google name
-          ("First Last") into a third of the row until it truncated to nothing. */}
-      {tab === 'players' && !loading && topThree.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...springs.slide, delay: 0.1 }}
-          className="grid gap-2 mb-4"
-          style={{ gridTemplateColumns: `repeat(${topThree.length}, minmax(0, 1fr))` }}
-        >
-          {topThree.map((entry) => (
-            <PodiumCard
-              key={entry.user_id}
-              entry={entry}
-              isCurrentUser={!!user && entry.user_id === user.id}
-            />
-          ))}
-        </motion.div>
-      )}
+      {tab === 'players' && (
+        <Reveal className="flex flex-col gap-6">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="rule-top">
+                <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
+                <th scope="col" className={clsx(TH, 'pr-4')}><Label>player</Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label>rating</Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>games</Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label>win</Label></th>
+              </tr>
+            </thead>
+            {loading ? (
+              <tbody><SkeletonRows count={10} cols={5} /></tbody>
+            ) : entries.length === 0 ? (
+              <tbody>
+                <tr><td colSpan={5} className="pt-6"><EmptyBand>No players yet. Be the first.</EmptyBand></td></tr>
+              </tbody>
+            ) : (
+              <motion.tbody variants={staggerParent} initial="hidden" animate="show" key={page}>
+                {entries.map((entry) => {
+                  const isMe = !!user && entry.user_id === user.id;
+                  const winRate = entry.games_played > 0 ? Math.round((entry.wins / entry.games_played) * 100) : 0;
+                  return (
+                    <motion.tr key={entry.user_id} variants={staggerChild} className={rowClass(entry.rank, isMe)}>
+                      <td className={clsx('py-3 pr-2 w-14 align-middle', isMe ? 'pl-2' : 'pl-3')}><Rank rank={entry.rank} /></td>
+                      <td className="py-3 pr-4">
+                        <span className="inline-flex items-center gap-2 min-w-0">
+                          <TierDot elo={Math.round(entry.elo_rating)} />
+                          <Name username={entry.username} isMe={isMe} />
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span className="font-display font-bold text-base tabular text-text-primary">{Math.round(entry.elo_rating)}</span>
+                      </td>
+                      <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.games_played}</td>
+                      <td className="py-3 pr-3 text-right font-mono text-xs tabular text-text-secondary">{winRate}%</td>
+                    </motion.tr>
+                  );
+                })}
+              </motion.tbody>
+            )}
+          </table>
 
-      {/* Main list card */}
-      {tab === 'players' && (loading || rest.length > 0 || (page === 1 && !loading && entries.length === 0)) && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ ...springs.slide, delay: 0.14 }}
-          className="bg-bg-base border border-border-default rounded-card-lg overflow-hidden"
-        >
-          {/* Column headers */}
-          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle">
-            <span className="w-7 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">
-              #
-            </span>
-            <span className="flex-1 font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider">
-              Player
-            </span>
-            <span className="w-14 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">
-              ELO
-            </span>
-            <span className="w-12 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">
-              Games
-            </span>
-            <span className="w-10 text-right font-sans text-[10px] font-semibold text-text-ghost uppercase tracking-wider shrink-0">
-              W%
-            </span>
-          </div>
-
-          {/* Body — scrolls inside the card so the page itself doesn't grow */}
-          <div
-            className="overflow-y-auto"
-            style={{
-              maxHeight: 'max(280px, calc(100dvh - 420px))',
-              scrollbarGutter: 'stable',
-            }}
-          >
-          {loading ? (
-            <div>
-              {Array.from({ length: 10 }).map((_, i) => (
-                <SkeletonRow key={i} index={i} />
-              ))}
+          {!loading && (entries.length > 0 || page > 1) && (
+            <div className="flex items-center justify-between gap-3">
+              <Button variant="secondary" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
+                <ChevronLeft size={14} />
+                previous
+              </Button>
+              <span className="font-mono text-label uppercase tabular text-text-secondary">page {page}</span>
+              <Button variant="secondary" size="sm" onClick={() => setPage((p) => p + 1)} disabled={!hasMore}>
+                next
+                <ChevronRight size={14} />
+              </Button>
             </div>
-          ) : rest.length === 0 && page === 1 && entries.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="font-sans text-sm text-text-secondary">No players yet. Be the first!</p>
-            </div>
-          ) : rest.length > 0 ? (
-            <motion.div
-              initial="hidden"
-              animate="visible"
-              variants={containerVariants}
-            >
-              {rest.map((entry) =>
-                renderRow(entry, !!user && entry.user_id === user.id)
-              )}
-            </motion.div>
-          ) : null}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Pagination — ghost buttons matching play-page style */}
-      {tab === 'players' && !loading && (entries.length > 0 || page > 1) && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ ...springs.slide, delay: 0.22 }}
-          className="flex items-center justify-between mt-4 px-1"
-        >
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-card bg-bg-base border border-border-default font-sans text-sm text-text-secondary hover:text-text-primary hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2"
-            style={{ outlineColor: 'var(--tile-correct)' }}
-          >
-            <ChevronLeft size={14} />
-            Previous
-          </button>
-
-          <span className="font-sans text-xs text-text-ghost font-mono tabular-nums">
-            Page {page}
-          </span>
-
-          <button
-            onClick={() => setPage((p) => p + 1)}
-            disabled={!hasMore}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-card bg-bg-base border border-border-default font-sans text-sm text-text-secondary hover:text-text-primary hover:border-border-strong disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2"
-            style={{ outlineColor: 'var(--tile-correct)' }}
-          >
-            Next
-            <ChevronRight size={14} />
-          </button>
-        </motion.div>
+          )}
+        </Reveal>
       )}
     </div>
   );

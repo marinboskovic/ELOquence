@@ -1,10 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Gauge, Zap, Clock, Hash, FlaskConical } from 'lucide-react';
-import { springs } from '@/lib/animations';
 import { Classification } from '@/lib/types';
-import MiniWord from './MiniWord';
+import { Label, MiniTiles, Reveal, Stat } from '@/components/ui';
 
 export interface PaceStats {
   avg_win_seconds: number | null;
@@ -34,8 +32,8 @@ function formatMMSS(seconds: number | null | undefined): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function Shimmer({ className }: { className?: string }) {
-  return <div className={`skeleton rounded-md bg-bg-muted ${className ?? ''}`} />;
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`skeleton bg-bg-muted ${className ?? ''}`} />;
 }
 
 // Three buckets for the mix bar: strong / meh / weak moves.
@@ -47,6 +45,10 @@ function sum(mix: Partial<Record<Classification, number>>, keys: Classification[
   return keys.reduce((acc, k) => acc + (mix[k] ?? 0), 0);
 }
 
+/**
+ * Pace & habits: three <Stat>s (avg win time, fastest win, favourite
+ * opener plays), then the move-quality mix as one thin stacked bar.
+ */
 export default function PaceHabits({
   pace,
   favouriteOpener,
@@ -62,133 +64,93 @@ export default function PaceHabits({
   const pct = (n: number) => (mixTotal > 0 ? (n / mixTotal) * 100 : 0);
 
   const segments = [
-    { label: 'Strong', value: good, color: 'var(--tile-correct)' },
-    { label: 'Okay', value: okay, color: 'var(--tile-present)' },
-    { label: 'Weak', value: bad, color: 'var(--cls-red)' },
+    { label: 'strong', value: good, color: 'var(--tile-correct)' },
+    { label: 'okay', value: okay, color: 'var(--tile-present)' },
+    { label: 'weak', value: bad, color: 'var(--cls-red)' },
   ];
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ ...springs.slide, delay }}
-      className="rounded-card-lg bg-bg-elevated border border-border-subtle p-5"
-      aria-label="Pace and habits"
-    >
-      <div className="flex items-center gap-2 mb-4">
-        <Gauge size={14} className="text-text-ghost" />
-        <span className="font-sans font-semibold text-sm text-text-primary">Pace &amp; Habits</span>
+    <Reveal as="section" delay={delay} aria-label="Pace and habits">
+      <div className="rule-top pt-3">
+        <Label className="block mb-1">pace · habits</Label>
+        <h2 className="font-display text-display-sm text-text-primary">How you play</h2>
       </div>
 
       {loading ? (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Shimmer className="h-14" />
-            <Shimmer className="h-14" />
+        <div className="mt-4 flex flex-col gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <Skeleton className="h-14" />
+            <Skeleton className="h-14" />
+            <Skeleton className="h-14" />
           </div>
-          <Shimmer className="h-10 w-full" />
-          <Shimmer className="h-2 w-full" />
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-1.5 w-full" />
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          {/* Timing */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5 p-3 rounded-card bg-bg-base border border-border-subtle">
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-secondary font-semibold">
-                <Clock size={10} />
-                Avg win time
-              </span>
-              <span className="font-display text-2xl font-black tabular-nums text-text-primary leading-none">
-                {formatMMSS(pace?.avg_win_seconds)}
-              </span>
-              <span className="font-sans text-[10px] text-text-ghost tabular-nums">
-                {pace?.timed_wins ? `${pace.timed_wins} timed win${pace.timed_wins !== 1 ? 's' : ''}` : 'No timed wins yet'}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1.5 p-3 rounded-card bg-bg-base border border-border-subtle min-w-0">
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-secondary font-semibold">
-                <Zap size={10} />
-                Fastest win
-              </span>
-              {pace?.fastest_win ? (
-                <>
-                  <span className="font-display text-2xl font-black tabular-nums text-text-primary leading-none">
-                    {formatMMSS(pace.fastest_win.seconds)}
+        <div className="mt-4 flex flex-col gap-6">
+          {/* Three stats */}
+          <div className="grid grid-cols-3 gap-4">
+            <Stat
+              size="sm"
+              label="avg win"
+              value={formatMMSS(pace?.avg_win_seconds)}
+              sub={pace?.timed_wins ? `${pace.timed_wins} timed win${pace.timed_wins !== 1 ? 's' : ''}` : 'no timed wins yet'}
+            />
+            <Stat
+              size="sm"
+              label="fastest"
+              value={pace?.fastest_win ? formatMMSS(pace.fastest_win.seconds) : '—'}
+              sub={
+                pace?.fastest_win ? (
+                  <span className="font-mono tabular">
+                    {pace.fastest_win.word.toUpperCase()} · {pace.fastest_win.num_guesses}/6
                   </span>
-                  <span className="font-sans text-[10px] text-text-ghost truncate">
-                    <span className="font-mono font-semibold uppercase tracking-wider text-text-secondary">
-                      {pace.fastest_win.word}
-                    </span>
-                    {' · '}
-                    <span className="font-mono tabular-nums">{pace.fastest_win.num_guesses}/6</span>
-                    {' · '}
-                    <span className="capitalize">{pace.fastest_win.mode}</span>
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="font-display text-2xl font-black text-text-primary leading-none">—</span>
-                  <span className="font-sans text-[10px] text-text-ghost">Win a timed game</span>
-                </>
-              )}
-            </div>
+                ) : (
+                  'win a timed game'
+                )
+              }
+            />
+            <Stat
+              size="sm"
+              label="opener plays"
+              value={favouriteOpener ? favouriteOpener.plays : '—'}
+              sub={favouriteOpener ? `${Math.round(favouriteOpener.solve_rate)}% solved` : 'no opener yet'}
+            />
           </div>
 
           {/* Favourite opener */}
-          <div className="flex items-center gap-3 p-3 rounded-card bg-bg-base border border-border-subtle">
-            <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-              <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-text-secondary font-semibold">
-                <Hash size={10} />
-                Favourite opener
-              </span>
-              {favouriteOpener ? (
-                <div className="flex items-center gap-3 flex-wrap">
-                  <MiniWord word={favouriteOpener.word} />
-                  <span className="font-sans text-xs text-text-secondary tabular-nums">
-                    <span className="font-mono font-semibold text-text-primary">{favouriteOpener.plays}</span>{' '}
-                    {favouriteOpener.plays === 1 ? 'play' : 'plays'}
-                    {' · '}
-                    <span className="font-mono font-semibold text-text-primary">
-                      {Math.round(favouriteOpener.solve_rate)}%
-                    </span>{' '}
-                    solved
-                  </span>
-                </div>
-              ) : (
-                <span className="font-sans text-xs text-text-secondary">Finish a game to find your go-to opener.</span>
-              )}
-            </div>
-            {favouriteOpener && (
-              <Link
-                href={`/lab?word=${encodeURIComponent(favouriteOpener.word.toUpperCase())}`}
-                className="inline-flex items-center gap-1 shrink-0 text-[11px] font-semibold text-text-secondary hover:text-text-primary transition-colors rounded px-1.5 py-1 hover:bg-bg-muted"
-                aria-label={`Analyse ${favouriteOpener.word.toUpperCase()} in the Opener Lab`}
-              >
-                <FlaskConical size={11} />
-                <span className="hidden sm:inline">Open in Lab</span>
-                <span className="sm:hidden">Lab</span>
-              </Link>
+          <div className="rule-hair pt-3 flex items-center gap-4 flex-wrap">
+            <Label>favourite opener</Label>
+            {favouriteOpener ? (
+              <>
+                <MiniTiles word={favouriteOpener.word.toUpperCase().slice(0, 5)} size={22} />
+                <Link
+                  href={`/lab?word=${encodeURIComponent(favouriteOpener.word.toUpperCase())}`}
+                  className="ink-link ml-auto font-mono text-label uppercase text-text-primary"
+                  aria-label={`Analyse ${favouriteOpener.word.toUpperCase()} in the Opener Lab`}
+                >
+                  open in lab →
+                </Link>
+              </>
+            ) : (
+              <span className="text-sm text-text-secondary">Finish a game to find your go-to opener.</span>
             )}
           </div>
 
-          {/* Classification mix */}
-          <div className="flex flex-col gap-2">
+          {/* Classification mix — one thin stacked bar */}
+          <div className="rule-hair pt-3 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-semibold">
-                Move quality mix
-              </span>
+              <Label>move quality</Label>
               {mixTotal > 0 && (
-                <span className="font-sans text-[10px] font-mono tabular-nums text-text-ghost">
-                  {mixTotal.toLocaleString()} analysed moves
-                </span>
+                <span className="font-mono text-xs tabular text-text-tertiary">{mixTotal.toLocaleString()} moves</span>
               )}
             </div>
             {mixTotal === 0 ? (
-              <p className="font-sans text-xs text-text-secondary">Review a finished game to start building your mix.</p>
+              <p className="text-sm text-text-secondary">Review a finished game to start building your mix.</p>
             ) : (
               <>
                 <div
-                  className="flex h-2 w-full rounded-pill overflow-hidden bg-bg-muted border border-border-subtle"
+                  className="flex h-1.5 w-full overflow-hidden bg-bg-muted"
                   role="img"
                   aria-label={`Strong ${Math.round(pct(good))}%, okay ${Math.round(pct(okay))}%, weak ${Math.round(pct(bad))}%`}
                 >
@@ -200,17 +162,17 @@ export default function PaceHabits({
                         style={{ backgroundColor: seg.color }}
                         initial={{ width: 0 }}
                         animate={{ width: `${pct(seg.value)}%` }}
-                        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: delay + 0.1 }}
+                        transition={{ duration: 0.48, ease: [0.7, 0, 0.2, 1], delay: delay + 0.1 }}
                       />
                     ) : null,
                   )}
                 </div>
-                <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-5 flex-wrap">
                   {segments.map((seg) => (
-                    <span key={seg.label} className="inline-flex items-center gap-1.5 font-sans text-[11px] text-text-secondary">
-                      <span className="inline-block w-2 h-2 rounded-sm" style={{ backgroundColor: seg.color }} aria-hidden="true" />
+                    <span key={seg.label} className="inline-flex items-center gap-1.5 font-mono text-label uppercase text-text-secondary">
+                      <span className="inline-block w-2 h-2" style={{ backgroundColor: seg.color }} aria-hidden="true" />
                       {seg.label}
-                      <span className="font-mono tabular-nums text-text-primary font-semibold">{Math.round(pct(seg.value))}%</span>
+                      <span className="tabular text-text-primary">{Math.round(pct(seg.value))}%</span>
                     </span>
                   ))}
                 </div>
@@ -219,6 +181,6 @@ export default function PaceHabits({
           </div>
         </div>
       )}
-    </motion.section>
+    </Reveal>
   );
 }

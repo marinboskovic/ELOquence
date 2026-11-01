@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, ChevronRight, RefreshCcw, X } from 'lucide-react';
+import { ChevronRight, RefreshCcw, X } from 'lucide-react';
+import { Button, CountUp, Label } from '@/components/ui';
 import TileTap from './TileTap';
 import TilePaint from './TilePaint';
 import MultipleChoice from './MultipleChoice';
@@ -104,84 +105,30 @@ export default function LessonRunner({ lesson, onComplete, onProgress }: Props) 
     setCorrectCount(0);
   }
 
-  // ── Done screen ────────────────────────────────────────────────
+  // ── Done screen: the lesson's one ink block ──────────────────
   if (done) {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4 }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 16,
-          padding: '24px 8px',
-          textAlign: 'center',
-        }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1] }}
+        className="bg-bg-ink text-text-on-ink px-6 md:px-10 py-10 md:py-14 flex flex-col gap-6"
       >
-        <motion.div
-          initial={{ scale: 0, rotate: -180 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ duration: 0.55, ease: [0.34, 1.56, 0.64, 1], delay: 0.1 }}
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: '50%',
-            background: 'var(--tile-correct)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 8px 32px color-mix(in srgb, var(--tile-correct) 40%, transparent)',
-          }}
-        >
-          <Trophy size={40} color="#fff" />
-        </motion.div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800, margin: 0 }}>
-          Lesson complete
-        </h2>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: 0, maxWidth: 360 }}>
-          {correctCount} / {total} on first try
-        </p>
-        <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-          <button
-            type="button"
-            onClick={restart}
-            style={{
-              padding: '8px 18px',
-              borderRadius: 999,
-              border: '1px solid var(--border-default)',
-              background: 'transparent',
-              color: 'var(--text-secondary)',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <RefreshCcw size={14} /> Practice again
-          </button>
-          <button
-            type="button"
-            onClick={onComplete}
-            style={{
-              padding: '8px 22px',
-              borderRadius: 999,
-              border: 'none',
-              background: 'var(--tile-correct)',
-              color: '#fff',
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            Next lesson <ChevronRight size={16} />
-          </button>
+        <Label className="text-text-on-ink opacity-70">{lesson.title} · complete</Label>
+        <h2 className="font-display text-display-lg text-text-on-ink">Lesson complete.</h2>
+        <div className="flex items-baseline gap-3">
+          <span className="font-display text-display-md tabular text-text-on-ink">
+            <CountUp value={correctCount} /> / {total}
+          </span>
+          <span className="font-mono text-xs uppercase tracking-[0.14em] text-text-on-ink opacity-70">on first try</span>
+        </div>
+        <div className="flex flex-wrap gap-3 mt-2">
+          <Button variant="primary" onClick={onComplete}>
+            Next lesson <ChevronRight size={14} aria-hidden="true" />
+          </Button>
+          <Button variant="secondary" onClick={restart} className="border-text-on-ink text-text-on-ink">
+            <RefreshCcw size={13} aria-hidden="true" /> Practice again
+          </Button>
         </div>
       </motion.div>
     );
@@ -189,51 +136,41 @@ export default function LessonRunner({ lesson, onComplete, onProgress }: Props) 
 
   // ── Active challenge ──────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, position: 'relative' }}>
-      {/* Top bar — progress + streak + close */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="flex flex-col gap-6 relative">
+      {/* Top bar — close + lesson label + progress rule + counter */}
+      <div className="flex items-center gap-4">
         <button
           onClick={onComplete}
           aria-label="Close lesson"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--text-ghost)',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-          }}
+          className="w-8 h-8 -ml-2 inline-flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors duration-fast"
         >
-          <X size={20} />
+          <X size={18} aria-hidden="true" />
         </button>
-        <div
-          style={{
-            flex: 1,
-            height: 10,
-            borderRadius: 999,
-            background: 'var(--bg-muted)',
-            overflow: 'hidden',
-            position: 'relative',
-          }}
-        >
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${((idx + (done ? 1 : 0)) / total) * 100}%` }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            style={{
-              height: '100%',
-              background: 'var(--tile-correct)',
-              borderRadius: 999,
-            }}
-          />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-3 mb-2">
+            <Label className="truncate">{lesson.title}</Label>
+            <span className="font-mono text-xs tabular text-text-tertiary shrink-0">
+              {idx + 1}/{total}
+            </span>
+          </div>
+          <div className="relative h-[2px] w-full">
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" aria-hidden="true" />
+            <motion.div
+              className="absolute inset-y-0 left-0 w-full origin-left bg-bg-ink"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: (idx + (done ? 1 : 0)) / total }}
+              transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={total}
+              aria-valuenow={idx}
+            />
+          </div>
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text-ghost)', fontFamily: 'var(--font-display)', fontWeight: 700, minWidth: 36, textAlign: 'right' }}>
-          {idx + 1}/{total}
-        </span>
       </div>
 
       {/* Challenge body */}
-      <div style={{ position: 'relative', minHeight: 360 }}>
+      <div className="relative rule-top pt-8" style={{ minHeight: 360 }}>
         <Confetti trigger={confettiTick} />
         <AnimatePresence mode="wait">
           <motion.div
@@ -241,12 +178,11 @@ export default function LessonRunner({ lesson, onComplete, onProgress }: Props) 
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -30 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
           >
             <ChallengeView challenge={current} onResolve={handleResolve} />
           </motion.div>
         </AnimatePresence>
-
       </div>
     </div>
   );

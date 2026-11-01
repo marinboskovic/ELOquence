@@ -58,7 +58,7 @@ export default function LetterPicker({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '8px 0' }}>
-      <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.15, textWrap: 'balance' }}>
         {challenge.prompt}
       </p>
 
@@ -133,11 +133,11 @@ export default function LetterPicker({
               alignItems: 'center',
               gap: 8,
               padding: '8px 16px',
-              borderRadius: 999,
+              borderRadius: 0,
               background:
                 outcome === 'correct'
-                  ? 'color-mix(in srgb, var(--tile-correct) 18%, transparent)'
-                  : 'color-mix(in srgb, var(--cls-red) 18%, transparent)',
+                  ? 'var(--wash-green)'
+                  : 'var(--wash-accent)',
               color: outcome === 'correct' ? 'var(--tile-correct)' : 'var(--cls-red)',
               fontWeight: 700,
               fontSize: 13,
@@ -157,7 +157,7 @@ export default function LetterPicker({
           onClick={reset}
           style={{
             padding: '8px 16px',
-            borderRadius: 999,
+            borderRadius: 0,
             border: '1px solid var(--border-default)',
             background: 'transparent',
             color: 'var(--text-secondary)',
@@ -190,11 +190,11 @@ function KeyButton({
   let color = 'var(--text-primary)';
   if (state === 'absent') {
     bg = 'var(--tile-absent)';
-    color = '#fff';
+    color = 'var(--tile-absent-text)';
   } else if (state === 'known') {
-    bg = 'color-mix(in srgb, var(--tile-present) 30%, transparent)';
+    bg = 'var(--wash-ochre)';
   } else if (state === 'used') {
-    bg = 'color-mix(in srgb, var(--cls-blue, #3b82f6) 22%, transparent)';
+    bg = 'var(--bg-muted)';
   }
   return (
     <motion.button
@@ -206,13 +206,13 @@ function KeyButton({
         minWidth: 30,
         height: 38,
         padding: '0 6px',
-        borderRadius: 6,
+        borderRadius: 0,
         border: 'none',
         background: bg,
         color,
         fontSize: 13,
         fontWeight: 700,
-        fontFamily: 'var(--font-sans)',
+        fontFamily: 'var(--font-display)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: dim ? 0.55 : 1,
         transition: 'all 200ms ease',

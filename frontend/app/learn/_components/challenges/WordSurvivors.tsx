@@ -47,7 +47,7 @@ export default function WordSurvivors({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18, padding: '8px 0' }}>
-      <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.15, textWrap: 'balance' }}>
         {challenge.prompt}
       </p>
 
@@ -58,8 +58,8 @@ export default function WordSurvivors({
             key={i}
             style={{
               padding: '5px 10px',
-              borderRadius: 999,
-              background: 'color-mix(in srgb, var(--tile-correct) 12%, transparent)',
+              borderRadius: 0,
+              background: 'var(--wash-green)',
               color: 'var(--tile-correct)',
               fontSize: 12,
               fontWeight: 600,
@@ -95,7 +95,7 @@ export default function WordSurvivors({
               transition={{ duration: 0.35 }}
               style={{
                 padding: '12px 6px',
-                borderRadius: 10,
+                borderRadius: 0,
                 border: `2px solid ${
                   submitted
                     ? c.survives
@@ -104,17 +104,17 @@ export default function WordSurvivors({
                         ? 'var(--cls-red)'
                         : 'var(--border-subtle)'
                     : picked
-                      ? 'var(--cls-blue, #3b82f6)'
+                      ? 'var(--border-default)'
                       : 'var(--border-subtle)'
                 }`,
                 background:
                   submitted && c.survives
-                    ? 'color-mix(in srgb, var(--tile-correct) 14%, transparent)'
+                    ? 'var(--wash-green)'
                     : picked
-                      ? 'color-mix(in srgb, var(--cls-blue, #3b82f6) 12%, transparent)'
+                      ? 'var(--bg-muted)'
                       : 'var(--bg-elevated)',
                 color: 'var(--text-primary)',
-                fontFamily: 'var(--font-sans)',
+                fontFamily: 'var(--font-display)',
                 fontWeight: 800,
                 fontSize: 15,
                 letterSpacing: '0.06em',
@@ -133,7 +133,7 @@ export default function WordSurvivors({
                     right: 4,
                     width: 16,
                     height: 16,
-                    borderRadius: '50%',
+                    borderRadius: 0,
                     background: correctAfter ? 'var(--tile-correct)' : 'var(--cls-red)',
                     color: '#fff',
                     display: 'flex',
@@ -160,7 +160,7 @@ export default function WordSurvivors({
             onClick={reset}
             style={{
               padding: '8px 16px',
-              borderRadius: 999,
+              borderRadius: 0,
               border: '1px solid var(--border-default)',
               background: 'transparent',
               color: 'var(--text-secondary)',
@@ -179,12 +179,11 @@ export default function WordSurvivors({
             disabled={selected.size === 0}
             style={{
               padding: '8px 22px',
-              borderRadius: 999,
+              borderRadius: 0,
               border: 'none',
-              background: selected.size === 0 ? 'var(--bg-muted)' : 'var(--tile-correct)',
-              color: selected.size === 0 ? 'var(--text-ghost)' : '#fff',
-              fontSize: 13,
-              fontWeight: 700,
+              background: selected.size === 0 ? 'var(--bg-muted)' : 'var(--accent)',
+              color: selected.size === 0 ? 'var(--text-ghost)' : 'var(--accent-ink)',
+              fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.14em',
               cursor: selected.size === 0 ? 'not-allowed' : 'pointer',
               transition: 'all 200ms ease',
             }}

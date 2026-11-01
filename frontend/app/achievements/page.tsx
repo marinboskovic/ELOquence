@@ -20,7 +20,6 @@ import {
   Hash,
   Activity,
   Layers,
-  Lock,
   Star,
   Feather,
   Brush,
@@ -43,7 +42,7 @@ import {
 import clsx from 'clsx';
 import { achievementsApi } from '@/lib/api';
 import { ACHIEVEMENT_META } from '@/components/AchievementToast';
-import ScrollArea from '@/components/ScrollArea';
+import { CountUp, Label, SplitWords, Tag, staggerChild, staggerParent } from '@/components/ui';
 
 interface AchievementDef {
   type: string;
@@ -157,24 +156,14 @@ const ICON_FOR_TYPE: Record<string, LucideIcon> = {
   night_owl:  Moon,
 };
 
-const CATEGORY_COLOR: Record<Category, string> = {
-  solving:  'var(--tile-correct)',  // green
-  accuracy: 'var(--cls-blue)',      // muted slate
-  streaks:  'var(--tile-present)',  // yellow
-  rating:   'var(--cls-orange)',    // muted orange
-  variety:  'var(--silver)',        // neutral
-  mastery:  'var(--gold)',          // trophy gold
-  timing:   'var(--bronze)',        // warm earth
-};
-
 const CATEGORY_LABEL: Record<Category, string> = {
-  solving:  'Solving',
-  accuracy: 'Accuracy',
-  streaks:  'Streaks',
-  rating:   'Rating',
-  variety:  'Variety',
-  mastery:  'Mastery',
-  timing:   'Timing',
+  solving:  'solving',
+  accuracy: 'accuracy',
+  streaks:  'streaks',
+  rating:   'rating',
+  variety:  'variety',
+  mastery:  'mastery',
+  timing:   'timing',
 };
 
 const CATEGORY_ORDER: Category[] = ['solving', 'accuracy', 'streaks', 'rating', 'mastery', 'timing', 'variety'];
@@ -187,103 +176,59 @@ interface MergedAchievement {
   category: Category;
 }
 
-// ─── Achievement card ────────────────────────────────────────────────────────
+// ─── Achievement row ─────────────────────────────────────────────────────────
 
-function AchievementCard({
-  ach,
-  index,
-  unlockedAt,
-}: {
-  ach: MergedAchievement;
-  index: number;
-  unlockedAt: string | undefined;
-}) {
+function AchievementRow({ ach, unlockedAt }: { ach: MergedAchievement; unlockedAt: string | undefined }) {
   const isUnlocked = !!unlockedAt;
-  const tint = CATEGORY_COLOR[ach.category];
   const Icon = ICON_FOR_TYPE[ach.type];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ type: 'spring', damping: 22, stiffness: 320, delay: index * 0.03 }}
-      className="relative flex items-start gap-3 rounded-card p-4 bg-bg-base border transition-colors"
-      style={{
-        borderColor: isUnlocked
-          ? `color-mix(in srgb, ${tint} 35%, var(--border-default))`
-          : 'var(--border-subtle)',
-        opacity: isUnlocked ? 1 : 0.55,
-      }}
+    <motion.li
+      variants={staggerChild}
+      className={clsx(
+        'rule-hair flex items-start gap-4 py-4 transition-colors duration-fast',
+        isUnlocked ? 'bg-bg-base hover:bg-bg-elevated' : 'opacity-55'
+      )}
     >
-      {/* Icon disc — color inherits to the SVG via `color` so we can use a token */}
-      <div
-        className="shrink-0 flex items-center justify-center rounded-full"
-        style={{
-          width: 40,
-          height: 40,
-          backgroundColor: isUnlocked
-            ? `color-mix(in srgb, ${tint} 14%, transparent)`
-            : 'var(--bg-muted)',
-          border: '1px solid',
-          borderColor: isUnlocked
-            ? `color-mix(in srgb, ${tint} 35%, transparent)`
-            : 'var(--border-subtle)',
-          color: isUnlocked ? tint : 'var(--text-tertiary)',
-        }}
-      >
-        {Icon ? (
-          <Icon size={18} strokeWidth={2} />
-        ) : (
-          <span style={{ fontSize: 18 }}>{ach.icon}</span>
+      {/* Glyph: lucide icon in a small ink square (emoji falls back to the same square) */}
+      <span
+        className={clsx(
+          'shrink-0 w-9 h-9 flex items-center justify-center',
+          isUnlocked ? 'bg-bg-ink text-text-on-ink' : 'border border-border-subtle text-text-tertiary'
         )}
-      </div>
+        aria-hidden="true"
+      >
+        {Icon ? <Icon size={16} strokeWidth={2} /> : <span style={{ fontSize: 14 }}>{ach.icon}</span>}
+      </span>
 
-      {/* Text block */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 mb-0.5">
-          <span
-            className="font-sans text-sm font-semibold truncate"
-            style={{ color: isUnlocked ? 'var(--text-primary)' : 'var(--text-secondary)' }}
-          >
+        <div className="flex items-baseline justify-between gap-3">
+          <span className={clsx('font-display text-display-sm', isUnlocked ? 'text-text-primary' : 'text-text-secondary')}>
             {ach.name}
           </span>
-          {!isUnlocked && (
-            <Lock size={11} style={{ color: 'var(--text-ghost)', flexShrink: 0 }} />
+          {isUnlocked && unlockedAt ? (
+            <span className="shrink-0 font-mono text-[11px] tabular text-text-tertiary">
+              {new Date(unlockedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toLowerCase()}
+            </span>
+          ) : (
+            <Tag tone="neutral" className="shrink-0">locked</Tag>
           )}
         </div>
-        <p
-          className="font-sans text-xs leading-snug"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          {ach.description}
-        </p>
-        {isUnlocked && unlockedAt && (
-          <p
-            className="font-sans text-[10px] font-mono mt-1"
-            style={{ color: 'var(--text-ghost)' }}
-          >
-            unlocked {new Date(unlockedAt).toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-          </p>
-        )}
+        <p className="text-sm text-text-secondary mt-1 leading-snug">{ach.description}</p>
       </div>
-
-    </motion.div>
+    </motion.li>
   );
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
-function SkeletonCard() {
+function SkeletonRow() {
   return (
-    <div className="flex items-start gap-3 rounded-card p-4 bg-bg-base border border-border-subtle">
-      <div className="w-10 h-10 rounded-full bg-bg-muted animate-pulse" />
-      <div className="flex-1 space-y-1.5 pt-1">
-        <div className="h-3 w-24 rounded bg-bg-muted animate-pulse" />
-        <div className="h-2.5 w-36 rounded bg-bg-muted/60 animate-pulse" />
+    <div className="rule-hair flex items-start gap-4 py-4">
+      <div className="w-9 h-9 skeleton bg-bg-muted shrink-0" />
+      <div className="flex-1 space-y-2 pt-1">
+        <div className="h-3.5 w-32 skeleton bg-bg-muted" />
+        <div className="h-3 w-48 skeleton bg-bg-muted" />
       </div>
     </div>
   );
@@ -359,106 +304,75 @@ export default function AchievementsPage() {
     return counts;
   }, [mergedAchievements]);
 
+  const FILTERS: { key: 'all' | Category; label: string }[] = [
+    { key: 'all',      label: 'all' },
+    { key: 'solving',  label: 'solving' },
+    { key: 'accuracy', label: 'accuracy' },
+    { key: 'streaks',  label: 'streaks' },
+    { key: 'rating',   label: 'rating' },
+    { key: 'mastery',  label: 'mastery' },
+    { key: 'timing',   label: 'timing' },
+    { key: 'variety',  label: 'variety' },
+  ];
+
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="mb-6 space-y-2">
-          <div className="h-3 w-24 rounded bg-bg-muted animate-pulse" />
-          <div className="h-9 w-56 rounded bg-bg-muted animate-pulse" />
-          <div className="h-1.5 w-48 rounded-pill bg-bg-muted/60 animate-pulse mt-3" />
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16">
+        <div className="space-y-3 mb-12">
+          <div className="h-3 w-28 skeleton bg-bg-muted" />
+          <div className="h-16 w-72 skeleton bg-bg-muted" />
+          <div className="h-0.5 w-full max-w-md skeleton bg-bg-muted mt-4" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
+          {Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        background: 'var(--bg-base)',
-        height: 'calc(100dvh - 52px)',
-        display: 'flex',
-        justifyContent: 'center',
-      }}
-    >
-      <ScrollArea
-        style={{
-          width: '100%',
-          maxWidth: '48rem',
-          height: '100%',
-          scrollbarGutter: 'stable',
-          padding: '32px 16px 48px',
-        }}
-      >
-      {/* Compact header matching dashboard/review style */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="mb-5"
-      >
-        <p
-          className="font-sans text-[10px] uppercase tracking-[0.1em] mb-1"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          Achievements
-        </p>
-        <h1
-          className="font-display font-black tracking-tight mb-2"
-          style={{
-            fontSize: '2rem',
-            color: 'var(--text-primary)',
-            lineHeight: 1.1,
-          }}
-        >
-          {unlockedCount}
-          <span style={{ color: 'var(--text-tertiary)' }}> / {totalCount}</span>
-          <span
-            className="font-sans font-medium ml-2"
-            style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}
-          >
-            unlocked
-          </span>
-        </h1>
-
-        <div
-          className="relative h-1.5 max-w-[280px] rounded-pill overflow-hidden bg-bg-muted"
-          role="progressbar"
-          aria-valuenow={unlockedCount}
-          aria-valuemin={0}
-          aria-valuemax={totalCount}
-          aria-label={`${unlockedCount} of ${totalCount} achievements unlocked`}
-        >
-          <motion.div
-            className="absolute inset-y-0 left-0 rounded-pill"
-            initial={{ width: '0%' }}
-            animate={{ width: `${progressPct}%` }}
-            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
-            style={{ backgroundColor: 'var(--tile-correct)' }}
-          />
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col gap-10 md:gap-12">
+      {/* ── Progress header ──────────────────────────────────────────────── */}
+      <header className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
+        <div className="md:col-span-7">
+          <Label className="block mb-3">achievements</Label>
+          <h1 className="font-display text-display-lg text-text-primary tabular">
+            <CountUp value={unlockedCount} />
+            <span className="text-text-tertiary"> / {totalCount}</span>
+          </h1>
+          <SplitWords text="unlocked" as="p" className="font-display text-display-sm text-text-secondary mt-2" delay={0.1} />
         </div>
-      </motion.div>
+        <div className="md:col-span-5">
+          <div className="flex items-baseline justify-between mb-2 font-mono text-label uppercase text-text-tertiary tabular">
+            <span>progress</span>
+            <span>{Math.round(progressPct)}%</span>
+          </div>
+          <div
+            className="relative h-px w-full bg-bg-muted"
+            role="progressbar"
+            aria-valuenow={unlockedCount}
+            aria-valuemin={0}
+            aria-valuemax={totalCount}
+            aria-label={`${unlockedCount} of ${totalCount} achievements unlocked`}
+          >
+            <motion.div
+              className="absolute left-0 bg-bg-ink"
+              style={{ height: 2, top: -0.5 }}
+              initial={{ width: '0%' }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ duration: 0.9, ease: [0.2, 0.8, 0.2, 1], delay: 0.2 }}
+            />
+          </div>
+        </div>
+      </header>
 
-      {/* Category filter — same pattern as dashboard/recent-games */}
+      {/* ── Category filter — underline strip ───────────────────────────── */}
       <div
         role="tablist"
         aria-label="Filter achievements by category"
-        className="flex gap-1 mb-5 p-1 rounded-card bg-bg-elevated border border-border-subtle w-fit"
+        className="flex gap-6 overflow-x-auto hide-native-scrollbar border-b border-border-subtle"
       >
-        {(
-          [
-            { key: 'all',      label: 'All' },
-            { key: 'solving',  label: 'Solving' },
-            { key: 'accuracy', label: 'Accuracy' },
-            { key: 'streaks',  label: 'Streaks' },
-            { key: 'rating',   label: 'Rating' },
-            { key: 'mastery',  label: 'Mastery' },
-            { key: 'timing',   label: 'Timing' },
-            { key: 'variety',  label: 'Variety' },
-          ] as const
-        ).map((opt) => {
+        {FILTERS.map((opt) => {
           const active = filter === opt.key;
           return (
             <button
@@ -468,92 +382,68 @@ export default function AchievementsPage() {
               aria-selected={active}
               onClick={() => setFilter(opt.key)}
               className={clsx(
-                'px-3 py-1.5 rounded-card text-xs font-sans font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2',
-                active
-                  ? 'bg-bg-base text-text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary',
+                'relative shrink-0 pb-3 -mb-px font-mono text-label uppercase transition-colors duration-fast',
+                active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
               )}
-              style={active ? { outlineColor: 'var(--tile-correct)' } : undefined}
             >
               {opt.label}
-              <span className="ml-1.5 text-text-ghost font-mono">
-                {filterCounts[opt.key]}
-              </span>
+              <span className="ml-1.5 tabular text-text-tertiary">{filterCounts[opt.key]}</span>
+              {active && (
+                <motion.span
+                  layoutId="ach-tab-underline"
+                  className="absolute left-0 right-0 bottom-0 h-0.5 bg-accent"
+                  transition={{ duration: 0.26, ease: [0.7, 0, 0.2, 1] }}
+                />
+              )}
             </button>
           );
         })}
       </div>
 
       {error && (
-        <div
-          className="mb-4 px-4 py-3 rounded-card font-sans text-sm"
-          style={{
-            backgroundColor: 'color-mix(in srgb, var(--red) 8%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--red) 20%, transparent)',
-            color: 'var(--red)',
-          }}
-          role="alert"
-        >
+        <div className="bg-wash-accent px-5 py-4 text-sm text-text-primary" role="alert">
           {error}
         </div>
       )}
 
-      {/* Grouped grid */}
+      {/* ── Grouped two-column list ─────────────────────────────────────── */}
       {grouped.length === 0 && !error ? (
-        <div className="text-center py-16 font-sans text-text-secondary text-sm">
-          No achievements in this category.
+        <div className="bg-bg-ink text-text-on-ink px-6 py-10 md:px-10 md:py-12">
+          <p className="font-display text-display-md">No achievements in this category.</p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-12">
           {grouped.map(({ category, items }) => {
-            // Group header colour follows Wordle convention based on progress
-            // through that group: gray = nothing unlocked, yellow = some,
-            // green = all done.
             const doneInGroup = items.filter((a) => unlockedMap.has(a.type)).length;
-            const groupColor =
-              doneInGroup === 0
-                ? 'var(--text-ghost)'
-                : doneInGroup >= items.length
-                  ? 'var(--tile-correct)'
-                  : 'var(--tile-present)';
+            const complete = doneInGroup >= items.length;
             return (
-            <section key={category}>
-              <header className="flex items-center gap-2 mb-3">
-                <span
-                  className="font-sans text-[10px] font-semibold uppercase tracking-[0.1em]"
-                  style={{ color: groupColor }}
+              <section key={category} aria-label={CATEGORY_LABEL[category]}>
+                <header className="rule-top pt-3 flex items-end justify-between gap-4 mb-2">
+                  <h2 className="font-display text-display-md text-text-primary capitalize">{CATEGORY_LABEL[category]}</h2>
+                  <span className="flex items-center gap-3">
+                    {complete && <Tag tone="green">complete</Tag>}
+                    <span className="font-mono text-xs tabular text-text-tertiary">
+                      {doneInGroup} / {items.length}
+                    </span>
+                  </span>
+                </header>
+                <motion.ul
+                  role="list"
+                  className="grid grid-cols-1 md:grid-cols-2 gap-x-10"
+                  variants={staggerParent}
+                  initial="hidden"
+                  whileInView="show"
+                  viewport={{ once: true, margin: '-8% 0px' }}
                 >
-                  {CATEGORY_LABEL[category]}
-                </span>
-                <span
-                  className="flex-1 h-px"
-                  style={{ backgroundColor: 'var(--border-subtle)' }}
-                />
-                <span
-                  className="font-mono text-[10px]"
-                  style={{ color: groupColor }}
-                >
-                  {doneInGroup}
-                  {' / '}
-                  {items.length}
-                </span>
-              </header>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {items.map((ach, i) => (
-                  <AchievementCard
-                    key={ach.type}
-                    ach={ach}
-                    index={i}
-                    unlockedAt={unlockedMap.get(ach.type)}
-                  />
-                ))}
-              </div>
-            </section>
+                  {items.map((ach) => (
+                    <AchievementRow key={ach.type} ach={ach} unlockedAt={unlockedMap.get(ach.type)} />
+                  ))}
+                </motion.ul>
+              </section>
             );
           })}
         </div>
       )}
-      </ScrollArea>
     </div>
   );
 }

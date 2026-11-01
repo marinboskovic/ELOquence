@@ -2,20 +2,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import {
-  CheckCircle,
-  XCircle,
-  Share2,
-  RotateCcw,
-  BarChart2,
-  Check,
-  Swords,
-  Trophy,
-  X,
-  ArrowLeft,
-} from 'lucide-react';
+import { Share2, Check, X } from 'lucide-react';
 import { Game, patternToTiles } from '@/lib/types';
 import { challengesApi } from '@/lib/api';
+import { Button, CountUp, Label, MiniTiles } from '@/components/ui';
 import Confetti from './Confetti';
 import Dialog from './Dialog';
 
@@ -52,8 +42,8 @@ type CelebrationTier = 'legendary' | 'impressive' | 'solid' | 'close_call';
 
 const WON_MESSAGES: Record<CelebrationTier, string> = {
   legendary: 'Outstanding!',
-  impressive: 'Brilliant Solve!',
-  solid: 'Well Played!',
+  impressive: 'Brilliant solve!',
+  solid: 'Well played!',
   close_call: 'Survived!',
 };
 
@@ -64,89 +54,33 @@ function getCelebrationTier(numGuesses: number): CelebrationTier {
   return 'close_call';
 }
 
-// ---- Stat Pill ---------------------------------------------------------------
+/* Hairline that reads on the ink block (border tokens are ink-on-ink here). */
+const ON_INK_RULE = '1px solid color-mix(in srgb, var(--text-on-ink) 22%, transparent)';
+const ON_INK_BTN: React.CSSProperties = { color: 'var(--text-on-ink)', borderColor: 'var(--text-on-ink)' };
 
-const pillItemVariants = {
-  hidden: { scale: 0.7, opacity: 0 },
-  visible: {
-    scale: 1,
-    opacity: 1,
-    transition: { type: 'spring' as const, damping: 14, stiffness: 280 },
-  },
-};
-
-interface StatPillProps {
-  label: string;
-  value: string;
-  highlight?: 'win' | 'loss' | 'neutral';
-}
-
-function StatPill({ label, value, highlight = 'neutral' }: StatPillProps) {
-  const valueColor =
-    highlight === 'win'
-      ? 'var(--green)'
-      : highlight === 'loss'
-      ? 'var(--red)'
-      : 'var(--text-primary)';
-
+function InkStat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <motion.div
-      variants={pillItemVariants}
-      className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-[10px]"
-      style={{
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border-subtle)',
-      }}
-    >
-      <span
-        className="text-[9px] uppercase tracking-widest font-semibold"
-        style={{ color: 'var(--text-tertiary)' }}
-      >
-        {label}
-      </span>
-      <span
-        className="text-lg font-mono font-bold leading-none"
-        style={{ color: valueColor }}
-      >
-        {value}
-      </span>
-    </motion.div>
+    <div className="pt-3 min-w-0" style={{ borderTop: ON_INK_RULE }}>
+      <Label className="block !text-text-on-ink opacity-60">{label}</Label>
+      <div className="font-display text-display-md tabular mt-1 leading-none">{children}</div>
+    </div>
   );
 }
 
-const pillContainerVariants = {
-  hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.06, delayChildren: 0.12 },
-  },
-};
-
-// ---- Secondary button --------------------------------------------------------
-
-interface SecondaryBtnProps {
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-  successIcon?: React.ReactNode;
-  success?: boolean;
-}
-
-function SecondaryBtn({ onClick, icon, label, successIcon, success }: SecondaryBtnProps) {
+function PlacementSquares({ done }: { done: number }) {
   return (
-    <motion.button
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.96 }}
-      onClick={onClick}
-      className="flex-1 py-2.5 rounded-[10px] font-medium text-sm transition-colors duration-150 flex items-center justify-center gap-1.5 min-w-0"
-      style={{
-        background: 'var(--bg-muted)',
-        border: '1px solid var(--border-default)',
-        color: 'var(--text-primary)',
-      }}
-    >
-      {success && successIcon ? successIcon : icon}
-      <span className="truncate">{label}</span>
-    </motion.button>
+    <span className="inline-flex gap-1" aria-hidden="true">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <span
+          key={i}
+          className="block w-3 h-3"
+          style={{
+            backgroundColor: i < done ? 'var(--text-on-ink)' : 'transparent',
+            border: '1.5px solid var(--text-on-ink)',
+          }}
+        />
+      ))}
+    </span>
   );
 }
 
@@ -168,6 +102,7 @@ export default function GameOverModal({
   const eloDelta = game.elo_delta;
   const showElo = eloDelta !== null && game.rated;
   const celebrationTier = won ? getCelebrationTier(game.num_guesses) : null;
+  const modeLabel = game.mode === 'competitive' && game.is_placement ? 'placement' : game.mode;
 
   const buildShareText = () => {
     const modeLabel = game.mode.charAt(0).toUpperCase() + game.mode.slice(1);
@@ -226,7 +161,12 @@ export default function GameOverModal({
     }
   };
 
-  const stripeColor = won ? 'var(--green)' : 'var(--red)';
+  // The answer as a row of mini tiles: green when solved, grey when missed.
+  const word = (game.target_word ?? '').toUpperCase();
+  const wordStates = Array(word.length).fill(won ? 'correct' : 'absent') as ('correct' | 'absent')[];
+
+  const delta = Math.round(eloDelta ?? 0);
+  const statCount = 1 + (showElo ? 1 : 0) + (game.word_difficulty ? 1 : 0);
 
   return (
     <>
@@ -241,203 +181,149 @@ export default function GameOverModal({
         open={open}
         onClose={onClose}
         label={won ? 'Game won' : 'Game over'}
-        maxWidth="max-w-sm"
-        accent={stripeColor}
+        maxWidth="max-w-md"
         hideClose
       >
-        <div className="relative p-6 flex flex-col gap-5">
-          {/* Close */}
+        {/* Ink block sheet */}
+        <div className="relative bg-bg-ink text-text-on-ink p-6 md:p-8 flex flex-col gap-6">
           <button
+            type="button"
             onClick={() => onClose?.()}
             aria-label="Close"
-            className="absolute top-3 right-3 p-1.5 rounded-md transition-colors duration-150"
-            style={{ color: 'var(--text-tertiary)' }}
+            className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity duration-fast"
           >
-            <X size={15} />
+            <X size={16} />
           </button>
 
-          {/* Result hero */}
-          <div className="flex flex-col items-center gap-2 text-center">
-            <motion.div
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{
-                delay: 0.1,
-                type: 'spring',
-                damping: 12,
-                stiffness: 220,
-              }}
+          {/* Result */}
+          <div className="pr-8">
+            <Label className="block !text-text-on-ink opacity-60">
+              {modeLabel}
+              {game.hard_mode ? ' · hard' : ''}
+              {' · '}
+              {won ? `${game.num_guesses}/6` : 'x/6'}
+              {celebrationTier ? ` · ${WON_MESSAGES[celebrationTier].toLowerCase()}` : ''}
+            </Label>
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1], delay: 0.05 }}
+              className="font-display text-display-lg mt-2"
             >
-              {won ? (
-                <CheckCircle size={38} style={{ color: 'var(--green)' }} strokeWidth={1.8} />
-              ) : (
-                <XCircle size={38} style={{ color: 'var(--red)' }} strokeWidth={1.8} />
-              )}
-            </motion.div>
-
-            <h2
-              className="text-xl font-bold leading-none"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {won
-                ? (celebrationTier ? WON_MESSAGES[celebrationTier] : 'Solved!')
-                : 'Not this time'}
-            </h2>
-
-            {won ? (
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Solved in{' '}
-                <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {game.num_guesses}/6
-                </span>{' '}
-                {game.num_guesses === 1 ? 'guess' : 'guesses'}
-              </p>
-            ) : (
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                The word was{' '}
-                <span className="font-semibold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
-                  {game.target_word}
-                </span>
-              </p>
-            )}
+              {won ? `Solved in ${game.num_guesses}` : 'Not this time'}
+            </motion.h2>
           </div>
 
-          {/* Stats pills */}
+          {/* The word */}
+          {word && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1], delay: 0.15 }}
+            >
+              <Label className="block !text-text-on-ink opacity-60 mb-2">
+                {won ? 'the word' : 'the word was'}
+              </Label>
+              <MiniTiles word={word} states={wordStates} size={44} gap={5} />
+            </motion.div>
+          )}
+
+          {/* Stats */}
           <motion.div
-            variants={pillContainerVariants}
-            initial="hidden"
-            animate="visible"
-            className={`grid gap-2 ${
-              showElo && game.word_difficulty
-                ? 'grid-cols-3'
-                : showElo || game.word_difficulty
-                ? 'grid-cols-2'
-                : 'grid-cols-1'
-            }`}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1], delay: 0.25 }}
+            className={`grid gap-4 ${statCount === 3 ? 'grid-cols-3' : statCount === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
           >
-            <StatPill
-              label="Guesses"
-              value={won ? `${game.num_guesses}/6` : 'X/6'}
-            />
+            <InkStat label="guesses">
+              {won ? game.num_guesses : 'X'}
+              <span className="opacity-50 text-[0.6em]">/6</span>
+            </InkStat>
 
             {showElo && (
-              <StatPill
-                label="Rating"
-                value={`${(eloDelta ?? 0) >= 0 ? '+' : ''}${Math.round(eloDelta ?? 0)}`}
-                highlight={(eloDelta ?? 0) >= 0 ? 'win' : 'loss'}
-              />
+              <InkStat label="rating">
+                <span className="text-accent">{delta >= 0 ? '+' : '−'}</span>
+                <CountUp value={Math.abs(delta)} decimals={0} />
+              </InkStat>
             )}
 
             {game.word_difficulty && (
-              <StatPill
-                label="Word ELO"
-                value={Math.round(game.word_difficulty).toLocaleString()}
-              />
+              <InkStat label="word elo">
+                <CountUp value={Math.round(game.word_difficulty)} decimals={0} />
+              </InkStat>
             )}
           </motion.div>
 
-          {/* Hint text */}
-          {!isGuest && (
-            <p
-              className="text-[10px] text-center -mt-1"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              Challenge a friend to beat your score
-            </p>
-          )}
-
-          {/* Placement badge */}
+          {/* Placement progress */}
           {!isGuest && game.is_placement && (
-            <div
-              className="text-center px-3 py-2 rounded-[10px]"
-              style={{
-                background: 'rgba(201,180,88,0.08)',
-                border: '1px solid rgba(201,180,88,0.25)',
-              }}
-            >
-              <span className="text-xs font-medium" style={{ color: 'var(--yellow)' }}>
-                Placement match
-                {gamesPlayed != null ? ` ${gamesPlayed}/5` : ''} — results
-                count toward your initial rating
-              </span>
+            <div className="flex items-center justify-between gap-4 pt-3" style={{ borderTop: ON_INK_RULE }}>
+              <div>
+                <Label className="block !text-text-on-ink opacity-60">
+                  placement{gamesPlayed != null ? ` · ${Math.min(gamesPlayed, 5)}/5` : ''}
+                </Label>
+                <p className="text-xs opacity-80 mt-1">Results count toward your initial rating.</p>
+              </div>
+              <PlacementSquares done={Math.min(gamesPlayed ?? 0, 5)} />
             </div>
           )}
 
           {/* Actions */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 pt-1">
             {isGuest ? (
               <>
-                {/* Primary */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => onClose?.()}
-                  className="w-full py-3 rounded-[10px] text-white font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2"
-                  style={{ backgroundColor: 'var(--tile-correct)' }}
-                >
-                  Admire Puzzle
-                </motion.button>
-
-                {/* Secondary row */}
-                <div className="flex gap-2">
-                  <SecondaryBtn
-                    onClick={handleShare}
-                    icon={<Share2 size={14} />}
-                    label={copied ? 'Copied!' : 'Share'}
-                    successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
-                    success={copied}
-                  />
-                  <SecondaryBtn
-                    onClick={() => router.push('/play')}
-                    icon={<RotateCcw size={14} />}
-                    label="Play Again"
-                  />
+                <Button size="lg" onClick={() => onClose?.()} className="w-full">
+                  Admire puzzle
+                </Button>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="secondary" onClick={handleShare} style={ON_INK_BTN}>
+                    {copied ? <Check size={14} /> : <Share2 size={14} />}
+                    {copied ? 'Copied' : 'Share'}
+                  </Button>
+                  <Button variant="secondary" onClick={() => router.push('/play')} style={ON_INK_BTN}>
+                    Play again
+                  </Button>
                 </div>
+                <p className="text-xs opacity-70 mt-2">
+                  Sign in to get rated and keep a record of every game.{' '}
+                  <button
+                    type="button"
+                    onClick={() => router.push('/login')}
+                    className="ink-link font-semibold text-text-on-ink"
+                  >
+                    Sign in
+                  </button>
+                </p>
               </>
             ) : (
               <>
-                {/* Primary: Review */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => router.push(`/review/${game.id}`)}
-                  className="w-full py-3 rounded-[10px] text-white font-semibold text-sm transition-colors duration-150 flex items-center justify-center gap-2"
-                  style={{ backgroundColor: 'var(--tile-correct)' }}
-                >
-                  <BarChart2 size={15} />
-                  Review Game
-                </motion.button>
-
-                {/* Secondary row */}
-                <div className="flex gap-2">
-                  <SecondaryBtn
-                    onClick={handleShare}
-                    icon={<Share2 size={14} />}
-                    label={copied ? 'Copied!' : 'Share'}
-                    successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
-                    success={copied}
-                  />
+                <Button size="lg" onClick={() => router.push(`/review/${game.id}`)} className="w-full">
+                  Review game
+                </Button>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button variant="secondary" size="sm" onClick={handleShare} style={ON_INK_BTN}>
+                    {copied ? <Check size={13} /> : <Share2 size={13} />}
+                    {copied ? 'Copied' : 'Share'}
+                  </Button>
                   {game.mode === 'challenge' && challengeCode ? (
-                    <SecondaryBtn
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => router.push(`/challenge/${challengeCode}`)}
-                      icon={<Trophy size={14} />}
-                      label="Results"
-                    />
+                      style={ON_INK_BTN}
+                    >
+                      Results
+                    </Button>
                   ) : (
-                    <SecondaryBtn
-                      onClick={handleChallenge}
-                      icon={<Swords size={14} />}
-                      label={challengeCopied ? 'Copied!' : 'Challenge'}
-                      successIcon={<Check size={14} style={{ color: 'var(--green)' }} />}
-                      success={challengeCopied}
-                    />
+                    <Button variant="secondary" size="sm" onClick={handleChallenge} style={ON_INK_BTN}>
+                      {challengeCopied ? <Check size={13} /> : null}
+                      {challengeCopied ? 'Copied' : 'Challenge'}
+                    </Button>
                   )}
-                  <SecondaryBtn
-                    onClick={() => router.push('/play')}
-                    icon={<ArrowLeft size={14} />}
-                    label="Back"
-                  />
+                  <Button variant="secondary" size="sm" onClick={() => router.push('/play')} style={ON_INK_BTN}>
+                    Back
+                  </Button>
                 </div>
+                <p className="font-mono text-[11px] opacity-60 mt-1">challenge copies a link a friend can play.</p>
               </>
             )}
           </div>

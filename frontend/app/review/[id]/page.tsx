@@ -21,7 +21,9 @@ import {
 } from 'lucide-react';
 import CoachChat from '@/components/CoachChat';
 import EloProjection from '@/components/EloProjection';
+import Tile from '@/components/Tile';
 import TileLoader from '@/components/TileLoader';
+import { Button, Label, MiniTiles, PatternRow, SectionHead, Stat, Tag } from '@/components/ui';
 import { gamesApi, analysisApi, communityApi, aiApi } from '@/lib/api';
 import {
   Game,
@@ -63,6 +65,27 @@ function classificationColor(c: string): string {
       return 'var(--cls-red)';
     default:
       return 'var(--text-tertiary)';
+  }
+}
+
+/** Tag tone for a classification: green = good, ochre = meh, accent = bad. */
+function classificationTone(c: string): 'green' | 'ochre' | 'accent' | 'neutral' {
+  switch (c) {
+    case 'brilliant':
+    case 'best':
+    case 'good':
+      return 'green';
+    case 'okay':
+    case 'forced':
+    case 'book':
+    case 'inaccuracy':
+      return 'ochre';
+    case 'mistake':
+    case 'blunder':
+    case 'miss':
+      return 'accent';
+    default:
+      return 'neutral';
   }
 }
 
@@ -170,12 +193,7 @@ function buildCommentary(m: MoveAnalysis, optimalWord: string): string {
 /* ------------------------------------------------------------------ */
 
 function Skeleton({ className }: { className?: string }) {
-  return (
-    <div
-      className={clsx('skeleton rounded-lg', className)}
-      style={{ backgroundColor: 'var(--bg-muted)' }}
-    />
-  );
+  return <div className={clsx('skeleton bg-bg-muted', className)} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -191,16 +209,10 @@ function Chip({
 }) {
   return (
     <span
-      className="inline-flex items-center justify-center rounded-pill px-3 py-1.5 font-display font-semibold tabular-nums text-base min-w-[60px]"
-      style={
-        highlighted
-          ? { backgroundColor: 'var(--tile-correct)', color: '#fff' }
-          : {
-              backgroundColor: 'transparent',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border-subtle)',
-            }
-      }
+      className={clsx(
+        'inline-flex items-center justify-center px-2 h-7 font-mono font-semibold tabular text-sm min-w-[56px] border',
+        highlighted ? 'bg-wash-green border-transparent text-text-primary' : 'bg-transparent border-border-subtle text-text-primary'
+      )}
     >
       {value}
     </span>
@@ -208,35 +220,7 @@ function Chip({
 }
 
 /* ------------------------------------------------------------------ */
-/* Mini tile row (for pattern groups)                                  */
-/* ------------------------------------------------------------------ */
-
-function MiniPatternRow({ pattern }: { pattern: number }) {
-  const tiles = patternToTiles(pattern);
-  return (
-    <div className="flex gap-0.5">
-      {tiles.map((state, i) => {
-        let bg = 'var(--tile-absent)';
-        if (state === 'correct') bg = 'var(--tile-correct)';
-        else if (state === 'present') bg = 'var(--tile-present)';
-        return (
-          <div
-            key={i}
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: 2,
-              backgroundColor: bg,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Navigator grid (6×5 Wordle tiles, clickable rows)                  */
+/* Navigator grid (6×5 mini tiles, clickable rows)                     */
 /* ------------------------------------------------------------------ */
 
 function NavigatorGrid({
@@ -250,72 +234,36 @@ function NavigatorGrid({
   activeRow: number;
   onRowClick: (row: number) => void;
 }) {
-  const TILE = 26;
-  const GAP = 3;
-
   return (
-    <div className="flex flex-col" style={{ gap: GAP }}>
+    <div className="flex flex-col gap-[3px]" role="list" aria-label="Guess navigator">
       {Array.from({ length: 6 }).map((_, row) => {
         const guess = guesses[row] || '';
         const pat = patterns[row] !== undefined ? patterns[row] : null;
         const tiles = pat !== null ? patternToTiles(pat) : null;
         const isActive = row === activeRow;
         const hasGuess = !!guess;
+        const states = tiles
+          ? (tiles as ('correct' | 'present' | 'absent' | 'empty')[])
+          : Array.from({ length: 5 }, () => 'empty' as const);
 
         return (
-          <div
+          <button
             key={row}
+            type="button"
+            role="listitem"
+            disabled={!hasGuess}
             onClick={() => hasGuess && onRowClick(row)}
-            className="flex transition-all duration-200"
-            style={{
-              gap: GAP,
-              cursor: hasGuess ? 'pointer' : 'default',
-              opacity: hasGuess && !isActive ? 0.55 : 1,
-              transform: isActive ? 'scale(1.05)' : 'scale(0.97)',
-              transformOrigin: 'left center',
-            }}
+            aria-label={hasGuess ? `Go to move ${row + 1}` : `Empty row ${row + 1}`}
+            aria-current={isActive ? 'true' : undefined}
+            className={clsx(
+              'flex items-center gap-2 p-0 border-0 bg-transparent transition-opacity duration-fast',
+              hasGuess ? 'cursor-pointer' : 'cursor-default',
+              hasGuess && !isActive && 'opacity-50 hover:opacity-100'
+            )}
           >
-            {Array.from({ length: 5 }).map((_, col) => {
-              const letter = guess[col] || '';
-              const state = tiles ? tiles[col] : 'empty';
-              let bg = 'transparent';
-              let border = '1px solid var(--tile-empty-border)';
-              if (state === 'correct') { bg = 'var(--tile-correct)'; border = 'none'; }
-              else if (state === 'present') { bg = 'var(--tile-present)'; border = 'none'; }
-              else if (state === 'absent') { bg = 'var(--tile-absent)'; border = 'none'; }
-              else if (letter) { bg = 'var(--bg-muted)'; border = '1px solid var(--border-default)'; }
-
-              return (
-                <div
-                  key={col}
-                  style={{
-                    width: TILE,
-                    height: TILE,
-                    backgroundColor: bg,
-                    border,
-                    borderRadius: 3,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {letter && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: tiles ? '#fff' : 'var(--text-secondary)',
-                        textTransform: 'uppercase',
-                        fontFamily: 'var(--font-sans)',
-                      }}
-                    >
-                      {letter}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            <span className={clsx('block w-[2px] h-5', isActive ? 'bg-accent' : 'bg-transparent')} aria-hidden="true" />
+            <MiniTiles word={hasGuess ? guess : '     '} states={states} size={22} gap={3} />
+          </button>
         );
       })}
     </div>
@@ -323,7 +271,7 @@ function NavigatorGrid({
 }
 
 /* ------------------------------------------------------------------ */
-/* Stats table (right of grid)                                         */
+/* Stats table                                                          */
 /* ------------------------------------------------------------------ */
 
 function StatsTable({
@@ -333,31 +281,24 @@ function StatsTable({
   moves: MoveAnalysis[];
   activeRow: number;
 }) {
-  const COL = 'font-sans text-[10px] uppercase tracking-[0.08em] text-right';
-
+  const COLS = '2.5rem repeat(4, 1fr)';
   return (
-    <div className="flex-1 min-w-0">
-      <div
-        className="grid gap-x-2 sm:gap-x-4 mb-1.5 px-1"
-        style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}
-      >
+    <div className="w-full min-w-0">
+      <div className="rule-top grid gap-x-2 sm:gap-x-4 pt-2 pb-1.5" style={{ gridTemplateColumns: COLS }}>
+        <Label>#</Label>
         {[
-          { full: 'SKILL', short: 'SKILL' },
-          { full: 'LUCK', short: 'LUCK' },
-          { full: 'WORDS LEFT', short: 'LEFT' },
-          { full: 'INFO (BITS)', short: 'BITS' },
+          { full: 'skill', short: 'skill' },
+          { full: 'luck', short: 'luck' },
+          { full: 'words left', short: 'left' },
+          { full: 'info (bits)', short: 'bits' },
         ].map((h) => (
-          <span
-            key={h.full}
-            className={clsx(COL, 'text-right')}
-            style={{ color: 'var(--text-tertiary)' }}
-          >
+          <Label key={h.full} className="text-right">
             <span className="sm:hidden">{h.short}</span>
             <span className="hidden sm:inline">{h.full}</span>
-          </span>
+          </Label>
         ))}
       </div>
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col">
         {moves.map((m, i) => {
           const isActive = i === activeRow;
           const bitsGained = m.info_gained ?? 0;
@@ -365,25 +306,20 @@ function StatsTable({
           return (
             <div
               key={i}
-              className="grid gap-x-2 sm:gap-x-4 rounded-md px-1 py-0.5"
-              style={{
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                backgroundColor: isActive
-                  ? 'color-mix(in srgb, var(--tile-correct) 8%, transparent)'
-                  : 'transparent',
-              }}
+              className={clsx(
+                'grid gap-x-2 sm:gap-x-4 py-1.5 border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast',
+                isActive && 'bg-bg-elevated'
+              )}
+              style={{ gridTemplateColumns: COLS }}
             >
+              <span className={clsx('font-mono text-xs tabular', isActive ? 'text-accent' : 'text-text-tertiary')}>{i + 1}</span>
               {[
                 String(m.skill_score ?? '—'),
                 String(m.luck_score ?? '—'),
                 wordsLeft,
                 bitsGained.toFixed(1),
               ].map((val, j) => (
-                <span
-                  key={j}
-                  className="font-display font-semibold tabular-nums text-base text-right"
-                  style={{ color: 'var(--text-primary)' }}
-                >
+                <span key={j} className="font-mono font-semibold tabular text-sm text-right text-text-primary">
                   {val}
                 </span>
               ))}
@@ -413,28 +349,14 @@ function BotPicksExpand({
 
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <Check
-          size={15}
-          style={{ color: 'var(--tile-correct)', flexShrink: 0 }}
-        />
-        <span
-          className="font-display font-semibold text-xl uppercase tracking-wide"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          {optimalWord}
-        </span>
-        <span
-          className="font-display font-semibold text-xl tabular-nums"
-          style={{ color: 'var(--tile-correct)' }}
-        >
-          99
-        </span>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Check size={15} style={{ color: 'var(--tile-correct)', flexShrink: 0 }} aria-hidden="true" />
+        <span className="font-display font-bold text-xl uppercase tracking-wide text-text-primary">{optimalWord}</span>
+        <span className="font-mono font-semibold text-lg tabular text-text-primary">99</span>
         {filtered.length > 0 && (
           <button
             onClick={() => setOpen((v) => !v)}
-            className="ml-1 p-0.5 rounded"
-            style={{ color: 'var(--tile-correct)' }}
+            className="ml-1 w-6 h-6 inline-flex items-center justify-center text-text-secondary hover:text-text-primary"
             aria-expanded={open}
             aria-label="Show alternative picks"
           >
@@ -442,7 +364,7 @@ function BotPicksExpand({
               size={16}
               style={{
                 transform: open ? 'rotate(180deg)' : 'none',
-                transition: 'transform 0.15s',
+                transition: 'transform var(--dur-fast)',
               }}
             />
           </button>
@@ -455,27 +377,14 @@ function BotPicksExpand({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
             className="overflow-hidden"
           >
-            <div className="mt-2 flex flex-col gap-1 pl-1">
+            <div className="mt-2 flex flex-col">
               {filtered.map((p, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 text-sm"
-                >
-                  <span
-                    className="font-sans font-semibold uppercase tracking-wide"
-                    style={{ color: 'var(--text-secondary)', minWidth: 52 }}
-                  >
-                    {p.word}
-                  </span>
-                  <span
-                    className="tabular-nums"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    ~{p.expected_remaining.toFixed(1)} exp.
-                  </span>
+                <div key={i} className="rule-hair py-1.5 flex items-center gap-3 text-sm">
+                  <span className="font-display font-bold uppercase tracking-wide text-text-secondary" style={{ minWidth: 56 }}>{p.word}</span>
+                  <span className="font-mono text-xs tabular text-text-tertiary">~{p.expected_remaining.toFixed(1)} exp.</span>
                 </div>
               ))}
             </div>
@@ -500,22 +409,22 @@ type MetricRowData = {
 
 function MetricMatrix({ rows }: { rows: MetricRowData[] }) {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col">
+      <div className="grid items-center gap-3 pb-1.5 border-b border-border-subtle" style={{ gridTemplateColumns: '64px 1fr 64px' }}>
+        <Label className="text-center">you</Label>
+        <span />
+        <Label className="text-center">bot</Label>
+      </div>
       {rows.map((r, i) => (
         <div
           key={i}
-          className="grid items-center gap-3"
-          style={{ gridTemplateColumns: '60px 1fr 60px' }}
+          className="grid items-center gap-3 py-2 border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast"
+          style={{ gridTemplateColumns: '64px 1fr 64px' }}
         >
           <div className="flex justify-center">
             <Chip value={r.your} highlighted={r.yH} />
           </div>
-          <p
-            className="font-sans text-[13px] text-center leading-tight"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            {r.label}
-          </p>
+          <p className="font-sans text-[13px] text-center leading-tight text-text-secondary">{r.label}</p>
           <div className="flex justify-center">
             <Chip value={r.bot} highlighted={r.bH} />
           </div>
@@ -555,12 +464,7 @@ function PatternGroupPanel({
 
   return (
     <div className="flex-1 min-w-0">
-      <p
-        className="font-sans text-[10px] uppercase tracking-[0.08em] mb-3"
-        style={{ color: 'var(--text-tertiary)' }}
-      >
-        {label}
-      </p>
+      <Label className="block mb-3">{label}</Label>
       <div className="flex flex-col gap-4">
         {rows.map(({ bucket, isExtra }, i) => {
           const pct =
@@ -571,84 +475,40 @@ function PatternGroupPanel({
           const labelText = bucket.is_actual
             ? 'Group with the solution'
             : 'Chance solution is among these words';
-          const barColor = bucket.is_actual
-            ? 'var(--tile-correct)'
-            : 'var(--border-strong)';
+          const barColor = bucket.is_actual ? 'var(--tile-correct)' : 'var(--border-default)';
 
           return (
             <div
               key={`${bucket.pattern}-${i}`}
-              className="flex flex-col gap-1"
-              style={
-                isExtra
-                  ? {
-                      paddingTop: 12,
-                      borderTop: '1px dashed var(--border-subtle)',
-                    }
-                  : undefined
-              }
+              className={clsx('flex flex-col gap-1.5', isExtra && 'rule-hair pt-3')}
             >
-              {isExtra && (
-                <span
-                  className="font-sans text-[9px] uppercase tracking-[0.08em] mb-1"
-                  style={{ color: 'var(--tile-correct)' }}
-                >
-                  Where the answer landed
-                </span>
-              )}
+              {isExtra && <Label className="mb-1 text-text-primary">where the answer landed</Label>}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex flex-col gap-1">
-                  <span
-                    className="font-sans text-[10px] uppercase tracking-[0.06em]"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    Pattern
-                  </span>
-                  <MiniPatternRow pattern={bucket.pattern} />
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-tertiary">pattern</span>
+                  <PatternRow pattern={bucket.pattern} size={14} gap={2} />
                 </div>
                 <div className="flex flex-col items-center gap-0.5">
-                  <span
-                    className="font-sans text-[10px] tracking-[0.02em]"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    e.g.
-                  </span>
-                  <span
-                    className="font-sans font-semibold text-sm uppercase"
-                    style={{
-                      color: bucket.is_actual
-                        ? 'var(--tile-correct)'
-                        : 'var(--text-secondary)',
-                    }}
-                  >
+                  <span className="font-mono text-[10px] text-text-tertiary">e.g.</span>
+                  <span className={clsx('font-display font-bold text-sm uppercase', bucket.is_actual ? 'text-text-primary' : 'text-text-secondary')}>
                     {repWord}
                   </span>
                 </div>
                 <div className="flex flex-col items-end gap-0.5">
-                  <span
-                    className="font-sans text-[9px] uppercase tracking-[0.06em] text-right leading-tight"
-                    style={{ color: 'var(--text-tertiary)', maxWidth: 80 }}
-                  >
+                  <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-right leading-tight text-text-tertiary" style={{ maxWidth: 88 }}>
                     {labelText}
                   </span>
-                  <span
-                    className="font-display font-semibold tabular-nums text-base"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {pct}%
-                  </span>
+                  <span className="font-mono font-semibold tabular text-base text-text-primary">{pct}%</span>
                 </div>
               </div>
-              <div
-                className="w-full rounded-full overflow-hidden"
-                style={{ height: 6, backgroundColor: 'var(--bg-muted)' }}
-              >
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${pct}%`,
-                    backgroundColor: barColor,
-                  }}
+              <div className="w-full relative" style={{ height: 2 }}>
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 bg-border-subtle" style={{ height: 1 }} aria-hidden="true" />
+                <motion.div
+                  className="absolute inset-y-0 left-0 w-full origin-left"
+                  style={{ backgroundColor: barColor }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: pct / 100 }}
+                  transition={{ duration: 0.6, delay: 0.1 + i * 0.06, ease: [0.2, 0.8, 0.2, 1] }}
                 />
               </div>
             </div>
@@ -778,98 +638,45 @@ function GuessCard({
   const [groupsH, botGroupsH] = highlightPair(numGroups, botNumGroups, 'higher');
   const [largestH, botLargestH] = highlightPair(largestGroup, botLargestGroup, 'lower');
   const [bitsH, botBitsH] = highlightPair(infoGained, optimalInfo, 'higher');
-  const dotStyle = (color: string): React.CSSProperties => ({
-    width: 8, height: 8, borderRadius: '50%', backgroundColor: color,
-    flexShrink: 0, display: 'inline-block',
-  });
   const classColor = move.classification ? classificationColor(move.classification) : 'var(--text-tertiary)';
+  const classTone = move.classification ? classificationTone(move.classification) : 'neutral';
   const statusIcon: React.ReactNode =
     move.classification === 'forced'
-      ? <Lock size={15} style={{ color: classColor, flexShrink: 0 }} />
+      ? <Lock size={15} style={{ color: classColor, flexShrink: 0 }} aria-hidden="true" />
       : move.classification === 'brilliant' || move.classification === 'best'
-      ? <Check size={15} style={{ color: classColor, flexShrink: 0 }} />
-      : <span style={dotStyle(classColor)} />;
+      ? <Check size={15} style={{ color: classColor, flexShrink: 0 }} aria-hidden="true" />
+      : null;
+  const guessTiles = patternToTiles(move.pattern).map((t) => (t === 'tbd' ? 'empty' : t));
 
   return (
-    <section
-      id={`guess-${n}`}
-      data-guess={n}
-      className="pt-10 mt-10"
-      style={{ borderTop: '1px solid var(--border-subtle)' }}
-    >
-      <h2
-        className="font-display font-semibold text-2xl mb-5"
-        style={{ color: 'var(--text-primary)' }}
-      >
-        Your {ordinal(n)} Guess
-      </h2>
+    <section id={`guess-${n}`} data-guess={n} className="pt-2">
+      <div className="rule-top pt-3 flex items-end justify-between gap-4 flex-wrap mb-6">
+        <div>
+          <Label className="block mb-1">move {n}</Label>
+          <h2 className="font-display text-display-md text-text-primary">Your {ordinal(n)} Guess</h2>
+        </div>
+        <MiniTiles word={move.guess_word} states={guessTiles} size={26} />
+      </div>
 
       <>
           {/* Comparison row */}
-          <div className="flex gap-6 mb-5 flex-wrap min-[520px]:flex-nowrap">
-            <div className="flex-1 min-w-0">
-              <p
-                className="font-sans text-[10px] uppercase tracking-[0.08em] mb-2"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                Your Guess
-              </p>
-              <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 min-[520px]:grid-cols-2 gap-6 mb-5">
+            <div className="rule-hair pt-3 min-w-0">
+              <Label className="block mb-2">your guess</Label>
+              <div className="flex items-center gap-2 flex-wrap">
                 {statusIcon}
-                <span
-                  className="font-display font-semibold text-xl uppercase tracking-wide"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {move.guess_word}
-                </span>
-                <span
-                  className="font-display font-semibold text-xl tabular-nums"
-                  style={{
-                    color:
-                      skill >= 95
-                        ? 'var(--tile-correct)'
-                        : 'var(--text-primary)',
-                  }}
-                >
-                  {skill}
-                </span>
-                {move.classification && (() => {
-                  const c = classificationColor(move.classification);
-                  return (
-                    <span
-                      className="font-sans text-[9px] uppercase tracking-[0.08em] px-1.5 py-0.5 rounded-pill font-semibold"
-                      style={{
-                        color: c,
-                        backgroundColor: `color-mix(in srgb, ${c} 14%, transparent)`,
-                        border: `1px solid color-mix(in srgb, ${c} 35%, transparent)`,
-                      }}
-                    >
-                      {move.classification}
-                    </span>
-                  );
-                })()}
+                <span className="font-display font-bold text-xl uppercase tracking-wide text-text-primary">{move.guess_word}</span>
+                <span className="font-mono font-semibold text-lg tabular text-text-primary">{skill}</span>
+                {move.classification && <Tag tone={classTone}>{move.classification}</Tag>}
               </div>
             </div>
 
-            <div className="flex-1 min-w-0">
-              <p
-                className="font-sans text-[10px] uppercase tracking-[0.08em] mb-2"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                My Picks
-              </p>
+            <div className="rule-hair pt-3 min-w-0">
+              <Label className="block mb-2">my picks</Label>
               {optimalWord === '—' ? (
-                <span
-                  className="font-display font-semibold text-xl"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  —
-                </span>
+                <span className="font-display font-bold text-xl text-text-tertiary">—</span>
               ) : (
-                <BotPicksExpand
-                  picks={picks}
-                  optimalWord={optimalWord}
-                />
+                <BotPicksExpand picks={picks} optimalWord={optimalWord} />
               )}
             </div>
           </div>
@@ -880,46 +687,22 @@ function GuessCard({
               <Skeleton className="h-3.5 w-[85%]" />
             </div>
           ) : (
-            <p
-              className="font-sans text-[15px] leading-relaxed mb-6"
-              style={{ color: 'var(--text-secondary)' }}
-            >
+            <p className="font-sans text-[15px] leading-relaxed mb-6 text-text-secondary">
               {aiCommentary || buildCommentary(move, optimalWord)}
             </p>
           )}
 
           {/* Solved variant — skip metrics/groups */}
           {isSolving ? (
-            <div
-              className="flex items-center gap-3 py-4 px-5 rounded-xl"
-              style={{ backgroundColor: 'var(--bg-muted)' }}
-            >
-              <span
-                className="font-display font-semibold text-lg"
-                style={{ color: 'var(--tile-correct)' }}
-              >
-                Puzzle solved in {n}/6
-              </span>
-              <span
-                className="font-display font-semibold text-xl uppercase tracking-wide"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {move.guess_word}
-              </span>
+            <div className="flex items-center gap-4 py-5 px-5 bg-wash-green flex-wrap">
+              <MiniTiles word={move.guess_word} states={['correct', 'correct', 'correct', 'correct', 'correct']} size={26} />
+              <span className="font-display text-display-sm text-text-primary">Puzzle solved in {n}/6.</span>
             </div>
           ) : (
             <>
               {/* Metrics matrix */}
-              <div
-                className="pt-6 mt-6"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <p
-                  className="font-display font-semibold text-base mb-4"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  Comparing our guesses
-                </p>
+              <div className="rule-top pt-4 mt-8">
+                <Label className="block mb-4">comparing our guesses</Label>
 
                 <div className="mb-3">
                   <MetricMatrix rows={[
@@ -936,44 +719,30 @@ function GuessCard({
                   ]} />
                 </div>
 
-                <p
-                  className="font-sans text-[13px]"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  Better outcomes are{' '}
-                  <Chip value="highlighted" highlighted={true} />.
+                <p className="font-sans text-xs text-text-tertiary flex items-center gap-1.5 flex-wrap">
+                  Better outcomes are <Chip value="highlighted" highlighted={true} />.
                 </p>
               </div>
 
               {/* Pattern groups */}
               {pDist.length > 0 && (
-                <div
-                  className="pt-6 mt-6"
-                  style={{ borderTop: '1px solid var(--border-subtle)' }}
-                >
-                  <p
-                    className="font-sans text-[15px] leading-relaxed mb-5"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
+                <div className="rule-top pt-4 mt-8">
+                  <p className="font-sans text-[15px] leading-relaxed mb-5 text-text-secondary">
                     Here&rsquo;s how our guesses divided the{' '}
-                    <strong
-                      style={{ color: 'var(--text-primary)', fontWeight: 600 }}
-                    >
-                      {remainBefore} solutions
-                    </strong>{' '}
+                    <strong className="text-text-primary font-semibold">{remainBefore} solutions</strong>{' '}
                     that I think remained before your guess. (On average, more
                     and smaller groups mean faster solving.)
                   </p>
 
-                  <div className="mb-4">
+                  <div className="mb-6">
                     <MetricMatrix rows={[
                       { your: String(numGroups), bot: botNumGroups != null ? String(botNumGroups) : '—', label: 'Number of groups', yH: groupsH, bH: botGroupsH },
                       { your: largestGroup != null ? String(largestGroup) : '—', bot: botLargestGroup != null ? String(botLargestGroup) : '—', label: 'Largest group', yH: largestH, bH: botLargestH },
-                      { your: infoGained.toFixed(2), bot: optimalInfo > 0 ? optimalInfo.toFixed(2) : '—', label: <>Bits of <a href="/faq#strategy-math" className="underline" style={{ color: 'var(--tile-correct)' }}>information</a></>, yH: bitsH, bH: botBitsH },
+                      { your: infoGained.toFixed(2), bot: optimalInfo > 0 ? optimalInfo.toFixed(2) : '—', label: <>Bits of <a href="/faq#strategy-math" className="ink-link text-text-primary">information</a></>, yH: bitsH, bH: botBitsH },
                     ]} />
                   </div>
 
-                  <div className="flex gap-6 flex-wrap min-[520px]:flex-nowrap">
+                  <div className="grid grid-cols-1 min-[520px]:grid-cols-2 gap-6">
                     <PatternGroupPanel
                       label={`Your Groups, with ${move.guess_word}`}
                       buckets={pDist}
@@ -987,18 +756,8 @@ function GuessCard({
                       />
                     ) : (
                       <div className="flex-1 min-w-0">
-                        <p
-                          className="font-sans text-[10px] uppercase tracking-[0.08em] mb-3"
-                          style={{ color: 'var(--text-tertiary)' }}
-                        >
-                          {`My Groups, with ${optimalWord}`}
-                        </p>
-                        <p
-                          className="font-sans text-sm italic"
-                          style={{ color: 'var(--text-tertiary)' }}
-                        >
-                          My groups not available for this analysis.
-                        </p>
+                        <Label className="block mb-3">{`My Groups, with ${optimalWord}`}</Label>
+                        <p className="font-sans text-sm text-text-tertiary">My groups not available for this analysis.</p>
                       </div>
                     )}
                   </div>
@@ -1047,10 +806,7 @@ function CommunityPanel({
 
   if (loading) {
     return (
-      <section
-        className="pt-10 mt-10"
-        style={{ borderTop: '1px solid var(--border-subtle)' }}
-      >
+      <section className="rule-top pt-6 mt-10">
         <Skeleton className="h-6 w-48 mb-3" />
         <Skeleton className="h-24" />
       </section>
@@ -1067,81 +823,34 @@ function CommunityPanel({
   const beatAvg = delta != null && delta < 0;
 
   return (
-    <section
-      className="pt-10 mt-10"
-      style={{ borderTop: '1px solid var(--border-subtle)' }}
-    >
-      <h2
-        className="font-display font-semibold text-xl mb-1"
-        style={{ color: 'var(--text-primary)' }}
-      >
-        How others did with {targetWord ?? 'this word'}
-      </h2>
-      <p
-        className="font-sans text-[15px] leading-relaxed mb-6"
-        style={{ color: 'var(--text-secondary)' }}
-      >
+    <section className="mt-6">
+      <SectionHead eyebrow="community" title={<>How others did with {targetWord ?? 'this word'}</>} />
+      <p className="font-sans text-sm leading-relaxed text-text-secondary mt-3 mb-6">
         {hasData
           ? `${stats.times_played.toLocaleString()} other ELOquence players have faced this word.`
           : 'No one else has played this word yet — stats will appear as others solve it.'}
       </p>
 
       {hasData && (
-        <div className="flex gap-8 mb-4">
-          <div className="flex flex-col gap-0.5">
-            <span
-              className="font-display font-semibold tabular-nums"
-              style={{ fontSize: '2.25rem', lineHeight: 1, color: 'var(--text-primary)' }}
-            >
-              {Math.round(stats.solve_rate)}%
-            </span>
-            <span
-              className="font-sans text-[11px] uppercase tracking-[0.08em]"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              solve rate
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-0.5">
-            <span
-              className="font-display font-semibold tabular-nums"
-              style={{ fontSize: '2.25rem', lineHeight: 1, color: 'var(--text-primary)' }}
-            >
-              {stats.avg_guesses != null
-                ? stats.avg_guesses.toFixed(1)
-                : '—'}
-            </span>
-            <span
-              className="font-sans text-[11px] uppercase tracking-[0.08em]"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              community avg
-            </span>
-            {delta != null && (
-              <span
-                className="font-sans text-[12px] mt-0.5"
-                style={{
-                  color: beatAvg
-                    ? 'var(--tile-correct)'
-                    : 'var(--text-tertiary)',
-                }}
-              >
-                You: {playerGuesses} ({delta > 0 ? '+' : ''}
-                {delta.toFixed(1)} vs avg)
-              </span>
-            )}
-          </div>
+        <div className="grid grid-cols-2 gap-x-6 mb-4 max-w-md">
+          <Stat label="solve rate" value={`${Math.round(stats.solve_rate)}%`} />
+          <Stat
+            label="community avg"
+            value={stats.avg_guesses != null ? stats.avg_guesses.toFixed(1) : '—'}
+            sub={
+              delta != null ? (
+                <span className={clsx('font-mono tabular', beatAvg ? 'text-text-primary font-semibold' : 'text-text-tertiary')}>
+                  you: {playerGuesses} ({delta > 0 ? '+' : ''}
+                  {delta.toFixed(1)} vs avg)
+                </span>
+              ) : undefined
+            }
+          />
         </div>
       )}
 
       {hasData && (
-        <p
-          className="font-sans text-[13px] italic"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          As more players solve this word, this card gets richer.
-        </p>
+        <p className="font-sans text-xs text-text-tertiary">As more players solve this word, this card gets richer.</p>
       )}
     </section>
   );
@@ -1162,34 +871,14 @@ function CoachFab({
 
   return (
     <>
-      {/* Idle pulse ring behind the FAB */}
-      <motion.span
-        className="fixed bottom-6 right-6 rounded-pill pointer-events-none"
-        style={{
-          width: 120,
-          height: 48,
-          zIndex: 39,
-          backgroundColor: 'var(--tile-correct)',
-          opacity: 0,
-        }}
-        animate={open ? {} : { opacity: [0, 0.25, 0], scale: [1, 1.18, 1] }}
-        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.6 }}
-      />
       <motion.button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2.5 rounded-pill px-5 py-3.5"
-        style={{
-          backgroundColor: 'var(--tile-correct)',
-          color: '#fff',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.18), 0 0 0 0 var(--tile-correct)',
-        }}
-        whileHover={{ scale: 1.06 }}
+        className="fixed bottom-6 right-6 z-40 w-16 h-16 flex flex-col items-center justify-center gap-1 bg-bg-ink text-text-on-ink border-2 border-border-default hover:shadow-ink hover:-translate-x-0.5 hover:-translate-y-0.5 transition-[transform,box-shadow] duration-fast"
         whileTap={{ scale: 0.97 }}
-        transition={{ type: 'spring', stiffness: 380, damping: 22 }}
         aria-label="Open coach"
       >
-        <MessageCircle size={20} />
-        <span className="font-sans font-bold text-sm tracking-wide">Coach</span>
+        <MessageCircle size={18} aria-hidden="true" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em]">coach</span>
       </motion.button>
 
       <AnimatePresence>
@@ -1201,7 +890,8 @@ function CoachFab({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-40 bg-black/40 md:hidden"
+              className="fixed inset-0 z-40 md:hidden"
+              style={{ backgroundColor: 'var(--dialog-backdrop)' }}
               onClick={() => setOpen(false)}
             />
             <motion.div
@@ -1209,43 +899,27 @@ function CoachFab({
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="fixed top-14 right-0 bottom-0 z-40 flex flex-col"
-              style={{
-                width: '100%',
-                maxWidth: 380,
-                backgroundColor: 'var(--bg-elevated)',
-                borderLeft: '1px solid var(--border-subtle)',
-                boxShadow: 'var(--shadow-modal)',
-              }}
+              transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+              className="fixed z-40 flex flex-col bg-bg-elevated border-2 border-border-default shadow-ink"
+              style={{ top: 'calc(var(--nav-h) + 16px)', right: 16, bottom: 16, width: 'calc(100% - 32px)', maxWidth: 380 }}
+              role="dialog"
+              aria-label="Coach"
             >
-              <div
-                className="flex items-center justify-between px-4 py-3 shrink-0"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
+              <div className="flex items-center justify-between px-4 py-3 shrink-0 border-b-2 border-border-default">
                 <div className="flex items-center gap-2">
-                  <MessageCircle size={15} style={{ color: 'var(--tile-correct)' }} />
-                  <span
-                    className="font-display font-semibold text-base"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    Coach
-                  </span>
+                  <span className="w-2 h-2 rounded-full bg-accent" aria-hidden="true" />
+                  <span className="font-display font-bold text-base text-text-primary">Coach</span>
                 </div>
                 <button
                   onClick={() => setOpen(false)}
-                  className="p-1.5 rounded-md"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  className="w-8 h-8 inline-flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors duration-fast"
                   aria-label="Close coach"
                 >
-                  <X size={16} />
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-hidden">
-                <CoachChat
-                  gameId={gameId}
-                  gameContext={gameContext}
-                />
+                <CoachChat gameId={gameId} gameContext={gameContext} />
               </div>
             </motion.div>
           </>
@@ -1269,80 +943,98 @@ function StepOverview({
   showExplanation,
   setShowExplanation,
   game,
+  guesses,
+  patterns,
+  onRowClick,
 }: {
   analysis: AnalysisResult;
   activeRow: number;
   showExplanation: boolean;
   setShowExplanation: (fn: (v: boolean) => boolean) => void;
   game: Game | null;
+  guesses: string[];
+  patterns: number[];
+  onRowClick: (row: number) => void;
 }) {
+  const won = game?.status === 'won';
+  const lost = game?.status === 'lost';
+  const skill = Math.round(analysis.skill_avg ?? analysis.skill_avg_excluding_opener ?? 0);
+  const luck = Math.round(analysis.luck_avg ?? 0);
+  const openerSub =
+    (analysis.opener_total_games ?? 0) > 1 ? `${analysis.opener_rarity_pct ?? 0}% chose differently` : 'first play of this opener';
+
   return (
-    <div>
-      <StatsTable moves={analysis.moves} activeRow={activeRow} />
-
-      <div
-        className="mt-8 pt-6"
-        style={{ borderTop: '1px solid var(--border-subtle)' }}
-      >
-        <div className="flex gap-6 flex-wrap mb-3">
-          {[
-            {
-              label: 'Skill',
-              value: String(
-                Math.round(
-                  analysis.skill_avg ?? analysis.skill_avg_excluding_opener ?? 0,
-                ),
-              ),
-              sub: 'your decisions',
-            },
-            { label: 'Luck', value: String(Math.round(analysis.luck_avg ?? 0)), sub: 'your outcomes' },
-            {
-              label: 'Opener',
-              value: analysis.opener_word || '—',
-              sub:
-                (analysis.opener_total_games ?? 0) > 1
-                  ? `${analysis.opener_rarity_pct ?? 0}% chose differently`
-                  : 'first play of this opener',
-            },
-          ].map(({ label, value, sub }) => (
-            <div key={label} className="flex flex-col gap-0.5">
-              <span
-                className="font-sans text-[10px] uppercase tracking-[0.08em]"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                {label}
+    <div className="pt-2">
+      {/* Editorial spread: word + result left, the real board right */}
+      <div className="grid md:grid-cols-12 gap-8 items-start">
+        <div className="md:col-span-7 flex flex-col gap-4">
+          <h1 className="font-display text-display-lg text-text-primary uppercase break-words">{game?.target_word ?? '—'}</h1>
+          <p className="font-display text-display-sm text-text-primary">
+            {won ? `Won in ${game!.num_guesses}` : lost ? 'Not solved' : '—'}
+          </p>
+          <div className="flex flex-col gap-1 font-mono text-xs text-text-secondary tabular">
+            <span>{game?.mode ?? '—'}{game?.rated ? ' · rated' : ''}</span>
+            {game?.created_at && (
+              <span>{new Date(game.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            )}
+            {game?.word_difficulty != null && <span>word elo {Math.round(game.word_difficulty)}</span>}
+            {game?.elo_delta != null && game.elo_delta !== 0 && (
+              <span className="text-text-primary font-semibold">
+                {game.elo_delta > 0 ? '+' : ''}
+                {Math.round(game.elo_delta)} elo
               </span>
-              <span
-                className="font-display font-semibold tabular-nums text-3xl leading-none"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {value}
-              </span>
-              {sub && (
-                <span
-                  className="font-sans text-[11px]"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  {sub}
-                </span>
-              )}
-            </div>
-          ))}
+            )}
+          </div>
         </div>
+        <div className="md:col-span-5 flex md:justify-end">
+          <div role="grid" aria-label="Game board" className="flex flex-col" style={{ gap: 'var(--tile-gap)' }}>
+            {Array.from({ length: 6 }).map((_, row) => {
+              const guess = guesses[row] || '';
+              const tiles = patterns[row] !== undefined ? patternToTiles(patterns[row]) : null;
+              const hasGuess = !!guess;
+              return (
+                <div
+                  key={row}
+                  role="row"
+                  onClick={() => hasGuess && onRowClick(row)}
+                  className={clsx('flex', hasGuess && 'cursor-pointer')}
+                  style={{ gap: 'var(--tile-gap)' }}
+                  title={hasGuess ? `Open move ${row + 1}` : undefined}
+                >
+                  {Array.from({ length: 5 }).map((_, col) => (
+                    <div key={col} role="gridcell">
+                      <Tile letter={guess[col] ?? ''} state={tiles ? tiles[col] : 'empty'} position={col} size="clamp(36px, 5vw, 48px)" />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
-        <p
-          className="font-sans text-[13px] mb-2"
-          style={{ color: 'var(--text-secondary)' }}
-        >
+      {/* Headline numbers */}
+      <div className="mt-10 grid grid-cols-3 gap-x-6">
+        <Stat label="skill" value={skill} size="lg" sub="your decisions" />
+        <Stat label="luck" value={luck} size="lg" sub="your outcomes" />
+        <Stat label="opener" value={analysis.opener_word || '—'} size="lg" sub={openerSub} />
+      </div>
+
+      <div className="mt-10">
+        <StatsTable moves={analysis.moves} activeRow={activeRow} />
+      </div>
+
+      <div className="mt-6">
+        <p className="font-sans text-sm text-text-secondary mb-2">
           Decision quality vs. how the tiles fell — judged separately.
         </p>
 
         <button
           onClick={() => setShowExplanation((v) => !v)}
-          className="font-sans text-[13px] underline"
-          style={{ color: 'var(--tile-correct)' }}
+          className="ink-link font-mono text-label uppercase text-text-primary"
+          aria-expanded={showExplanation}
         >
-          {showExplanation ? 'Show less' : 'Show more'}
+          {showExplanation ? 'show less' : 'show more'}
         </button>
 
         <AnimatePresence>
@@ -1351,7 +1043,7 @@ function StepOverview({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
               className="overflow-hidden"
             >
               {/* ELO distribution — top of the disclosure so it's the
@@ -1362,16 +1054,8 @@ function StepOverview({
                 </div>
               )}
 
-              <div
-                className="mt-4 rounded-xl p-4"
-                style={{ backgroundColor: 'var(--bg-muted)' }}
-              >
-                <p
-                  className="font-sans font-semibold text-sm mb-3"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  How to read the columns
-                </p>
+              <div className="mt-6 rule-top pt-4">
+                <Label className="block mb-3">how to read the columns</Label>
                 {[
                   {
                     term: 'Skill (0–99)',
@@ -1390,15 +1074,8 @@ function StepOverview({
                     def: 'How many bits of information this guess revealed. Each bit cuts the remaining possibilities in half — 1 bit ≈ half the words gone, 2 bits ≈ three-quarters gone, and so on. A strong guess gains several bits; a wasted guess gains almost none.',
                   },
                 ].map(({ term, def }) => (
-                  <p
-                    key={term}
-                    className="font-sans text-[13px] leading-relaxed mb-2 last:mb-0"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {term}
-                    </strong>{' '}
-                    &mdash; {def}
+                  <p key={term} className="rule-hair py-3 font-sans text-sm leading-relaxed text-text-secondary">
+                    <strong className="text-text-primary font-semibold">{term}</strong> &mdash; {def}
                   </p>
                 ))}
               </div>
@@ -1419,6 +1096,7 @@ function StepFinal({
   analysis: AnalysisResult;
   router: ReturnType<typeof useRouter>;
 }) {
+  void analysis;
   return (
     <div>
       {game && game.status !== 'in_progress' && game.user_id && (
@@ -1428,18 +1106,11 @@ function StepFinal({
           playerGuesses={game.num_guesses}
         />
       )}
-      <footer
-        className="pt-10 mt-10 pb-6 flex flex-col gap-3"
-        style={{ borderTop: '1px solid var(--border-subtle)' }}
-      >
-        <button
-          onClick={() => router.push('/play')}
-          className="flex items-center gap-1.5 font-sans text-sm self-start"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          <ArrowLeft size={14} />
+      <footer className="rule-top pt-6 mt-10 pb-6 flex flex-col gap-3 items-start">
+        <Button variant="primary" onClick={() => router.push('/play')}>
+          <ArrowLeft size={14} aria-hidden="true" />
           Back to play
-        </button>
+        </Button>
       </footer>
     </div>
   );
@@ -1589,7 +1260,7 @@ function ReviewPage() {
 
   if (loadingGame) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
+      <div className="flex items-center justify-center min-h-page">
         <TileLoader size={22} />
       </div>
     );
@@ -1599,370 +1270,232 @@ function ReviewPage() {
     ? `Game: ${game.target_word ?? 'unknown'}, ${game.status} in ${game.num_guesses}/6, mode: ${game.mode}`
     : '';
 
+  const resultStates: ('correct' | 'absent')[] = Array.from({ length: 5 }, () => (wonGame ? 'correct' : 'absent'));
+
   return (
-    <div
-      className="min-h-[calc(100dvh-56px)]"
-      style={{ backgroundColor: 'var(--bg-base)' }}
-    >
-      {/* Sticky mini-header */}
-      <div
-        className="sticky top-0 z-10 h-[52px] flex items-center px-5 gap-3"
-        style={{
-          borderBottom: '1px solid var(--border-subtle)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          backgroundColor: 'color-mix(in srgb, var(--bg-base) 85%, transparent)',
-        }}
-      >
-        <button
-          onClick={() => router.push('/play')}
-          className="flex items-center gap-1.5 text-sm"
-          style={{ color: 'var(--text-tertiary)' }}
-          aria-label="Back to play"
-        >
-          <ArrowLeft size={16} />
-          <span className="hidden sm:inline">Play</span>
-        </button>
-
-        <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
-          {game?.target_word && (
-            <span
-              className="font-display font-semibold uppercase tracking-wide text-sm"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {game.target_word}
-            </span>
-          )}
-          <span
-            className="inline-flex items-center rounded-pill px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
-            style={{
-              backgroundColor: wonGame
-                ? 'color-mix(in srgb, var(--tile-correct) 15%, transparent)'
-                : 'color-mix(in srgb, var(--text-tertiary) 15%, transparent)',
-              color: wonGame ? 'var(--tile-correct)' : 'var(--text-tertiary)',
-            }}
-          >
-            {wonGame
-              ? `Won ${game.num_guesses}/6`
-              : lostGame
-              ? 'Lost'
-              : game?.status ?? ''}
-          </span>
-          {game?.mode && (
-            <span
-              className="hidden sm:inline rounded-pill px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em]"
-              style={{
-                backgroundColor: 'var(--bg-muted)',
-                color: 'var(--text-tertiary)',
-              }}
-            >
-              {game.mode}
-            </span>
-          )}
-        </div>
-
-        <div className="relative">
+    <div className="min-h-page bg-bg-base">
+      {/* Sticky top bar */}
+      <div className="sticky top-0 z-10 h-[52px] bg-bg-base border-b border-border-subtle">
+        <div className="max-w-6xl mx-auto px-4 md:px-8 h-full flex items-center gap-4">
           <button
-            onClick={handleShare}
-            className="p-1.5 rounded-md"
-            style={{ color: 'var(--text-tertiary)' }}
-            aria-label="Share"
+            onClick={() => router.push('/play')}
+            className="ink-link inline-flex items-center gap-1.5 font-mono text-label uppercase text-text-secondary hover:text-text-primary"
+            aria-label="Back to play"
           >
-            <Share2 size={16} />
+            <ArrowLeft size={14} aria-hidden="true" />
+            <span className="hidden sm:inline">play</span>
           </button>
-          <AnimatePresence>
-            {toastVisible && (
-              <motion.span
-                key="toast"
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-1 rounded-md px-2.5 py-1.5 text-xs font-sans whitespace-nowrap pointer-events-none"
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-primary)',
-                  zIndex: 99,
-                }}
-              >
-                Link copied
-              </motion.span>
-            )}
-          </AnimatePresence>
+
+          <div className="flex-1 flex items-center justify-center gap-3 min-w-0">
+            {game?.target_word && <MiniTiles word={game.target_word} states={resultStates} size={22} />}
+            <Tag tone={wonGame ? 'green' : lostGame ? 'accent' : 'neutral'}>
+              {wonGame ? `won ${game.num_guesses}/6` : lostGame ? 'lost' : game?.status ?? ''}
+            </Tag>
+            {game?.mode && <Tag className="hidden sm:inline-flex">{game.mode}</Tag>}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={handleShare}
+              className="ink-link inline-flex items-center gap-1.5 font-mono text-label uppercase text-text-secondary hover:text-text-primary"
+              aria-label="Share"
+            >
+              <Share2 size={14} aria-hidden="true" />
+              <span className="hidden sm:inline">share</span>
+            </button>
+            <AnimatePresence>
+              {toastVisible && (
+                <motion.span
+                  key="toast"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-2 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] whitespace-nowrap pointer-events-none bg-bg-ink text-text-on-ink"
+                  style={{ zIndex: 99 }}
+                >
+                  link copied
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 
       {/* Main column */}
-      <div className="max-w-[680px] mx-auto px-5 md:px-0 pb-4 relative">
-
-        {/* Persistent header — compact layout so the analysis box fits in viewport */}
-        <div className="pt-6 mb-4 flex items-start gap-6 flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <p
-              className="font-sans text-[10px] uppercase tracking-[0.1em] mb-1"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              Game review
-            </p>
-            <h1
-              className="font-display font-bold uppercase tracking-wide mb-1.5"
-              style={{ fontSize: '1.75rem', color: 'var(--text-primary)', lineHeight: 1.1 }}
-            >
-              {game?.target_word ?? '—'}
-            </h1>
-            <div
-              className="flex items-center gap-2 flex-wrap font-sans text-xs"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              <span>
-                {wonGame
-                  ? `Won in ${game!.num_guesses}/6`
-                  : lostGame
-                  ? 'Not solved'
-                  : '—'}
-              </span>
-              <span style={{ color: 'var(--text-tertiary)' }}>·</span>
-              <span className="capitalize">{game?.mode ?? '—'}</span>
-              {game?.created_at && (
-                <>
-                  <span style={{ color: 'var(--text-tertiary)' }}>·</span>
-                  <span>
-                    {new Date(game.created_at).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-                  </span>
-                </>
-              )}
-              {game?.word_difficulty != null && (
-                <>
-                  <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+      <div className="max-w-6xl mx-auto px-4 md:px-8 pb-6 relative">
+        <div className="max-w-[760px] mx-auto">
+          {/* Persistent header — eyebrow + meta, navigator on move steps */}
+          <div className="pt-6 mb-4 flex items-start justify-between gap-6 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <Label className="block mb-1">
+                game review{game?.mode ? ` · ${game.mode}` : ''}
+                {game?.created_at
+                  ? ` · ${new Date(game.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                  : ''}
+              </Label>
+              <div className="flex items-center gap-3 flex-wrap font-mono text-xs text-text-secondary tabular">
+                {currentStep !== 0 && (
+                  <span className="font-display font-bold text-base text-text-primary uppercase tracking-wide">{game?.target_word ?? '—'}</span>
+                )}
+                <span>{wonGame ? `won in ${game!.num_guesses}/6` : lostGame ? 'not solved' : '—'}</span>
+                {game?.word_difficulty != null && (
                   <span title="Difficulty rating of the solved word">
-                    Word ELO{' '}
-                    <span className="font-mono tabular-nums font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {Math.round(game.word_difficulty)}
-                    </span>
+                    word elo <span className="text-text-primary font-semibold">{Math.round(game.word_difficulty)}</span>
                   </span>
-                </>
-              )}
-              {eloDelta != null && eloDelta !== 0 && (
-                <span
-                  className="rounded-pill px-2 py-0.5 text-[10px] font-semibold tabular-nums"
-                  style={{
-                    backgroundColor:
-                      eloDelta > 0
-                        ? 'color-mix(in srgb, var(--tile-correct) 15%, transparent)'
-                        : 'color-mix(in srgb, var(--red) 15%, transparent)',
-                    color: eloDelta > 0 ? 'var(--tile-correct)' : 'var(--red)',
-                  }}
-                >
-                  {eloDelta > 0 ? '+' : ''}
-                  {Math.round(eloDelta)} ELO
-                </span>
-              )}
+                )}
+                {eloDelta != null && eloDelta !== 0 && (
+                  <Tag tone={eloDelta > 0 ? 'green' : 'accent'}>
+                    {eloDelta > 0 ? '+' : ''}
+                    {Math.round(eloDelta)} elo
+                  </Tag>
+                )}
+              </div>
             </div>
+
+            {/* Navigator — hidden on the Overview step, which shows the real board */}
+            {analysis && !loadingAnalysis && currentStep !== 0 && (
+              <div className="shrink-0">
+                <NavigatorGrid guesses={guesses} patterns={boardPatterns} activeRow={activeRow} onRowClick={goToMoveRow} />
+              </div>
+            )}
           </div>
 
-          {/* Persistent NavigatorGrid — sits inline with the title to save vertical space */}
+          {/* Analysis error */}
+          {analysisError && (
+            <div className="mt-6 bg-wash-accent px-5 py-5 flex flex-col gap-3 items-start">
+              <p className="font-display text-display-sm text-text-primary">{analysisError}</p>
+              <Button variant="secondary" size="sm" onClick={runAnalysis}>
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {/* Loading skeleton for analysis */}
+          {loadingAnalysis && (
+            <div className="mt-6 flex flex-col gap-4">
+              <Skeleton className="h-32" />
+              <Skeleton className="h-7 w-40" />
+              <Skeleton className="h-16" />
+            </div>
+          )}
+
+          {/* Step panels — internal scrolling so the page itself stays put */}
           {analysis && !loadingAnalysis && (
-            <div className="shrink-0">
-              <NavigatorGrid
-                guesses={guesses}
-                patterns={boardPatterns}
-                activeRow={activeRow}
-                onRowClick={goToMoveRow}
-              />
+            <div className="relative" style={{ height: 'max(320px, calc(100dvh - 330px))' }}>
+              {/* Anchored arrows — sit just outside the box, vertically centered with it */}
+              {totalSteps > 1 && (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={goPrev}
+                    disabled={currentStep === 0}
+                    aria-label="Previous step (←)"
+                    className="hidden lg:inline-flex absolute -left-24 top-1/2 -translate-y-1/2 z-10 w-11 h-11 !px-0 bg-bg-base disabled:opacity-0 disabled:pointer-events-none"
+                  >
+                    <ChevronLeft size={18} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={goNext}
+                    disabled={currentStep === totalSteps - 1}
+                    aria-label="Next step (→)"
+                    className="hidden lg:inline-flex absolute -right-24 top-1/2 -translate-y-1/2 z-10 w-11 h-11 !px-0 bg-bg-base disabled:opacity-0 disabled:pointer-events-none"
+                  >
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </Button>
+                </>
+              )}
+
+              <div className="overflow-x-hidden h-full">
+                <AnimatePresence mode="wait" custom={stepDir}>
+                  <motion.div
+                    key={currentStep}
+                    custom={stepDir}
+                    initial={{ opacity: 0, x: stepDir > 0 ? 40 : -40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: stepDir > 0 ? -40 : 40 }}
+                    transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+                    className="h-full overflow-y-auto pr-1"
+                    style={{ scrollbarGutter: 'stable' }}
+                  >
+                    {currentStep === 0 && (
+                      <StepOverview
+                        analysis={analysis}
+                        activeRow={activeRow}
+                        showExplanation={showExplanation}
+                        setShowExplanation={setShowExplanation}
+                        game={game}
+                        guesses={guesses}
+                        patterns={boardPatterns}
+                        onRowClick={goToMoveRow}
+                      />
+                    )}
+                    {currentStep >= 1 && currentStep <= moveCount && (
+                      <GuessCard
+                        move={analysis.moves[currentStep - 1]}
+                        moveIndex={currentStep - 1}
+                        activeRow={activeRow}
+                        targetWord={game?.target_word ?? null}
+                        gameId={game?.id ?? null}
+                        aiCacheRef={aiCacheRef}
+                      />
+                    )}
+                    {currentStep === moveCount + 1 && <StepFinal game={game} analysis={analysis} router={router} />}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+            </div>
+          )}
+
+          {/* Step indicator — thin ink segments, the active one in accent */}
+          {analysis && !loadingAnalysis && totalSteps > 1 && (
+            <div className="mt-4 flex justify-center items-center gap-1" role="tablist" aria-label="Review steps">
+              {Array.from({ length: totalSteps }).map((_, i) => {
+                const active = i === currentStep;
+                const label = i === 0 ? 'Overview' : i === moveCount + 1 ? 'Final' : `Move ${i}`;
+                return (
+                  <button
+                    key={i}
+                    role="tab"
+                    aria-selected={active}
+                    aria-label={label}
+                    onClick={() => goToStep(i)}
+                    className="group py-2 px-0.5"
+                  >
+                    <span
+                      className={clsx(
+                        'block h-[2px] transition-[background-color,width] duration-med ease-ink',
+                        active ? 'w-8 bg-accent' : 'w-5 bg-border-subtle group-hover:bg-border-default'
+                      )}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Step counter + arrow controls */}
+          {analysis && !loadingAnalysis && totalSteps > 1 && (
+            <div className="mt-1 flex items-center justify-center gap-4">
+              <Button variant="secondary" size="sm" onClick={goPrev} disabled={currentStep === 0} aria-label="Previous step" className="w-9 !px-0">
+                <ChevronLeft size={16} aria-hidden="true" />
+              </Button>
+              <span className="font-mono text-xs tabular text-text-tertiary select-none">
+                {currentStep + 1} / {totalSteps}
+              </span>
+              <Button variant="secondary" size="sm" onClick={goNext} disabled={currentStep === totalSteps - 1} aria-label="Next step" className="w-9 !px-0">
+                <ChevronRight size={16} aria-hidden="true" />
+              </Button>
             </div>
           )}
         </div>
-
-        {/* Analysis error */}
-        {analysisError && (
-          <div className="mt-6 flex flex-col gap-3">
-            <p className="font-sans text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {analysisError}
-            </p>
-            <button
-              onClick={runAnalysis}
-              className="self-start font-sans text-sm underline"
-              style={{ color: 'var(--tile-correct)' }}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {/* Loading skeleton for analysis */}
-        {loadingAnalysis && (
-          <div className="mt-6 flex flex-col gap-4">
-            <Skeleton className="h-32" />
-            <Skeleton className="h-7 w-40" />
-            <Skeleton className="h-16" />
-          </div>
-        )}
-
-        {/* Step panels — internal scrolling so the page itself stays put */}
-        {analysis && !loadingAnalysis && (
-          <div
-            className="relative"
-            style={{ height: 'max(280px, calc(100dvh - 400px))' }}
-          >
-            {/* Anchored arrows — sit just outside the box, vertically centered with it */}
-            {totalSteps > 1 && (
-              <>
-                <button
-                  onClick={goPrev}
-                  disabled={currentStep === 0}
-                  aria-label="Previous step (←)"
-                  className="hidden md:flex absolute -left-32 top-1/2 -translate-y-1/2 z-10 w-11 h-11 items-center justify-center rounded-full transition-all disabled:opacity-0 disabled:pointer-events-none enabled:hover:scale-105"
-                  style={{
-                    backgroundColor: 'var(--bg-elevated)',
-                    border: '1px solid var(--border-default)',
-                    color: 'var(--text-secondary)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  <ChevronLeft size={22} />
-                </button>
-                <button
-                  onClick={goNext}
-                  disabled={currentStep === totalSteps - 1}
-                  aria-label="Next step (→)"
-                  className="hidden md:flex absolute -right-32 top-1/2 -translate-y-1/2 z-10 w-11 h-11 items-center justify-center rounded-full transition-all disabled:opacity-0 disabled:pointer-events-none enabled:hover:scale-105"
-                  style={{
-                    backgroundColor: 'var(--bg-elevated)',
-                    border: '1px solid var(--border-default)',
-                    color: 'var(--text-secondary)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                  }}
-                >
-                  <ChevronRight size={22} />
-                </button>
-              </>
-            )}
-
-            <div className="overflow-x-hidden h-full">
-            <AnimatePresence mode="wait" custom={stepDir}>
-              <motion.div
-                key={currentStep}
-                custom={stepDir}
-                initial={{ opacity: 0, x: stepDir > 0 ? 40 : -40 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: stepDir > 0 ? -40 : 40 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                className="h-full overflow-y-auto pr-1 rounded-card"
-                style={{ scrollbarGutter: 'stable' }}
-              >
-                {currentStep === 0 && (
-                  <StepOverview
-                    analysis={analysis}
-                    activeRow={activeRow}
-                    showExplanation={showExplanation}
-                    setShowExplanation={setShowExplanation}
-                    game={game}
-                  />
-                )}
-                {currentStep >= 1 && currentStep <= moveCount && (
-                  <GuessCard
-                    move={analysis.moves[currentStep - 1]}
-                    moveIndex={currentStep - 1}
-                    activeRow={activeRow}
-                    targetWord={game?.target_word ?? null}
-                    gameId={game?.id ?? null}
-                    aiCacheRef={aiCacheRef}
-                  />
-                )}
-                {currentStep === moveCount + 1 && (
-                  <StepFinal
-                    game={game}
-                    analysis={analysis}
-                    router={router}
-                  />
-                )}
-              </motion.div>
-            </AnimatePresence>
-            </div>
-          </div>
-        )}
-
-        {/* Step indicator dots */}
-        {analysis && !loadingAnalysis && totalSteps > 1 && (
-          <div
-            className="mt-4 flex justify-center items-center gap-1.5"
-            role="tablist"
-            aria-label="Review steps"
-          >
-            {Array.from({ length: totalSteps }).map((_, i) => {
-              const active = i === currentStep;
-              const label =
-                i === 0
-                  ? 'Overview'
-                  : i === moveCount + 1
-                  ? 'Final'
-                  : `Move ${i}`;
-              return (
-                <button
-                  key={i}
-                  role="tab"
-                  aria-selected={active}
-                  aria-label={label}
-                  onClick={() => goToStep(i)}
-                  className="rounded-full transition-all focus-visible:outline-none focus-visible:ring-2"
-                  style={{
-                    width: active ? 18 : 6,
-                    height: 6,
-                    backgroundColor: active
-                      ? 'var(--tile-correct)'
-                      : 'var(--border-strong)',
-                    outlineColor: 'var(--tile-correct)',
-                  }}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        {/* Step counter + arrow controls */}
-        {analysis && !loadingAnalysis && totalSteps > 1 && (
-          <div
-            className="mt-2 flex items-center justify-center gap-4 font-mono text-xs"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            <button
-              onClick={goPrev}
-              disabled={currentStep === 0}
-              aria-label="Previous step"
-              className="p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:bg-bg-muted"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span className="tabular-nums select-none">
-              {currentStep + 1} / {totalSteps}
-            </span>
-            <button
-              onClick={goNext}
-              disabled={currentStep === totalSteps - 1}
-              aria-label="Next step"
-              className="p-1.5 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:bg-bg-muted"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
       </div>
 
-
       {/* Floating coach */}
-      {game && analysis && (
-        <CoachFab
-          gameId={game.id}
-          gameContext={gameContext}
-        />
-      )}
+      {game && analysis && <CoachFab gameId={game.id} gameContext={gameContext} />}
     </div>
   );
 }
@@ -1975,7 +1508,7 @@ export default function ReviewPageWrapper() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-[calc(100dvh-56px)]">
+        <div className="flex items-center justify-center min-h-page">
           <TileLoader size={22} />
         </div>
       }

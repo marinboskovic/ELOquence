@@ -1,6 +1,5 @@
 'use client';
-import { useMemo, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useMemo } from 'react';
 import { patternToTiles } from '@/lib/types';
 import type { GameStatus } from '@/lib/types';
 
@@ -11,191 +10,49 @@ interface GameWaveBackgroundProps {
   lastPattern: number | null;
 }
 
-type RGB = [number, number, number];
+type Wash = 'none' | 'green' | 'ochre' | 'accent';
 
-function hexToRgb(hex: string): RGB {
-  const h = hex.replace('#', '');
-  const f = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
-  return [parseInt(f.slice(0, 2), 16), parseInt(f.slice(2, 4), 16), parseInt(f.slice(4, 6), 16)];
-}
-
-function lerp3(a: RGB, b: RGB, t: number): RGB {
-  const s = Math.min(1, Math.max(0, t));
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * s),
-    Math.round(a[1] + (b[1] - a[1]) * s),
-    Math.round(a[2] + (b[2] - a[2]) * s),
-  ];
-}
-
-function rgba(c: RGB, a: number): string {
-  return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a.toFixed(3)})`;
-}
-
-function cssRgb(varName: string, fallback: string): RGB {
-  if (typeof document === 'undefined') return hexToRgb(fallback);
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-  return hexToRgb(raw || fallback);
-}
-
-function blobColors(
-  patterns: number[], status: GameStatus, correct: RGB, present: RGB, isDark: boolean,
-): [string, string, string] {
-  const charcoal: RGB = isDark ? [60, 60, 65] : [165, 168, 175];
-  const lostAlpha = isDark ? 0.50 : 0.45;
-  if (status === 'lost') return [rgba(charcoal, lostAlpha), rgba(charcoal, lostAlpha), rgba(charcoal, lostAlpha)];
-
-  let green = 0, yellow = 0;
-  for (const p of patterns) {
-    for (const t of patternToTiles(p)) {
-      if (t === 'correct') green++;
-      else if (t === 'present') yellow++;
-    }
-  }
-  const denom = Math.max(patterns.length * 5, 1);
-  const g = green / denom, y = yellow / denom;
-  const activity = Math.min(1, g * 2 + y);
-
-  // A win is a deliberate celebration — keep it strong.
-  if (status === 'won') {
-    const wonAlpha = isDark ? 0.50 + activity * 0.30 : 0.42 + activity * 0.30;
-    return [rgba(correct, wonAlpha), rgba(correct, wonAlpha), rgba(correct, wonAlpha)];
-  }
-
-  // While playing, the wave must be FULLY blended into the page background at
-  // the start of a game and only "develop" as guesses arrive — so `presence`
-  // ramps from 0 (fresh board → invisible) to 1 over the first two guesses.
-  // Dark mode composites with `mixBlendMode: screen` (which brightens), so its
-  // alpha ceiling is kept lower than light mode's `multiply` to stop the wave
-  // reading too hot.
-  const presence = Math.min(1, patterns.length / 2);
-  const alpha = presence * (isDark ? 0.16 + activity * 0.30 : 0.20 + activity * 0.32);
-
-  const idleTop: RGB = isDark ? [55, 70, 60] : [205, 220, 208];
-  const idleBl: RGB  = isDark ? [60, 58, 40] : [215, 210, 185];
-  const idleBr: RGB  = isDark ? [50, 60, 55] : [208, 215, 205];
-  const brBase = lerp3(correct, present, 0.5);
-  return [
-    rgba(lerp3(idleTop, correct, activity * Math.min(1, g * 2.5)), alpha),
-    rgba(lerp3(idleBl,  present, activity * Math.min(1, y * 2.5)), alpha),
-    rgba(lerp3(idleBr,  brBase,  activity * Math.min(1, (g + y) * 1.2)), alpha),
-  ];
-}
-
-function accentColor(pattern: number, correct: RGB, present: RGB, isDark: boolean): string {
-  const tiles = patternToTiles(pattern);
+/**
+ * Picks the paper tint for the board screen from the last revealed row:
+ * mostly-green → green wash, mostly-yellow → ochre wash, a dead row → plain
+ * paper. Win and loss settle on green / accent. Only the four wash tokens are
+ * used, so dark mode and colour-blind mode need no special handling.
+ */
+function pickWash(patterns: number[], status: GameStatus, lastPattern: number | null): Wash {
+  if (status === 'won') return 'green';
+  if (status === 'lost') return 'accent';
+  if (lastPattern === null || patterns.length === 0) return 'none';
+  const tiles = patternToTiles(lastPattern);
   const g = tiles.filter((t) => t === 'correct').length;
   const y = tiles.filter((t) => t === 'present').length;
-  const tot = g + y || 1;
-  const c = lerp3(present, correct, g / tot);
-  return rgba(c, isDark ? 0.65 : 0.50);
+  if (g === 0 && y === 0) return 'none';
+  return g >= y ? 'green' : 'ochre';
 }
 
-export default function GameWaveBackground({ patterns, status, triggerKey, lastPattern }: GameWaveBackgroundProps) {
-  const [reducedMotion, setReducedMotion] = useState(false);
-  // Theme is read in an effect (not a lazy initializer) so the server and the
-  // first client render agree — reading `document` during render caused a
-  // hydration mismatch. The effect below syncs it on mount and keeps it live
-  // via a MutationObserver; the blobs fade in via `transition` anyway.
-  const [isDark, setIsDark] = useState(false);
+const WASH_VAR: Record<Exclude<Wash, 'none'>, string> = {
+  green: 'var(--wash-green)',
+  ochre: 'var(--wash-ochre)',
+  accent: 'var(--wash-accent)',
+};
 
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setReducedMotion(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  useEffect(() => {
-    const sync = () => setIsDark(document.documentElement.getAttribute('data-theme') === 'dark');
-    sync();
-    const obs = new MutationObserver(sync);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => obs.disconnect();
-  }, []);
-
-  // `patterns` is a deliberate dependency: it re-reads the CSS vars on every
-  // move so a colour-blind / theme toggle mid-game is picked up.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const correct = useMemo(() => cssRgb('--tile-correct', '#538d4e'), [patterns]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const present = useMemo(() => cssRgb('--tile-present', '#b59f3b'), [patterns]);
-  const [topC, blC, brC] = useMemo(() => blobColors(patterns, status, correct, present, isDark), [patterns, status, correct, present, isDark]);
-  const accC = useMemo(() => lastPattern !== null ? accentColor(lastPattern, correct, present, isDark) : null, [lastPattern, correct, present, isDark]);
-
-  const tr = reducedMotion ? '0ms' : 'background 1500ms cubic-bezier(0.4, 0, 0.2, 1)';
-  const blobBase = (bg: string) => ({
-    position: 'absolute' as const,
-    inset: 0,
-    background: bg,
-    filter: 'blur(70px)',
-    transition: tr,
-    willChange: 'transform',
-  });
-
-  // Mask the top strip so the wave never bleeds under the sticky navbar
-  // (navbar is h-14 = 56px). A short fade-in below it keeps the edge soft.
-  const navMask =
-    'linear-gradient(to bottom, transparent 0px, transparent 56px, black 110px, black 100%)';
+/**
+ * A very quiet tint behind the board that shifts with the last pattern.
+ * No gradients, no blur — one flat wash token at low opacity, cross-faded
+ * with a plain CSS transition (which the global reduce-motion rules zero).
+ */
+export default function GameWaveBackground({ patterns, status, lastPattern }: GameWaveBackgroundProps) {
+  const wash = useMemo(() => pickWash(patterns, status, lastPattern), [patterns, status, lastPattern]);
+  const strong = status !== 'in_progress';
 
   return (
-    <motion.div
-      aria-hidden
-      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+    <div
+      aria-hidden="true"
+      className="pointer-events-none fixed inset-0 -z-10"
       style={{
-        mixBlendMode: isDark ? 'screen' : 'multiply',
-        maskImage: navMask,
-        WebkitMaskImage: navMask,
+        backgroundColor: wash === 'none' ? 'transparent' : WASH_VAR[wash],
+        opacity: wash === 'none' ? 0 : strong ? 1 : 0.55,
+        transition: 'background-color var(--dur-slow) var(--ease-ink), opacity var(--dur-slow) var(--ease-ink)',
       }}
-      animate={status === 'won' && !reducedMotion ? { opacity: [1, 1.25, 1] } : { opacity: 1 }}
-      transition={status === 'won' && !reducedMotion ? { duration: 0.7, ease: 'easeOut', times: [0, 0.4, 1] } : undefined}
-    >
-      {/* Left pillar — anchored to the left edge, vertical center.
-          Sits in the open margin to the left of the board column so it
-          never competes with tiles/keyboard for visual weight. */}
-      <motion.div
-        style={blobBase(`radial-gradient(35% 80% at -8% 50%, ${topC}, transparent 75%)`)}
-        animate={reducedMotion ? undefined : { y: ['0%', '-2%', '1%', '0%'], scale: [1, 1.05, 0.97, 1] }}
-        transition={reducedMotion ? undefined : { duration: 11, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      {/* Right pillar — mirrors the left, counter-drifts so they don't sync */}
-      <motion.div
-        style={blobBase(`radial-gradient(35% 80% at 108% 50%, ${brC}, transparent 75%)`)}
-        animate={reducedMotion ? undefined : { y: ['0%', '1%', '-2%', '0%'], scale: [1, 0.97, 1.05, 1] }}
-        transition={reducedMotion ? undefined : { duration: 13, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      {/* Bottom banner — sits under the keyboard, anchored off-screen. */}
-      <motion.div
-        style={blobBase(`radial-gradient(70% 30% at 50% 115%, ${blC}, transparent 75%)`)}
-        animate={reducedMotion ? undefined : { x: ['0%', '2%', '-2%', '0%'], scale: [1, 1.04, 0.98, 1] }}
-        transition={reducedMotion ? undefined : { duration: 15, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      {/* Per-guess accent — pulses on BOTH sides simultaneously instead of
-          behind the board, so the response stays in the user's peripheral
-          vision rather than competing with the tile colors. */}
-      {!reducedMotion && (
-        <AnimatePresence>
-          {accC !== null && triggerKey > 0 && (
-            <motion.div
-              key={triggerKey}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 0.75, scale: 1.0 }}
-              exit={{ opacity: 0, scale: 1.0 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: `
-                  radial-gradient(25% 50% at -5% 50%, ${accC}, transparent 75%),
-                  radial-gradient(25% 50% at 105% 50%, ${accC}, transparent 75%)
-                `,
-                filter: 'blur(60px)',
-              }}
-            />
-          )}
-        </AnimatePresence>
-      )}
-    </motion.div>
+    />
   );
 }

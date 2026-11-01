@@ -59,7 +59,7 @@ export default function PoolShrink({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '8px 0' }}>
-      <p style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.4 }}>
+      <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)', margin: 0, textAlign: 'center', lineHeight: 1.15, textWrap: 'balance' }}>
         {challenge.prompt}
       </p>
 
@@ -72,7 +72,7 @@ export default function PoolShrink({
           padding: 14,
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border-subtle)',
-          borderRadius: 12,
+          borderRadius: 0,
           maxWidth: 'fit-content',
         }}
       >
@@ -90,11 +90,11 @@ export default function PoolShrink({
               style={{
                 width: 14,
                 height: 14,
-                borderRadius: 3,
+                borderRadius: 0,
                 background: isFinal
                   ? 'var(--tile-correct)'
                   : alive
-                    ? 'var(--cls-blue, #3b82f6)'
+                    ? 'var(--border-default)'
                     : 'var(--border-default)',
               }}
             />
@@ -109,7 +109,7 @@ export default function PoolShrink({
           alignItems: 'baseline',
           gap: 10,
           padding: '6px 12px',
-          borderRadius: 999,
+          borderRadius: 0,
           background: 'var(--bg-elevated)',
           border: '1px solid var(--border-subtle)',
         }}
@@ -134,8 +134,8 @@ export default function PoolShrink({
               textAlign: 'center',
               maxWidth: 480,
               padding: '8px 14px',
-              borderRadius: 10,
-              background: 'color-mix(in srgb, var(--cls-blue, #3b82f6) 12%, transparent)',
+              borderRadius: 0,
+              background: 'var(--bg-muted)',
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>
@@ -160,12 +160,12 @@ export default function PoolShrink({
           alignItems: 'center',
           gap: 6,
           padding: '10px 22px',
-          borderRadius: 999,
+          borderRadius: 0,
           border: 'none',
-          background: 'var(--tile-correct)',
-          color: '#fff',
-          fontSize: 14,
-          fontWeight: 700,
+          background: 'var(--accent)',
+          color: 'var(--accent-ink)',
+          fontFamily: 'var(--font-mono)',
+          fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.14em',
           cursor: 'pointer',
         }}
       >

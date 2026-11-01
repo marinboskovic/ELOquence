@@ -11,7 +11,7 @@ import clsx from 'clsx';
 
 /* ───────────────────────── Buttons ───────────────────────── */
 
-type Variant = 'primary' | 'secondary' | 'ink' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ink' | 'ghost' | 'danger' | 'on-ink';
 type Size = 'sm' | 'md' | 'lg';
 
 const VARIANT: Record<Variant, string> = {
@@ -20,6 +20,8 @@ const VARIANT: Record<Variant, string> = {
   ink: 'bg-bg-ink text-text-on-ink border-2 border-border-default hover:shadow-ink',
   ghost: 'bg-transparent text-text-secondary border-2 border-transparent hover:text-text-primary hover:border-border-subtle',
   danger: 'bg-transparent border-2 hover:shadow-ink',
+  // For buttons placed inside an ink block (inverted surface).
+  'on-ink': 'bg-transparent text-text-on-ink border-2 border-[var(--text-on-ink)] hover:bg-[var(--text-on-ink)] hover:text-[var(--bg-ink)]',
 };
 const SIZE: Record<Size, string> = {
   sm: 'h-9 px-3 text-[11px]',

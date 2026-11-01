@@ -1,11 +1,10 @@
 'use client';
 import { Suspense, useState, FormEvent } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { errorMessage } from '@/lib/api';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
-import { AuthError, AuthField, AuthShell, AuthSubmit, OrDivider, safeNext } from '@/components/auth/AuthShell';
+import { AuthError, AuthField, AuthLink, AuthShell, AuthSubmit, OrDivider, safeNext } from '@/components/auth/AuthShell';
 
 function RegisterInner() {
   const { register } = useAuth();
@@ -42,25 +41,22 @@ function RegisterInner() {
 
   return (
     <AuthShell
-      title="Create Account"
+      title="Create account"
+      eyebrow="account · register"
+      manifesto="Every guess is a move. Every game is rated."
       footer={
         <>
           Already have an account?{' '}
-          <Link
-            href={next !== '/play' ? `/login?next=${encodeURIComponent(next)}` : '/login'}
-            className="text-text-secondary hover:text-text-primary font-medium transition-colors duration-150 underline underline-offset-2"
-          >
-            Sign in
-          </Link>
+          <AuthLink href={next !== '/play' ? `/login?next=${encodeURIComponent(next)}` : '/login'}>Sign in</AuthLink>
         </>
       }
     >
       <GoogleSignInButton next={next} />
       <OrDivider />
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <AuthField
           id="email"
-          label="Email"
+          label="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -70,7 +66,7 @@ function RegisterInner() {
         />
         <AuthField
           id="username"
-          label="Username"
+          label="username"
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
@@ -83,7 +79,7 @@ function RegisterInner() {
         />
         <AuthField
           id="password"
-          label="Password"
+          label="password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -94,7 +90,7 @@ function RegisterInner() {
         />
         <AuthError message={error} />
         <AuthSubmit loading={loading} loadingLabel="Creating…">
-          Create Account
+          Create account
         </AuthSubmit>
       </form>
     </AuthShell>

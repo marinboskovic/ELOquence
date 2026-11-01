@@ -4,175 +4,80 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { AxiosError } from 'axios';
-import { Award, Flame, Pencil, Share2, TrendingUp, BarChart2, History } from 'lucide-react';
-import Tile from '@/components/Tile';
+import { Pencil, Share2 } from 'lucide-react';
 import TileSpinner from '@/components/TileSpinner';
 import Toast from '@/components/Toast';
 import GuessDistribution from '@/components/GuessDistribution';
+import EloSparkline from '@/components/EloSparkline';
 import { ACHIEVEMENT_META } from '@/components/AchievementToast';
 import { profilesApi, errorMessage, PublicProfile } from '@/lib/api';
-import { getRatingTier, patternToTiles, TileState } from '@/lib/types';
-import { springs } from '@/lib/animations';
+import { getRatingTier, type EloHistoryEntry } from '@/lib/types';
+import {
+  Button,
+  ButtonLink,
+  Label,
+  MiniTiles,
+  PatternRow,
+  Reveal,
+  SplitWords,
+  Stat,
+  Tag,
+  staggerChild,
+  staggerParent,
+} from '@/components/ui';
 import clsx from 'clsx';
 
-// ─── Small pieces ─────────────────────────────────────────────────────────────
-const TILE_FILL: Record<TileState, string> = {
-  correct: 'var(--tile-correct)',
-  present: 'var(--tile-present)',
-  absent:  'var(--tile-absent)',
-  empty:   'var(--tile-empty-bg)',
-  tbd:     'var(--tile-empty-bg)',
-};
-
-function PatternRow({ pattern, size = 10 }: { pattern: number; size?: number }) {
-  const tiles = patternToTiles(pattern);
-  return (
-    <div className="flex" style={{ gap: 2 }} aria-hidden="true">
-      {tiles.map((s, i) => (
-        <span key={i} className="block rounded-sm" style={{ width: size, height: size, backgroundColor: TILE_FILL[s] }} />
-      ))}
-    </div>
-  );
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+type TierTone = 'neutral' | 'ochre' | 'green' | 'ink';
+function tierTone(name: string): TierTone {
+  if (name === 'Veteran') return 'ochre';
+  if (name === 'Master') return 'green';
+  if (name === 'Grandmaster') return 'ink';
+  return 'neutral';
 }
 
-function MiniWord({ word, size = 26 }: { word: string; size?: number }) {
-  return (
-    <div className="flex" style={{ gap: 3 }} aria-label={word}>
-      {word.split('').map((ch, i) => (
-        <span
-          key={i}
-          className="flex items-center justify-center rounded-sm font-sans font-bold uppercase select-none"
-          style={{ width: size, height: size, backgroundColor: 'var(--tile-correct)', color: '#ffffff', fontSize: Math.round(size * 0.55), lineHeight: 1 }}
-        >
-          {ch}
-        </span>
-      ))}
-    </div>
-  );
+/** Adapt the public profile's compact history to the shared sparkline. */
+function toHistory(history: PublicProfile['elo_history']): EloHistoryEntry[] {
+  const pts = history.filter((h) => Number.isFinite(h.elo));
+  return pts.map((h, i) => ({
+    elo_before: i === 0 ? h.elo : pts[i - 1].elo,
+    elo_after: h.elo,
+    delta: i === 0 ? 0 : Math.round(h.elo - pts[i - 1].elo),
+    accuracy_score: null,
+    recorded_at: h.at ?? new Date(0).toISOString(),
+  }));
 }
 
-function MicroLabel({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <span className={clsx('font-sans text-[10px] uppercase tracking-wider text-text-secondary font-semibold', className)}>{children}</span>;
-}
-
-function StatTile({ label, value, sub, accent, delay = 0 }: { label: string; value: string; sub?: string; accent?: string; delay?: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay, ease: [0.22, 1, 0.36, 1] }}
-      className="flex flex-col gap-2 p-4 rounded-card bg-bg-base border border-border-default min-w-0"
-    >
-      <MicroLabel>{label}</MicroLabel>
-      <span className="font-display font-black tracking-tight text-2xl tabular-nums leading-none truncate" style={accent ? { color: accent } : undefined}>
-        {value}
-      </span>
-      {sub && <span className="font-sans text-[11px] text-text-tertiary leading-tight truncate">{sub}</span>}
-    </motion.div>
-  );
-}
-
-function Card({ title, icon, aside, children, className }: { title: string; icon?: React.ReactNode; aside?: React.ReactNode; children: React.ReactNode; className?: string }) {
-  return (
-    <section className={clsx('rounded-card-lg bg-bg-elevated border border-border-subtle p-5', className)} aria-label={title}>
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          {icon && <span className="text-text-ghost">{icon}</span>}
-          <span className="font-sans font-semibold text-sm text-text-primary">{title}</span>
-        </div>
-        {aside && <span className="font-sans text-[11px] text-text-ghost font-mono tabular-nums text-right">{aside}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-// ─── ELO sparkline (plain inline SVG) ─────────────────────────────────────────
-function EloLine({ history }: { history: PublicProfile['elo_history'] }) {
-  const pts = history.map((h) => h.elo).filter((n) => Number.isFinite(n));
-  if (pts.length < 2) {
-    return (
-      <div className="flex items-center justify-center h-24 font-sans text-sm text-text-secondary">Not enough rated games yet</div>
-    );
-  }
-  const W = 320;
-  const H = 96;
-  const PAD = 6;
-  const min = Math.min(...pts);
-  const max = Math.max(...pts);
-  const span = Math.max(1, max - min);
-  const x = (i: number) => PAD + (i / (pts.length - 1)) * (W - PAD * 2);
-  const y = (v: number) => H - PAD - ((v - min) / span) * (H - PAD * 2);
-  const d = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const last = pts[pts.length - 1];
-  const first = pts[0];
-  const delta = Math.round(last - first);
-
-  return (
-    <div className="flex flex-col gap-2">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24" role="img" aria-label={`Rating over the last ${pts.length} rated games, from ${Math.round(first)} to ${Math.round(last)}`}>
-        <line x1={PAD} x2={W - PAD} y1={y(min)} y2={y(min)} stroke="var(--border-subtle)" strokeWidth={1} />
-        <line x1={PAD} x2={W - PAD} y1={y(max)} y2={y(max)} stroke="var(--border-subtle)" strokeWidth={1} />
-        <motion.polyline
-          points={d}
-          fill="none"
-          stroke="var(--tile-correct)"
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          initial={{ pathLength: 0 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-        />
-        <circle cx={x(pts.length - 1)} cy={y(last)} r={3.5} fill="var(--tile-correct)" stroke="var(--bg-elevated)" strokeWidth={2} />
-      </svg>
-      <div className="flex items-center justify-between font-mono text-[11px] tabular-nums text-text-secondary">
-        <span>
-          low <span className="text-text-primary">{Math.round(min)}</span>
-        </span>
-        <span style={{ color: delta >= 0 ? 'var(--tile-correct)' : 'var(--red)' }}>
-          {delta >= 0 ? '+' : ''}
-          {delta} over {pts.length} games
-        </span>
-        <span>
-          high <span className="text-text-primary">{Math.round(max)}</span>
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ─── Recent game column ───────────────────────────────────────────────────────
-function GameColumn({ game, index }: { game: PublicProfile['recent_games'][number]; index: number }) {
+// ─── Recent game card ─────────────────────────────────────────────────────────
+function GameCard({ game }: { game: PublicProfile['recent_games'][number] }) {
   const won = game.status === 'won';
   const lost = game.status === 'lost';
-  const score = won ? `${game.num_guesses}/6` : lost ? 'X/6' : '—';
+  const score = won ? `${game.num_guesses}/6` : lost ? 'X' : '—';
   const delta = game.elo_delta;
   const rows = game.patterns.length ? game.patterns : [];
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index * 0.04, 0.4), duration: 0.25 }}
-      className="flex flex-col items-center gap-1.5 shrink-0 w-[76px] px-2 py-2.5 rounded-card bg-bg-base border border-border-subtle"
+      variants={staggerChild}
+      className="shrink-0 w-[92px] border-2 border-border-default bg-bg-base p-2.5 flex flex-col gap-2 transition-all duration-fast hover:shadow-ink hover:-translate-x-0.5 hover:-translate-y-0.5"
       title={`${game.mode}${game.hard_mode ? ' · hard mode' : ''} · ${won ? `won in ${game.num_guesses}` : lost ? 'lost' : game.status}`}
     >
       <div className="flex flex-col justify-end" style={{ gap: 2, minHeight: 6 * 12 }}>
         {rows.map((p, i) => (
-          <PatternRow key={i} pattern={p} size={10} />
+          <PatternRow key={i} pattern={p} size={10} gap={2} />
         ))}
       </div>
-      <span className={clsx('font-mono text-xs font-bold tabular-nums', won ? 'text-text-primary' : 'text-text-secondary')}>
-        {score}
-        {game.hard_mode && <span className="text-text-secondary">*</span>}
-      </span>
-      <span className="font-sans text-[10px] text-text-ghost capitalize leading-none">{game.mode}</span>
-      <span
-        className="font-mono text-[10px] tabular-nums font-semibold leading-none"
-        style={{ color: delta == null ? 'var(--text-ghost)' : delta >= 0 ? 'var(--tile-correct)' : 'var(--red)' }}
-      >
-        {delta == null ? '·' : `${delta >= 0 ? '+' : ''}${Math.round(delta)}`}
-      </span>
+      <div className="flex items-baseline justify-between gap-1">
+        <span className={clsx('font-display font-bold text-base tabular', won ? 'text-text-primary' : 'text-text-secondary')}>
+          {score}
+          {game.hard_mode && <span className="text-text-tertiary">*</span>}
+        </span>
+        <span
+          className={clsx('font-mono text-[10px] tabular', delta == null ? 'text-text-ghost' : delta >= 0 ? 'text-accent' : 'text-text-tertiary')}
+        >
+          {delta == null ? '·' : `${delta >= 0 ? '+' : ''}${Math.round(delta)}`}
+        </span>
+      </div>
+      <Label className="text-text-tertiary">{game.mode}</Label>
     </motion.div>
   );
 }
@@ -241,7 +146,7 @@ export default function PublicProfilePage() {
 
   if (state.kind === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
+      <div className="flex items-center justify-center min-h-page">
         <TileSpinner size="md" label="Loading profile" />
       </div>
     );
@@ -249,26 +154,28 @@ export default function PublicProfilePage() {
 
   if (state.kind === 'missing' || state.kind === 'error') {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 flex flex-col items-center gap-6 text-center">
-        <div className="flex" style={{ gap: 'var(--tile-gap)' }} role="img" aria-label="Unknown player">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Tile key={i} letter="?" state="absent" position={i} />
-          ))}
+      <div className="min-h-page flex items-center">
+        <div className="w-full bg-wash-accent">
+          <div className="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24 grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+            <div className="md:col-span-7">
+              <Label className="block mb-3">{state.kind === 'missing' ? 'profile · not found' : 'profile · error'}</Label>
+              <SplitWords
+                text={state.kind === 'missing' ? 'No one to see here.' : 'Something went wrong.'}
+                as="h1"
+                className="font-display text-display-lg text-text-primary"
+              />
+              <p className="text-base text-text-secondary mt-4 max-w-md">
+                {state.kind === 'missing' ? 'This player is private or does not exist.' : state.message}
+              </p>
+              <ButtonLink href="/leaderboard" variant="secondary" size="md" className="mt-8">
+                browse the ladder
+              </ButtonLink>
+            </div>
+            <div className="md:col-span-5 md:justify-self-end" role="img" aria-label="Unknown player">
+              <MiniTiles word="?????" states={['empty', 'empty', 'empty', 'empty', 'empty']} size={56} gap={6} />
+            </div>
+          </div>
         </div>
-        <div className="space-y-1">
-          <h1 className="font-display font-black tracking-tight text-2xl text-text-primary">
-            {state.kind === 'missing' ? 'No one to see here' : 'Something went wrong'}
-          </h1>
-          <p className="font-sans text-sm text-text-secondary">
-            {state.kind === 'missing' ? 'This player is private or doesn’t exist.' : state.message}
-          </p>
-        </div>
-        <Link
-          href="/leaderboard"
-          className="inline-flex items-center px-5 py-2.5 rounded-md border-2 border-border-default hover:border-border-strong text-text-primary font-sans text-sm font-bold uppercase tracking-wider transition-colors"
-        >
-          Browse the leaderboard
-        </Link>
       </div>
     );
   }
@@ -285,7 +192,7 @@ function ProfileBody({ profile, onShare }: { profile: PublicProfile; onShare: ()
   const tier = getRatingTier(profile.elo_rating);
   const initial = profile.username.trim().charAt(0).toUpperCase() || '?';
   const memberSince = profile.member_since
-    ? new Date(profile.member_since).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    ? new Date(profile.member_since).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).toLowerCase()
     : null;
   const losses = Math.max(0, profile.completed - profile.wins);
   const achievements = useMemo(
@@ -297,201 +204,187 @@ function ProfileBody({ profile, onShare }: { profile: PublicProfile; onShare: ()
       }),
     [profile.achievements]
   );
-
-  const fadeUp = (delay = 0) => ({
-    initial: { opacity: 0, y: 16 },
-    animate: { opacity: 1, y: 0 },
-    transition: { ...springs.slide, delay },
-  });
+  const history = useMemo(() => toHistory(profile.elo_history), [profile.elo_history]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <motion.section {...fadeUp(0)} aria-label="Player" className="rounded-card-lg bg-bg-base border border-border-default p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          {/* Avatar */}
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col gap-12 md:gap-16">
+      {/* ── Masthead ────────────────────────────────────────────────────── */}
+      <header aria-label="Player" className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-8 items-end">
+        <div className="md:col-span-8 flex items-end gap-5 min-w-0">
           {profile.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={profile.avatar_url}
               alt=""
-              width={64}
-              height={64}
+              width={72}
+              height={72}
               referrerPolicy="no-referrer"
-              className="w-16 h-16 rounded-card object-cover shrink-0 border border-border-subtle"
+              className="w-14 h-14 md:w-[72px] md:h-[72px] object-cover shrink-0 border-2 border-border-default"
             />
           ) : (
             <div
-              className="w-16 h-16 rounded-card flex items-center justify-center shrink-0 font-sans font-bold text-3xl text-white select-none"
-              style={{ backgroundColor: 'var(--tile-correct)', boxShadow: '0 1px 2px rgba(0,0,0,0.18)' }}
+              className="w-14 h-14 md:w-[72px] md:h-[72px] shrink-0 bg-bg-ink text-text-on-ink flex items-center justify-center font-display font-black text-3xl select-none"
               aria-hidden="true"
             >
               {initial}
             </div>
           )}
-
-          {/* Name + pills */}
-          <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="font-display font-black tracking-tight text-3xl text-text-primary truncate">{profile.username}</h1>
-              {profile.is_me && <span className="font-sans text-[10px] text-text-ghost">(you)</span>}
+          <div className="min-w-0">
+            <Label className="block mb-2">profile{profile.is_me ? ' · you' : ''}</Label>
+            <SplitWords text={profile.username} as="h1" className="font-display text-display-lg text-text-primary break-words" />
+            <div className="mt-4 flex items-center gap-2 flex-wrap">
+              <Tag tone={tierTone(tier.name)}>{tier.name}</Tag>
+              {profile.is_placement && <Tag tone="ochre">placement {Math.min(profile.rated_games, 5)}/5</Tag>}
+              {memberSince && <span className="font-mono text-xs text-text-tertiary tabular">since {memberSince}</span>}
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span
-                className="inline-flex items-center px-2.5 py-1 rounded-pill text-xs font-semibold leading-none border"
-                style={{
-                  color: tier.color,
-                  backgroundColor: `color-mix(in srgb, ${tier.color} 12%, transparent)`,
-                  borderColor: `color-mix(in srgb, ${tier.color} 25%, transparent)`,
-                }}
-              >
-                {tier.name}
-              </span>
-              {profile.is_placement && (
-                <span
-                  className="inline-flex items-center px-2.5 py-1 rounded-pill text-xs font-medium leading-none border"
-                  style={{
-                    color: 'var(--gold)',
-                    backgroundColor: 'color-mix(in srgb, var(--gold) 10%, transparent)',
-                    borderColor: 'color-mix(in srgb, var(--gold) 25%, transparent)',
-                  }}
-                >
-                  Placement {Math.min(profile.rated_games, 5)}/5
-                </span>
-              )}
-              {memberSince && <span className="font-sans text-xs text-text-secondary">Member since {memberSince}</span>}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            {profile.is_me && (
-              <Link
-                href="/settings"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border-2 border-border-default hover:border-border-strong text-text-primary font-sans text-xs font-bold uppercase tracking-wider transition-colors"
-              >
-                <Pencil size={13} />
-                Edit profile
-              </Link>
-            )}
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              onClick={onShare}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-tile-correct text-white font-sans text-xs font-bold uppercase tracking-wider hover:brightness-110 transition"
-            >
-              <Share2 size={13} />
-              Share
-            </motion.button>
           </div>
         </div>
-      </motion.section>
 
-      {/* ── Stat tiles ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3" aria-label="Player statistics">
-        <StatTile label="ELO" value={String(Math.round(profile.elo_rating))} sub={`${profile.rated_games} rated game${profile.rated_games === 1 ? '' : 's'}`} accent={tier.color} />
-        <StatTile label="Peak" value={String(Math.round(profile.peak_elo))} delay={0.04} />
-        <StatTile label="Win rate" value={`${Math.round(profile.win_rate)}%`} sub={`${profile.wins} of ${profile.completed}`} delay={0.08} />
-        <StatTile label="Avg guesses" value={profile.avg_guesses != null ? profile.avg_guesses.toFixed(2) : '—'} sub="per win" delay={0.12} />
-        <StatTile
-          label="Avg accuracy"
+        <div className="md:col-span-4 flex items-center gap-2 md:justify-end">
+          {profile.is_me && (
+            <ButtonLink href="/settings" variant="secondary" size="sm">
+              <Pencil size={13} />
+              edit
+            </ButtonLink>
+          )}
+          <Button type="button" variant="primary" size="sm" onClick={onShare}>
+            <Share2 size={13} />
+            share
+          </Button>
+        </div>
+      </header>
+
+      {/* ── Stats ───────────────────────────────────────────────────────── */}
+      <section aria-label="Player statistics" className="rule-top pt-1 grid grid-cols-2 md:grid-cols-6 gap-x-6 gap-y-6">
+        <Stat label="rating" value={Math.round(profile.elo_rating)} sub={`${profile.rated_games} rated game${profile.rated_games === 1 ? '' : 's'}`} />
+        <Stat label="peak" value={Math.round(profile.peak_elo)} />
+        <Stat label="win rate" value={`${Math.round(profile.win_rate)}%`} sub={`${profile.wins} of ${profile.completed}`} />
+        <Stat label="avg guesses" value={profile.avg_guesses != null ? profile.avg_guesses.toFixed(2) : '—'} sub="per win" />
+        <Stat
+          label="accuracy"
           value={profile.avg_accuracy != null ? `${Math.round(profile.avg_accuracy)}%` : '—'}
           sub={profile.best_accuracy != null ? `best ${Math.round(profile.best_accuracy)}%` : undefined}
-          delay={0.16}
         />
-        <StatTile
-          label="Streak"
-          value={`${profile.current_streak}`}
-          sub={`max ${profile.max_streak}`}
-          accent={profile.current_streak > 0 ? 'var(--red)' : undefined}
-          delay={0.2}
-        />
-      </div>
+        <Stat label="streak" value={profile.current_streak} sub={`max ${profile.max_streak}`} />
+      </section>
 
-      {/* ── Distribution + rating line ──────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <motion.div {...fadeUp(0.15)}>
-          <Card title="Guess distribution" icon={<BarChart2 size={14} />} aside={profile.completed > 0 ? `${profile.completed} games` : undefined}>
+      {/* ── Distribution + rating line (7/5) ────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8">
+        <Reveal as="section" aria-label="Guess distribution" className="md:col-span-7 min-w-0">
+          <div className="rule-top pt-3 flex items-end justify-between gap-4">
+            <div>
+              <Label className="block mb-1">distribution</Label>
+              <h2 className="font-display text-display-sm text-text-primary">Guesses to solve</h2>
+            </div>
+            {profile.completed > 0 && <span className="font-mono text-xs tabular text-text-tertiary">{profile.completed} games</span>}
+          </div>
+          <div className="mt-4">
             {profile.completed > 0 ? (
               <GuessDistribution distribution={profile.guess_distribution} losses={losses} />
             ) : (
-              <p className="font-sans text-sm text-text-secondary py-6 text-center">No completed games yet.</p>
+              <p className="text-sm text-text-secondary">No completed games yet.</p>
             )}
-          </Card>
-        </motion.div>
-        <motion.div {...fadeUp(0.2)} className="flex flex-col gap-5">
-          <Card title="Rating history" icon={<TrendingUp size={14} />} aside={profile.elo_history.length > 1 ? `last ${profile.elo_history.length}` : undefined}>
-            <EloLine history={profile.elo_history} />
-          </Card>
-          <Card title="Favourite opener" icon={<Flame size={14} />}>
-            {profile.favourite_opener ? (
-              <div className="flex items-center gap-4">
-                <MiniWord word={profile.favourite_opener} size={28} />
-                <span className="font-sans text-xs text-text-secondary">
-                  played <span className="font-mono tabular-nums text-text-primary font-semibold">{profile.favourite_opener_plays}</span> time
-                  {profile.favourite_opener_plays === 1 ? '' : 's'}
-                </span>
-                <Link
-                  href={`/lab?word=${encodeURIComponent(profile.favourite_opener)}`}
-                  className="ml-auto font-sans text-xs font-semibold shrink-0"
-                  style={{ color: 'var(--tile-correct)' }}
-                >
-                  Analyse it
-                </Link>
+          </div>
+        </Reveal>
+
+        <div className="md:col-span-5 min-w-0 flex flex-col gap-10">
+          <Reveal as="section" delay={0.08} aria-label="Rating history">
+            <div className="rule-top pt-3 flex items-end justify-between gap-4">
+              <div>
+                <Label className="block mb-1">rating</Label>
+                <h2 className="font-display text-display-sm text-text-primary">Rated games</h2>
               </div>
-            ) : (
-              <p className="font-sans text-sm text-text-secondary">No opener yet.</p>
-            )}
-          </Card>
-        </motion.div>
+              {history.length > 1 && <span className="font-mono text-xs tabular text-text-tertiary">last {history.length}</span>}
+            </div>
+            <div className="mt-4">
+              {history.length >= 2 ? (
+                <EloSparkline data={history} height={160} />
+              ) : (
+                <p className="text-sm text-text-secondary">Not enough rated games yet.</p>
+              )}
+            </div>
+          </Reveal>
+
+          <Reveal as="section" delay={0.14} aria-label="Favourite opener">
+            <div className="rule-top pt-3">
+              <Label className="block mb-1">favourite opener</Label>
+            </div>
+            <div className="mt-3">
+              {profile.favourite_opener ? (
+                <div className="flex items-center gap-4 flex-wrap">
+                  <MiniTiles word={profile.favourite_opener.toUpperCase().slice(0, 5)} size={26} />
+                  <span className="text-sm text-text-secondary">
+                    played <span className="font-mono tabular text-text-primary font-semibold">{profile.favourite_opener_plays}</span> time
+                    {profile.favourite_opener_plays === 1 ? '' : 's'}
+                  </span>
+                  <Link
+                    href={`/lab?word=${encodeURIComponent(profile.favourite_opener)}`}
+                    className="ink-link ml-auto font-mono text-label uppercase text-text-primary"
+                  >
+                    analyse →
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-sm text-text-secondary">No opener yet.</p>
+              )}
+            </div>
+          </Reveal>
+        </div>
       </div>
 
       {/* ── Recent games ────────────────────────────────────────────────── */}
-      <motion.div {...fadeUp(0.25)}>
-        <Card title="Recent games" icon={<History size={14} />} aside={profile.recent_games.length ? '* hard mode' : undefined}>
-          {profile.recent_games.length === 0 ? (
-            <p className="font-sans text-sm text-text-secondary py-4 text-center">Nothing played yet.</p>
-          ) : (
-            <div className="-mx-5 px-5 overflow-x-auto" style={{ scrollbarWidth: 'thin' }}>
-              <div className="flex gap-2 pb-1 w-max">
-                {profile.recent_games.map((g, i) => (
-                  <GameColumn key={g.id} game={g} index={i} />
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
-      </motion.div>
+      <Reveal as="section" aria-label="Recent games">
+        <div className="rule-top pt-3 flex items-end justify-between gap-4">
+          <div>
+            <Label className="block mb-1">recent</Label>
+            <h2 className="font-display text-display-md text-text-primary">Last games</h2>
+          </div>
+          {profile.recent_games.length > 0 && <span className="font-mono text-label uppercase text-text-tertiary">* hard mode</span>}
+        </div>
+        {profile.recent_games.length === 0 ? (
+          <p className="mt-4 text-sm text-text-secondary">Nothing played yet.</p>
+        ) : (
+          <div className="mt-5 -mx-4 px-4 md:-mx-8 md:px-8 overflow-x-auto hide-native-scrollbar">
+            <motion.div className="flex gap-3 pb-2 pr-2 w-max" variants={staggerParent} initial="hidden" animate="show">
+              {profile.recent_games.map((g) => (
+                <GameCard key={g.id} game={g} />
+              ))}
+            </motion.div>
+          </div>
+        )}
+      </Reveal>
 
       {/* ── Achievements ────────────────────────────────────────────────── */}
-      <motion.div {...fadeUp(0.3)}>
-        <Card title="Achievements" icon={<Award size={14} />} aside={achievements.length ? `${achievements.length} unlocked` : undefined}>
-          {achievements.length === 0 ? (
-            <p className="font-sans text-sm text-text-secondary py-4 text-center">No achievements yet.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {achievements.map((a) => {
-                const meta = ACHIEVEMENT_META[a.type];
-                const unlocked = a.unlocked_at
-                  ? new Date(a.unlocked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                  : null;
-                return (
-                  <span
-                    key={a.type}
-                    className="inline-flex items-center gap-1.5 rounded-pill text-xs px-3 py-1 font-sans font-semibold border border-border-subtle bg-bg-base text-text-primary"
-                    title={[meta?.description, unlocked ? `Unlocked ${unlocked}` : null].filter(Boolean).join(' · ')}
-                  >
-                    <span className="text-sm leading-none" aria-hidden="true">
-                      {meta?.icon ?? '🏆'}
+      <Reveal as="section" aria-label="Achievements">
+        <div className="rule-top pt-3 flex items-end justify-between gap-4">
+          <div>
+            <Label className="block mb-1">achievements</Label>
+            <h2 className="font-display text-display-md text-text-primary">Unlocked</h2>
+          </div>
+          {achievements.length > 0 && <span className="font-mono text-xs tabular text-text-tertiary">{achievements.length}</span>}
+        </div>
+        {achievements.length === 0 ? (
+          <p className="mt-4 text-sm text-text-secondary">No achievements yet.</p>
+        ) : (
+          <motion.ul className="mt-4 flex flex-wrap gap-2" role="list" variants={staggerParent} initial="hidden" animate="show">
+            {achievements.map((a) => {
+              const meta = ACHIEVEMENT_META[a.type];
+              const unlocked = a.unlocked_at
+                ? new Date(a.unlocked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                : null;
+              return (
+                <motion.li key={a.type} variants={staggerChild}>
+                  <Tag tone="neutral" className="!h-7 !text-[11px] text-text-primary border-border-default" >
+                    <span title={[meta?.description, unlocked ? `Unlocked ${unlocked}` : null].filter(Boolean).join(' · ')}>
+                      {meta?.name ?? a.type.replace(/_/g, ' ')}
                     </span>
-                    {meta?.name ?? a.type.replace(/_/g, ' ')}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-      </motion.div>
+                  </Tag>
+                </motion.li>
+              );
+            })}
+          </motion.ul>
+        )}
+      </Reveal>
     </div>
   );
 }

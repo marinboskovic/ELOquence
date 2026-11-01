@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import TileSpinner from '@/components/TileSpinner';
+import { Label } from '@/components/ui';
 
 /**
  * Final hop of the Google sign-in. The token pair arrives in the URL
@@ -39,9 +40,9 @@ export default function GoogleCompletePage() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[80dvh] gap-4">
+    <div className="flex flex-col items-center justify-center min-h-page gap-5">
       <TileSpinner size="md" label="Signing you in" />
-      <p className="font-sans text-sm text-text-secondary">Signing you in…</p>
+      <Label>signing you in</Label>
     </div>
   );
 }

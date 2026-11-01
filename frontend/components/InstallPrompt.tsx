@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Share, X, Plus } from 'lucide-react';
+import { Share, X, Plus } from 'lucide-react';
+import { Button, Label } from '@/components/ui';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
   subscribeInstall,
@@ -109,88 +110,52 @@ export default function InstallPrompt() {
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.28, ease: [0.25, 0.1, 0.25, 1] }}
+          transition={{ duration: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
           className="overflow-hidden"
           role="dialog"
           aria-label="Install ELOquence"
         >
-          <div
-            className="rounded-card-lg p-4 flex items-start gap-3"
-            style={{
-              backgroundColor: 'var(--bg-elevated)',
-              border: '1px solid var(--border-default)',
-            }}
-          >
-            <div
-              className="flex items-center justify-center rounded-[10px] flex-shrink-0"
-              style={{
-                width: 40,
-                height: 40,
-                backgroundColor: 'var(--tile-correct)',
-                color: '#ffffff',
-              }}
-              aria-hidden="true"
-            >
-              {showIosHint ? <Share size={18} /> : <Download size={18} />}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-sm font-semibold leading-tight"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {showIosHint ? 'Add ELOquence to Home Screen' : 'Install ELOquence'}
+          {/* Ochre wash band: the one wash on the dashboard viewport. */}
+          <div className="bg-wash-ochre px-5 py-5 md:px-6 flex items-start md:items-center justify-between gap-4 flex-col md:flex-row">
+            <div className="min-w-0">
+              <Label className="block mb-1">{showIosHint ? 'home screen' : 'install'}</Label>
+              <p className="font-display text-display-sm text-text-primary">
+                {showIosHint ? 'Add ELOquence to your home screen.' : 'Install ELOquence.'}
               </p>
               {showIosHint ? (
-                <p
-                  className="text-xs mt-1 leading-snug flex items-center gap-1 flex-wrap"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Tap <Share size={12} style={{ display: 'inline-block', verticalAlign: '-2px' }} /> then
-                  <span className="inline-flex items-center gap-0.5">
-                    <Plus size={12} /> Add to Home Screen
+                <p className="text-sm text-text-secondary mt-1 flex items-center gap-1 flex-wrap">
+                  Tap <Share size={13} aria-label="Share" className="inline-block" /> then
+                  <span className="inline-flex items-center gap-0.5 font-mono text-xs">
+                    <Plus size={12} aria-hidden="true" /> Add to Home Screen
                   </span>
                 </p>
               ) : (
-                <p
-                  className="text-xs mt-1 leading-snug"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
+                <p className="text-sm text-text-secondary mt-1">
                   Faster launch, full-screen play, works offline.
                 </p>
               )}
-
-              {!showIosHint && (
-                <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={install}
-                    className="px-3 py-1.5 rounded-[8px] text-xs font-semibold text-white transition-opacity duration-150 hover:opacity-90"
-                    style={{ backgroundColor: 'var(--tile-correct)' }}
-                  >
-                    Install
-                  </button>
-                  <button
-                    onClick={dismiss}
-                    className="px-3 py-1.5 rounded-[8px] text-xs font-medium transition-colors duration-150"
-                    style={{
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'transparent',
-                    }}
-                  >
-                    Not now
-                  </button>
-                </div>
-              )}
             </div>
 
-            <button
-              onClick={dismiss}
-              aria-label="Dismiss"
-              className="p-1 rounded-md transition-colors duration-150 flex-shrink-0"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              <X size={14} />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {!showIosHint && (
+                <>
+                  <Button size="sm" onClick={install}>
+                    Install
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={dismiss}>
+                    Not now
+                  </Button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={dismiss}
+                aria-label="Dismiss"
+                className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors duration-fast"
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
         </motion.div>
       )}

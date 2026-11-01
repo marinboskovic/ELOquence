@@ -9,10 +9,11 @@ import TileSpinner from '@/components/TileSpinner';
 import { analysisApi, errorMessage, PositionReport } from '@/lib/api';
 import { patternToTiles, TileState } from '@/lib/types';
 import { springs } from '@/lib/animations';
+import { Button, Label, MiniTiles } from '@/components/ui';
 import clsx from 'clsx';
 import WordInputRow from './WordInputRow';
 import { useWordInput } from './useWordInput';
-import { AnswerDot, Chip, ErrorLine, LabCard, MicroLabel, MiniPattern, MiniWord, StatTile, formatInt } from './LabPrimitives';
+import { AnswerDot, Chip, ErrorLine, LabCard, MiniPattern, StatTile, formatInt } from './LabPrimitives';
 
 const MAX_GUESSES = 6;
 const ANSWERS_TOTAL = 2309;
@@ -159,7 +160,7 @@ export default function PositionExplorer() {
   const isWinRow = (r: number) => patterns[r] === 242;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-12 md:gap-16">
       {/* ── Board ─────────────────────────────────────────────────────────── */}
       <div className="flex flex-col items-center gap-4">
         <div role="grid" aria-label="Painted Wordle board" className="flex flex-col items-center" style={{ gap: 'var(--tile-gap)' }}>
@@ -176,9 +177,8 @@ export default function PositionExplorer() {
                     role="gridcell"
                     whileTap={{ scale: 0.94 }}
                     onClick={() => paint(r, i)}
-                    className="block p-0 border-0 bg-transparent rounded-tile focus-visible:outline-none focus-visible:ring-2 cursor-pointer"
+                    className="block p-0 border-0 bg-transparent cursor-pointer"
                     style={{
-                      outlineColor: 'var(--tile-correct)',
                       ...(winReady
                         ? { animation: 'win-bounce 600ms ease', animationDelay: `${i * 100}ms`, animationFillMode: 'both' }
                         : {}),
@@ -196,40 +196,28 @@ export default function PositionExplorer() {
 
         <div className="h-5 flex items-center text-center" aria-live="polite">
           {input.notice ? (
-            <span className="font-sans text-sm font-semibold text-text-primary">{input.notice}</span>
+            <span className="font-mono text-xs text-text-primary">{input.notice}</span>
           ) : solved ? (
-            <span className="font-sans text-sm font-semibold" style={{ color: 'var(--tile-correct)' }}>
-              Solved in {guesses.length} — nothing left to learn.
-            </span>
+            <span className="font-mono text-xs text-text-primary">Solved in {guesses.length} — nothing left to learn.</span>
           ) : guesses.length === 0 ? (
-            <span className="font-sans text-xs text-text-ghost">Enter the guess you played, then tap its tiles to paint the colours you got</span>
+            <span className="font-mono text-label uppercase text-text-tertiary">enter the guess you played · tap tiles to paint the colours</span>
           ) : canType ? (
-            <span className="font-sans text-xs text-text-ghost">Tap tiles to paint feedback · gray → yellow → green</span>
+            <span className="font-mono text-label uppercase text-text-tertiary">tap tiles to paint · gray → yellow → green</span>
           ) : (
-            <span className="font-sans text-xs text-text-ghost">Six guesses used — undo one to keep exploring</span>
+            <span className="font-mono text-label uppercase text-text-tertiary">six guesses used — undo one to keep exploring</span>
           )}
         </div>
 
         {guesses.length > 0 && (
           <div className="flex items-center gap-2">
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              onClick={undo}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border-2 border-border-default hover:border-border-strong text-text-primary font-sans text-xs font-bold uppercase tracking-wider transition-colors"
-            >
-              <Undo2 size={13} />
+            <Button variant="secondary" size="sm" onClick={undo}>
+              <Undo2 size={13} aria-hidden="true" />
               Undo guess
-            </motion.button>
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              onClick={reset}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-text-secondary hover:text-text-primary font-sans text-xs font-semibold transition-colors"
-            >
-              <RotateCcw size={13} />
+            </Button>
+            <Button variant="ghost" size="sm" onClick={reset}>
+              <RotateCcw size={13} aria-hidden="true" />
               Reset
-            </motion.button>
+            </Button>
           </div>
         )}
 
@@ -241,7 +229,7 @@ export default function PositionExplorer() {
       {!report && loading && (
         <div className="flex flex-col items-center gap-3 py-10">
           <TileSpinner size="md" label="Evaluating position" />
-          <span className="font-sans text-xs text-text-secondary">Asking the engine…</span>
+          <span className="font-mono text-xs text-text-secondary">asking the engine…</span>
         </div>
       )}
 
@@ -268,20 +256,16 @@ function PositionResults({
   const remainingAccent = impossible ? 'var(--red)' : report.remaining === 1 ? 'var(--tile-correct)' : undefined;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: dimmed ? 0.5 : 1, y: 0 }} transition={springs.slide} className="flex flex-col gap-5">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: dimmed ? 0.5 : 1, y: 0 }} transition={springs.slide} className="flex flex-col gap-12 md:gap-16">
       {solved && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={springs.snappy}
-          className="rounded-card border px-4 py-3 flex items-center gap-3"
-          style={{
-            borderColor: 'color-mix(in srgb, var(--tile-correct) 40%, transparent)',
-            background: 'color-mix(in srgb, var(--tile-correct) 10%, transparent)',
-          }}
+          className="bg-wash-green px-5 md:px-8 py-5 flex items-center gap-4 flex-wrap"
         >
-          <MiniWord word={guesses[guesses.length - 1] ?? ''} state="correct" size={22} />
-          <span className="font-display font-black tracking-tight text-base text-text-primary">
+          <MiniTiles word={guesses[guesses.length - 1] ?? ''} states={['correct', 'correct', 'correct', 'correct', 'correct']} size={26} />
+          <span className="font-display text-display-sm text-text-primary">
             Solved in {guesses.length}/{MAX_GUESSES}.
           </span>
           <span className="font-sans text-xs text-text-secondary">Undo a guess to see what else would have worked.</span>
@@ -289,32 +273,33 @@ function PositionResults({
       )}
 
       {/* Headline numbers */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-x-6 gap-y-8">
         <StatTile
-          label="Answers left"
-          value={formatInt(report.remaining)}
+          label="answers left"
+          value={report.remaining}
+          decimals={0}
           sub={impossible ? 'no answer fits — check your colours' : `of ${formatInt(ANSWERS_TOTAL)} possible answers`}
           accent={remainingAccent}
         />
-        <StatTile label="Uncertainty" value={report.entropy_left.toFixed(2)} unit="bits" sub="log₂ of answers left" delay={0.04} />
-        <StatTile label="Guesses" value={`${guesses.length}/${MAX_GUESSES}`} sub={guesses.length ? 'painted so far' : 'opening position'} delay={0.08} />
+        <StatTile label="uncertainty" value={report.entropy_left} decimals={2} unit="bits" sub="log₂ of answers left" delay={0.04} />
+        <StatTile label="guesses" value={`${guesses.length}/${MAX_GUESSES}`} sub={guesses.length ? 'painted so far' : 'opening position'} delay={0.08} />
       </div>
 
       {/* Path */}
       {report.history.length > 0 && (
-        <LabCard title="Your path" aside="answers before → after" padded={false}>
-          <div className="divide-y divide-border-subtle">
+        <LabCard title="Your path" eyebrow="history" aside="answers before → after" padded={false}>
+          <div>
             {report.history.map((h, i) => {
               const bits = h.remaining_after > 0 ? Math.log2(h.remaining_before / h.remaining_after) : null;
               return (
-                <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="font-display font-bold text-sm tabular-nums w-5 text-right shrink-0 text-text-ghost">{i + 1}</span>
+                <div key={i} className="flex items-center gap-3 py-2.5 border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast">
+                  <span className="font-mono text-xs tabular w-5 text-right shrink-0 text-text-tertiary">{i + 1}</span>
                   <MiniPattern pattern={h.pattern} letters={h.guess} size={18} />
-                  <span className="flex-1 font-mono text-xs tabular-nums text-text-secondary text-right">
+                  <span className="flex-1 font-mono text-xs tabular text-text-secondary text-right">
                     {formatInt(h.remaining_before)} → <span className="text-text-primary font-semibold">{formatInt(h.remaining_after)}</span>
                   </span>
-                  <span className="font-mono text-xs tabular-nums w-16 text-right shrink-0" style={{ color: bits == null ? 'var(--red)' : 'var(--tile-correct)' }}>
-                    {bits == null ? 'impossible' : `+${bits.toFixed(2)} b`}
+                  <span className="font-mono text-xs tabular w-20 text-right shrink-0" style={{ color: bits == null ? 'var(--red)' : undefined }}>
+                    {bits == null ? 'impossible' : `+${bits.toFixed(2)} bits`}
                   </span>
                 </div>
               );
@@ -324,43 +309,44 @@ function PositionResults({
       )}
 
       {impossible ? (
-        <div className="rounded-card-lg border border-dashed border-border-default px-6 py-8 text-center">
-          <p className="font-sans text-sm text-text-secondary">
+        <div className="bg-wash-accent px-5 md:px-8 py-6">
+          <p className="font-display text-display-sm text-text-primary max-w-xl">
             No answer in the list produces that feedback. Tap the tiles to fix a colour, or undo the last guess.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-12 md:gap-8">
           {/* Top picks */}
           <LabCard
             title={solved ? 'Best next guess (if it weren’t over)' : 'What should I guess next?'}
-            aside="engine’s top picks"
+            eyebrow="engine"
+            aside="top picks"
             padded={false}
-            className="lg:col-span-3"
+            className="md:col-span-7"
           >
             {report.top_picks.length === 0 ? (
-              <div className="px-4 py-8 text-center font-sans text-sm text-text-secondary">Nothing to suggest.</div>
+              <div className="py-8 font-sans text-sm text-text-secondary">Nothing to suggest.</div>
             ) : (
               <>
-                <div className="flex items-center gap-3 px-4 py-2 border-b border-border-subtle">
-                  <MicroLabel className="w-5 text-right shrink-0">#</MicroLabel>
-                  <MicroLabel className="flex-1">Word</MicroLabel>
-                  <MicroLabel className="w-12 text-right shrink-0">Bits</MicroLabel>
-                  <MicroLabel className="w-12 text-right shrink-0">Exp.</MicroLabel>
-                  <MicroLabel className="w-12 text-right shrink-0 hidden sm:block">Worst</MicroLabel>
+                <div className="flex items-center gap-3 py-2 border-b border-border-subtle">
+                  <Label className="w-5 text-right shrink-0">#</Label>
+                  <Label className="flex-1">word</Label>
+                  <Label className="w-12 text-right shrink-0">bits</Label>
+                  <Label className="w-12 text-right shrink-0">exp.</Label>
+                  <Label className="w-12 text-right shrink-0 hidden sm:block">worst</Label>
                   <span className="w-2 shrink-0" />
                 </div>
-                <div className="divide-y divide-border-subtle">
+                <div>
                   {report.top_picks.map((p, i) => {
                     const row = (
                       <>
-                        <span className="font-display font-bold text-sm tabular-nums w-5 text-right shrink-0 text-text-ghost">{i + 1}</span>
+                        <span className={clsx('font-mono text-xs tabular w-5 text-right shrink-0', i === 0 ? 'text-accent' : 'text-text-tertiary')}>{i + 1}</span>
                         <div className="flex-1 min-w-0 flex items-center gap-2">
-                          <MiniWord word={p.word} state={i === 0 ? 'correct' : 'absent'} size={18} />
+                          <MiniTiles word={p.word} states={Array.from({ length: 5 }, () => (i === 0 ? 'correct' : 'absent'))} size={18} gap={2} />
                         </div>
-                        <span className="font-mono text-sm font-semibold tabular-nums text-text-primary w-12 text-right shrink-0">{p.entropy.toFixed(2)}</span>
-                        <span className="font-mono text-xs tabular-nums text-text-secondary w-12 text-right shrink-0">{p.expected_remaining.toFixed(1)}</span>
-                        <span className="font-mono text-xs tabular-nums text-text-secondary w-12 text-right shrink-0 hidden sm:block">
+                        <span className="font-mono text-sm font-semibold tabular text-text-primary w-12 text-right shrink-0">{p.entropy.toFixed(2)}</span>
+                        <span className="font-mono text-xs tabular text-text-secondary w-12 text-right shrink-0">{p.expected_remaining.toFixed(1)}</span>
+                        <span className="font-mono text-xs tabular text-text-secondary w-12 text-right shrink-0 hidden sm:block">
                           {formatInt(p.worst_case_remaining)}
                         </span>
                         <AnswerDot on={p.is_possible_answer} />
@@ -371,22 +357,21 @@ function PositionResults({
                         key={p.word}
                         type="button"
                         onClick={() => onUse(p.word)}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-bg-elevated/50 transition-colors focus-visible:outline-none focus-visible:ring-2"
-                        style={{ outlineColor: 'var(--tile-correct)' }}
+                        className="w-full flex items-center gap-3 py-2.5 text-left border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast"
                         aria-label={`Type ${p.word} as the next guess`}
                       >
                         {row}
                       </button>
                     ) : (
-                      <div key={p.word} className="flex items-center gap-3 px-4 py-2.5">
+                      <div key={p.word} className="flex items-center gap-3 py-2.5 border-b border-border-subtle">
                         {row}
                       </div>
                     );
                   })}
                 </div>
-                <div className="px-4 py-2.5 border-t border-border-subtle flex items-center gap-2">
+                <div className="pt-3 flex items-center gap-2">
                   <AnswerDot on />
-                  <span className="font-sans text-[11px] text-text-ghost">
+                  <span className="font-sans text-xs text-text-tertiary">
                     = could be the answer.{onUse ? ' Tap a row to type it in.' : ''}
                   </span>
                 </div>
@@ -397,18 +382,19 @@ function PositionResults({
           {/* Remaining words */}
           <LabCard
             title="Still possible"
+            eyebrow="answer pool"
             aside={report.remaining_truncated ? `showing ${report.remaining_words.length} of ${formatInt(report.remaining)}` : `${formatInt(report.remaining)} word${report.remaining === 1 ? '' : 's'}`}
-            className="lg:col-span-2"
+            className="md:col-span-5"
           >
             <div className="flex flex-wrap gap-1.5">
               {report.remaining_words.map((w) => (
                 <Chip key={w} tone={report.remaining === 1 ? 'green' : 'neutral'} onClick={onUse ? () => onUse(w) : undefined} className={clsx(!onUse && 'cursor-default')}>
-                  <span className="font-mono tracking-wider text-[11px]">{w}</span>
+                  {w}
                 </Chip>
               ))}
             </div>
             {report.remaining_truncated && (
-              <p className="font-sans text-[11px] text-text-ghost mt-3">
+              <p className="font-sans text-xs text-text-tertiary mt-3">
                 Too many to list — paint another guess to narrow it down.
               </p>
             )}

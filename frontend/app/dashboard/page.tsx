@@ -3,63 +3,59 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import type { Variants } from 'framer-motion';
+import { Trash2 } from 'lucide-react';
 import TileLoader from '@/components/TileLoader';
-import {
-  TrendingUp,
-  BarChart2,
-  Flame,
-  Trophy,
-  Target,
-  Hash,
-  Clock,
-  Trash2,
-  Star,
-  Sun,
-  Swords,
-  FlaskConical,
-  Gamepad2,
-  Users,
-  ExternalLink,
-} from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { gamesApi, usersApi, challengesApi } from '@/lib/api';
 import { Game, getRatingTier, RATING_TIERS, EloHistoryEntry, Classification } from '@/lib/types';
-import { springs, stagger, easings } from '@/lib/animations';
 import EloSparkline from '@/components/EloSparkline';
 import GuessDistribution from '@/components/GuessDistribution';
 import InstallPrompt from '@/components/InstallPrompt';
 import NemesisWords, { type NemesisWord } from '@/components/dashboard/NemesisWords';
 import PaceHabits, { type PaceStats, type FavouriteOpener } from '@/components/dashboard/PaceHabits';
+import {
+  Button,
+  ButtonLink,
+  CountUp,
+  Label,
+  MiniTiles,
+  Reveal,
+  Stat,
+  Tag,
+  staggerChild,
+  staggerParent,
+} from '@/components/ui';
 import clsx from 'clsx';
 
-// ─── Mode icon map (Lucide, no emoji) ─────────────────────────────────────────
-function ModeIcon({ mode, size = 14 }: { mode: string; size?: number }) {
-  const cls = 'shrink-0 text-text-ghost';
-  if (mode === 'daily') return <Sun size={size} className={cls} />;
-  if (mode === 'competitive') return <Swords size={size} className={cls} />;
-  if (mode === 'practice') return <FlaskConical size={size} className={cls} />;
-  if (mode === 'challenge') return <Users size={size} className={cls} />;
-  return <Gamepad2 size={size} className={cls} />;
-}
-
-// ─── Status config — token-driven colors ─────────────────────────────────────
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  won:         { label: 'Won',         color: 'var(--tile-correct)' },
-  lost:        { label: 'Lost',        color: 'var(--red)' },
-  in_progress: { label: 'In Progress', color: 'var(--tile-present)' },
-  abandoned:   { label: 'Abandoned',   color: 'var(--border-strong)' },
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const STATUS_LABEL: Record<string, string> = {
+  won: 'Won',
+  lost: 'Lost',
+  in_progress: 'In progress',
+  abandoned: 'Abandoned',
 };
 
-// ─── Date helper ─────────────────────────────────────────────────────────────
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
   const days = Math.floor((now.getTime() - d.getTime()) / 86_400_000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
   if (days < 7) return `${days}d ago`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toLowerCase();
+}
+
+function formatMMSS(seconds: number): string {
+  const total = Math.round(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+type TierTone = 'neutral' | 'ochre' | 'green' | 'ink';
+function tierTone(name: string): TierTone {
+  if (name === 'Veteran') return 'ochre';
+  if (name === 'Master') return 'green';
+  if (name === 'Grandmaster') return 'ink';
+  return 'neutral';
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,49 +82,11 @@ interface UserStats {
   [key: string]: unknown;
 }
 
-// ─── Shimmer skeleton ─────────────────────────────────────────────────────────
-function Shimmer({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <div
-      className={clsx('skeleton rounded-md bg-bg-muted', className)}
-      style={style}
-    />
-  );
-}
+type ModeFilter = 'all' | 'daily' | 'practice' | 'competitive' | 'challenge';
 
-// ─── Stat card ────────────────────────────────────────────────────────────────
-interface StatCardProps {
-  label: string;
-  value: string | number;
-  icon: React.ReactNode;
-  variants: Variants;
-}
-function StatCard({ label, value, icon, variants }: StatCardProps) {
-  return (
-    <motion.div
-      variants={variants}
-      className="flex flex-col gap-3 p-5 rounded-card bg-bg-base border border-border-default"
-    >
-      <div className="flex items-center gap-1.5 text-text-ghost">
-        {icon}
-        <span className="font-sans text-xs uppercase tracking-wider text-text-secondary">
-          {label}
-        </span>
-      </div>
-      <span className="font-display text-3xl font-bold tabular-nums text-text-primary leading-none">
-        {value}
-      </span>
-    </motion.div>
-  );
-}
-
-// ─── Section label ────────────────────────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="font-sans text-xs uppercase tracking-wider font-semibold text-text-secondary">
-      {children}
-    </span>
-  );
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+function Skeleton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={clsx('skeleton bg-bg-muted', className)} style={style} />;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -138,7 +96,7 @@ export default function DashboardPage() {
 
   const [games,          setGames]         = useState<Game[]>([]);
   const [loadingGames,   setLoadingGames]   = useState(true);
-  const [gameFilter,     setGameFilter]     = useState<'all' | 'daily' | 'practice' | 'competitive' | 'challenge'>('all');
+  const [gameFilter,     setGameFilter]     = useState<ModeFilter>('all');
   // Client-side pagination over the fetched games. The list itself is
   // already capped at the API's per_page (currently 20) — for deeper
   // history users go through /archive.
@@ -165,7 +123,7 @@ export default function DashboardPage() {
 
   // Fetch recent games for the active mode filter. Refetched when the filter
   // changes so the Recent Games list actually reflects that mode (per-mode
-  // COUNTS and the stat cards come from the server aggregate in `userStats`,
+  // COUNTS and the stat row come from the server aggregate in `userStats`,
   // not from this capped 20-game list). The cancel guard drops stale
   // responses if the user flips filters quickly.
   useEffect(() => {
@@ -245,7 +203,7 @@ export default function DashboardPage() {
   // ── Loading state ────────────────────────────────────────────────────────
   if (loading || !user) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100dvh-52px)]">
+      <div className="flex items-center justify-center min-h-page">
         <TileLoader size={20} />
       </div>
     );
@@ -264,15 +222,6 @@ export default function DashboardPage() {
       : 100;
   const toNextTier = nextTier ? Math.max(0, nextTier.min - user.elo_rating) : 0;
 
-  // Tier color tokens: master uses gold, veteran uses green, others use their tier color
-  const isMaster  = tier.name === 'Master';
-  const isVeteran = tier.name === 'Veteran';
-  const tierBadgeColor = isMaster
-    ? 'var(--gold)'
-    : isVeteran
-      ? 'var(--green)'
-      : tier.color;
-
   // The Recent Games list is driven by the per-mode fetch above, so the
   // fetched `games` are already scoped to the active filter.
   const completedGames = games.filter(
@@ -282,8 +231,6 @@ export default function DashboardPage() {
       (g.status === 'abandoned' && g.rated),
   );
 
-  // Pagination derived from the filtered list. Reset to page 1 whenever
-  // the filter changes (handled in an effect below).
   const RECENT_PER_PAGE = 5;
   const recentTotalPages = Math.max(1, Math.ceil(completedGames.length / RECENT_PER_PAGE));
   const recentClampedPage = Math.min(recentPage, recentTotalPages);
@@ -292,16 +239,13 @@ export default function DashboardPage() {
     recentClampedPage * RECENT_PER_PAGE,
   );
 
-  // ── Stat cards + tab counts come from the server-side aggregate
+  // ── Stat row + tab counts come from the server-side aggregate
   // (`userStats.mode_stats`), computed over the player's ENTIRE history —
   // NOT from the 20-game window above. The client fallback is only used until
-  // the stats request resolves (or if it fails); being limited to the recent
-  // window, that fallback is exactly what produced the "Daily 0 / wrong Avg
-  // Guesses" bug, so the aggregate is always preferred when present.
+  // the stats request resolves (or if it fails).
   const modeStats = userStats?.mode_stats;
   const filterStat = modeStats?.[gameFilter];
-  const modeCount = (key: typeof gameFilter): number | undefined =>
-    modeStats?.[key]?.completed;
+  const modeCount = (key: ModeFilter): number | undefined => modeStats?.[key]?.completed;
 
   const wonGamesFiltered = completedGames.filter((g) => g.status === 'won');
   const gamesPlayedFiltered = filterStat?.completed ?? completedGames.length;
@@ -311,17 +255,12 @@ export default function DashboardPage() {
         ? (wonGamesFiltered.length / completedGames.length) * 100
         : 0),
   );
-  const avgGuesses =
+  const avgGuessesNum: number | null =
     filterStat != null
-      ? filterStat.avg_guesses != null
-        ? filterStat.avg_guesses.toFixed(1)
-        : '—'
+      ? filterStat.avg_guesses
       : wonGamesFiltered.length > 0
-        ? (
-            wonGamesFiltered.reduce((s, g) => s + g.num_guesses, 0) /
-            wonGamesFiltered.length
-          ).toFixed(1)
-        : '—';
+        ? wonGamesFiltered.reduce((s, g) => s + g.num_guesses, 0) / wonGamesFiltered.length
+        : null;
 
   const guessDistribution: Record<string, number> =
     filterStat?.distribution ??
@@ -336,537 +275,363 @@ export default function DashboardPage() {
   const lossCount =
     filterStat?.losses ?? completedGames.filter((g) => g.status === 'lost').length;
 
-  // ── Animation variants ───────────────────────────────────────────────────
-  const fadeUp = (delay = 0) => ({
-    initial: { opacity: 0, y: 16 },
-    animate: { opacity: 1, y: 0 },
-    transition: { ...springs.slide, delay },
-  });
+  const monthName = new Date().toLocaleDateString('en-US', { month: 'long' }).toLowerCase();
 
-  const cardVariants: Variants = {
-    hidden:  { opacity: 0, y: 14 },
-    visible: { opacity: 1, y: 0, transition: springs.slide },
-  };
-
-  const containerVariants: Variants = {
-    hidden:  {},
-    visible: { transition: stagger.fast },
-  };
+  const FILTERS: { key: ModeFilter; label: string }[] = [
+    { key: 'all',         label: 'all' },
+    { key: 'daily',       label: 'daily' },
+    { key: 'practice',    label: 'practice' },
+    { key: 'competitive', label: 'competitive' },
+    { key: 'challenge',   label: 'challenge' },
+  ];
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 flex flex-col gap-12 md:gap-16">
 
       {/* ── INSTALL NUDGE (first login, this device) ───────────────────── */}
       <InstallPrompt />
 
-      {/* ── HERO: ELO + tier + streaks ─────────────────────────────────── */}
-      <motion.section {...fadeUp(0)} aria-label="Rating overview">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-6">
-
-          {/* Left: ELO number + tier pill + placement badge + username */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-baseline gap-3 flex-wrap">
-              {/* Big ELO number */}
-              <span
-                className="font-display text-5xl font-black tabular-nums leading-none"
-                style={{ color: tier.color }}
-              >
-                {Math.round(user.elo_rating)}
-              </span>
-
-              {/* Tier pill — token-driven color */}
-              <span
-                className="inline-flex items-center px-2.5 py-1 rounded-pill text-sm font-semibold leading-none border"
-                style={{
-                  color: tierBadgeColor,
-                  backgroundColor: `color-mix(in srgb, ${tierBadgeColor} 12%, transparent)`,
-                  borderColor: `color-mix(in srgb, ${tierBadgeColor} 25%, transparent)`,
-                }}
-              >
-                {tier.name}
-              </span>
-
-              {/* Placement badge */}
-              {user.is_placement && (
-                <span
-                  className="inline-flex items-center px-2.5 py-1 rounded-pill text-xs font-medium leading-none border"
-                  style={{
-                    color: 'var(--gold)',
-                    backgroundColor: 'color-mix(in srgb, var(--gold) 10%, transparent)',
-                    borderColor: 'color-mix(in srgb, var(--gold) 25%, transparent)',
-                  }}
-                >
-                  Placement {user.games_played}/5
-                </span>
-              )}
-            </div>
-
-            {/* Username */}
-            <p className="font-display text-3xl font-black text-text-primary tracking-tight">
-              {user.username}
-            </p>
+      {/* ── HERO: rating + sparkline ───────────────────────────────────── */}
+      <section aria-label="Rating overview" className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-10 items-end">
+        <div className="md:col-span-7 min-w-0">
+          <Label className="block">dashboard · {monthName}</Label>
+          <h1 className="font-display text-display-xl text-text-primary tabular mt-3 leading-none">
+            <CountUp value={Math.round(user.elo_rating)} duration={1100} format={(n) => String(Math.round(n))} />
+          </h1>
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            <Tag tone={tierTone(tier.name)}>{tier.name}</Tag>
+            {user.is_placement && <Tag tone="ochre">placement {user.games_played}/5</Tag>}
+            {user.current_streak > 0 && <Tag tone="neutral" dot="var(--accent)">streak {user.current_streak}</Tag>}
+          </div>
+          <div className="mt-5 flex items-baseline gap-4 flex-wrap">
+            <p className="font-display font-bold text-display-sm text-text-primary">{user.username}</p>
             <Link
               href={`/u/${encodeURIComponent(user.username)}`}
-              className="inline-flex items-center gap-1 w-fit font-sans text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 rounded"
+              className="ink-link font-mono text-label uppercase text-text-secondary"
             >
-              <ExternalLink size={11} />
-              View public profile
+              public profile →
             </Link>
           </div>
 
-          {/* Right: streak pills */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {user.current_streak > 0 && (
-              <div
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-pill border border-border-subtle text-xs font-medium"
-                style={{ color: 'var(--red)' }}
-              >
-                <Flame size={12} />
-                {user.current_streak} streak
-              </div>
-            )}
-            {user.max_streak > 0 && (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-pill border border-border-subtle text-xs text-text-secondary">
-                <Star size={11} />
-                Best&nbsp;
-                <span className="font-mono tabular-nums text-text-primary font-semibold">
-                  {user.max_streak}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tier progress bar — solid tokens, no gradient */}
-        <div className="mt-5">
-          <div className="flex items-center justify-between mb-2">
-            <SectionLabel>{tier.name} Progress</SectionLabel>
-            {nextTier ? (
-              <span className="font-sans text-[10px] font-mono tabular-nums text-text-secondary">
-                <span style={{ color: tier.color }}>{Math.round(user.elo_rating)}</span>
-                {' → '}
-                <span style={{ color: nextTier.color }}>{nextTier.name}</span>
-                {' · '}
-                <span className="text-text-secondary">{toNextTier} pts to go</span>
-              </span>
-            ) : (
-              <span className="font-sans text-[10px] font-mono text-text-secondary">Max rank reached</span>
-            )}
-          </div>
-          {/* Solid bg-bg-muted track, fill with tier-correct or gold for master */}
-          <div
-            className="h-1.5 rounded-pill bg-bg-muted border border-border-subtle overflow-hidden"
-            role="progressbar"
-            aria-valuenow={Math.round(tierProgress)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${tier.name} tier progress`}
-          >
-            <motion.div
-              className="h-full rounded-pill"
-              style={{ backgroundColor: isMaster ? 'var(--gold)' : 'var(--tile-correct)' }}
-              initial={{ width: 0 }}
-              animate={{ width: `${tierProgress}%` }}
-              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
-            />
-          </div>
-        </div>
-      </motion.section>
-
-      {/* ── MODE FILTER (controls stats grid + recent games) ───────────── */}
-      <div
-        role="tablist"
-        aria-label="Filter by mode"
-        className="flex flex-wrap gap-1 p-1 rounded-card bg-bg-elevated border border-border-subtle w-full sm:w-fit"
-      >
-        {(
-          [
-            { key: 'all',         label: 'All',         count: modeCount('all') },
-            { key: 'daily',       label: 'Daily',       count: modeCount('daily') },
-            { key: 'practice',    label: 'Practice',    count: modeCount('practice') },
-            { key: 'competitive', label: 'Competitive', count: modeCount('competitive') },
-            { key: 'challenge',   label: 'Challenge',   count: modeCount('challenge') },
-          ] as const
-        ).map((opt) => {
-          const active = gameFilter === opt.key;
-          return (
-            <button
-              key={opt.key}
-              role="tab"
-              type="button"
-              aria-selected={active}
-              onClick={() => setGameFilter(opt.key)}
-              className={clsx(
-                'shrink-0 whitespace-nowrap px-3 py-1.5 rounded-card text-xs font-sans font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2',
-                active
-                  ? 'bg-bg-base text-text-primary shadow-sm'
-                  : 'text-text-secondary hover:text-text-primary'
-              )}
-              style={active ? { outlineColor: 'var(--tile-correct)' } : undefined}
+          {/* Tier progress — one thin ink rule */}
+          <div className="mt-6 max-w-sm">
+            <div className="flex items-center justify-between mb-2 font-mono text-label uppercase text-text-tertiary tabular">
+              <span>{tier.name.toLowerCase()}</span>
+              <span>{nextTier ? `${toNextTier} to ${nextTier.name.toLowerCase()}` : 'top tier'}</span>
+            </div>
+            <div
+              className="h-px w-full bg-bg-muted relative"
+              role="progressbar"
+              aria-valuenow={Math.round(tierProgress)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${tier.name} tier progress`}
             >
-              {opt.label}
-              <span className="ml-1.5 text-text-ghost font-mono">{opt.count}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── STATS GRID ─────────────────────────────────────────────────── */}
-      <motion.div
-        className="grid grid-cols-2 sm:grid-cols-4 gap-3"
-        initial="hidden"
-        animate="visible"
-        variants={containerVariants}
-        aria-label="Player statistics"
-      >
-        <StatCard
-          label="Games Played"
-          value={gamesPlayedFiltered}
-          icon={<Hash size={13} />}
-          variants={cardVariants}
-        />
-        <StatCard
-          label="Win Rate"
-          value={`${winRate}%`}
-          icon={<Trophy size={13} />}
-          variants={cardVariants}
-        />
-        <StatCard
-          label="Avg Guesses"
-          value={avgGuesses}
-          icon={<Target size={13} />}
-          variants={cardVariants}
-        />
-        <StatCard
-          label="Current Streak"
-          value={user.current_streak}
-          icon={<Flame size={13} />}
-          variants={cardVariants}
-        />
-      </motion.div>
-
-      {/* ── ELO SPARKLINE ──────────────────────────────────────────────── */}
-      <motion.section
-        {...fadeUp(0.2)}
-        className="rounded-card-lg bg-bg-elevated border border-border-subtle p-5"
-        aria-label="Rating history chart"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <TrendingUp size={14} className="text-text-ghost" />
-            <span className="font-sans font-semibold text-sm text-text-primary">Rating History</span>
+              <motion.div
+                className="absolute inset-y-0 left-0 bg-bg-ink"
+                style={{ height: 2, top: -0.5 }}
+                initial={{ width: 0 }}
+                animate={{ width: `${tierProgress}%` }}
+                transition={{ duration: 0.9, ease: [0.2, 0.8, 0.2, 1], delay: 0.4 }}
+              />
+            </div>
           </div>
-          {eloHistory.length > 0 && (
-            <span className="font-sans text-[10px] font-mono tabular-nums text-text-secondary">
-              Last {eloHistory.length} game{eloHistory.length !== 1 ? 's' : ''}
-            </span>
+        </div>
+
+        <Reveal delay={0.1} className="md:col-span-5 min-w-0" aria-label="Rating history chart">
+          <div className="flex items-baseline justify-between mb-2">
+            <Label>rating · last 90</Label>
+            {eloHistory.length > 0 && (
+              <span className="font-mono text-xs tabular text-text-tertiary">
+                {eloHistory.length} game{eloHistory.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          {loadingHistory ? (
+            <Skeleton className="w-full" style={{ height: 180 }} />
+          ) : (
+            <EloSparkline data={eloHistory} height={180} />
           )}
+        </Reveal>
+      </section>
+
+      {/* ── MODE FILTER + STAT ROW ─────────────────────────────────────── */}
+      <section aria-label="Player statistics" className="flex flex-col gap-6">
+        <div
+          role="tablist"
+          aria-label="Filter by mode"
+          className="flex gap-6 overflow-x-auto hide-native-scrollbar border-b border-border-subtle"
+        >
+          {FILTERS.map((opt) => {
+            const active = gameFilter === opt.key;
+            const count = modeCount(opt.key);
+            return (
+              <button
+                key={opt.key}
+                role="tab"
+                type="button"
+                aria-selected={active}
+                onClick={() => setGameFilter(opt.key)}
+                className={clsx(
+                  'relative shrink-0 pb-3 -mb-px font-mono text-label uppercase transition-colors duration-fast',
+                  active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                )}
+              >
+                {opt.label}
+                {count !== undefined && <span className="ml-1.5 tabular text-text-tertiary">{count}</span>}
+                {active && (
+                  <motion.span
+                    layoutId="dash-tab-underline"
+                    className="absolute left-0 right-0 bottom-0 h-0.5 bg-accent"
+                    transition={{ duration: 0.26, ease: [0.7, 0, 0.2, 1] }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {loadingHistory ? (
-          <div className="space-y-2 py-4">
-            <Shimmer className="h-3 w-full" />
-            <Shimmer className="h-3 w-5/6" />
-            <Shimmer className="h-3 w-4/6" />
-            <Shimmer className="h-32 w-full mt-2" />
-          </div>
-        ) : (
-          <EloSparkline data={eloHistory} height={180} />
-        )}
-      </motion.section>
-
-      {/* ── GUESS DISTRIBUTION ─────────────────────────────────────────── */}
-      <motion.section
-        {...fadeUp(0.25)}
-        className="rounded-card-lg bg-bg-elevated border border-border-subtle p-5"
-        aria-label="Guess distribution"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <BarChart2 size={14} className="text-text-ghost" />
-          <span className="font-sans font-semibold text-sm text-text-primary">Guess Distribution</span>
+        <div className="rule-top pt-1 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-6">
+          <Stat label="games" value={gamesPlayedFiltered} />
+          <Stat label="win rate" value={`${winRate}%`} sub={`${lossCount} lost`} />
+          <Stat
+            label="avg guesses"
+            value={avgGuessesNum != null ? avgGuessesNum.toFixed(1) : '—'}
+            sub="per win"
+          />
+          <Stat label="streak" value={user.current_streak} sub={`best ${user.max_streak}`} />
         </div>
+      </section>
 
-        {loadingStats ? (
-          <div className="space-y-2">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Shimmer className="h-3 w-3" />
-                <Shimmer className="h-5 flex-1" style={{ width: `${40 + i * 7}%` }} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <GuessDistribution distribution={guessDistribution} losses={lossCount} />
-        )}
-      </motion.section>
-
-      {/* ── NEMESIS + PACE ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <NemesisWords words={userStats?.nemesis_words} loading={loadingStats} delay={0.28} />
-        <PaceHabits
-          pace={userStats?.pace}
-          favouriteOpener={userStats?.favourite_opener}
-          classificationMix={userStats?.classification_mix}
-          loading={loadingStats}
-          delay={0.3}
-        />
-      </div>
-
-      {/* ── RECENT GAMES ───────────────────────────────────────────────── */}
-      <motion.section {...fadeUp(0.3)} aria-label="Recent games">
-        {/* Section header */}
-        <div className="flex items-center justify-between mb-3">
-          <SectionLabel>Recent Games</SectionLabel>
-          <Link
-            href="/play"
-            className="font-sans text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 rounded"
-            style={{ color: 'var(--tile-correct)' }}
-            aria-label="Play a new game"
-          >
-            Play New
-          </Link>
+      {/* ── DISTRIBUTION ───────────────────────────────────────────────── */}
+      <Reveal as="section" aria-label="Guess distribution" className="grid grid-cols-1 md:grid-cols-12 gap-8">
+        <div className="md:col-span-4 rule-top pt-3">
+          <Label className="block mb-1">distribution</Label>
+          <h2 className="font-display text-display-md text-text-primary">Guesses to solve</h2>
+          <p className="text-sm text-text-secondary mt-3 max-w-xs">
+            How many rows it took, across {gameFilter === 'all' ? 'every mode' : `${gameFilter} games`}. X is a loss.
+          </p>
         </div>
-
-        {/* Games container */}
-        <div className="rounded-card-lg bg-bg-base border border-border-default overflow-hidden">
-          {loadingGames ? (
-            /* Shimmer rows */
-            <div className="divide-y divide-border-subtle">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3.5">
-                  <Shimmer className="h-4 w-4 rounded-sm" />
-                  <Shimmer className="h-4 w-28 rounded-sm" />
-                  <Shimmer className="h-3 w-16 rounded-sm ml-auto" />
-                  <Shimmer className="h-3 w-10 rounded-sm" />
-                  <Shimmer className="h-4 w-4 rounded-sm" />
+        <div className="md:col-span-8 md:pt-3">
+          {loadingStats ? (
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="rule-hair flex items-center gap-3 py-1.5">
+                  <Skeleton className="h-3 w-6" />
+                  <Skeleton className="h-4" style={{ width: `${30 + i * 8}%` }} />
                 </div>
               ))}
             </div>
-          ) : completedGames.length === 0 ? (
-            /* Empty state */
-            <div className="flex flex-col items-center gap-4 py-16 px-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-bg-muted border border-border-subtle flex items-center justify-center">
-                <Gamepad2 size={22} className="text-text-ghost" />
-              </div>
-              <div className="space-y-1">
-                <p className="font-sans text-sm font-medium text-text-secondary">
-                  {gameFilter === 'all'
-                    ? 'No completed games yet'
-                    : `No completed ${gameFilter} games`}
-                </p>
-                <p className="font-sans text-xs text-text-ghost">
-                  {gameFilter === 'all'
-                    ? 'Finish a game to see it here.'
-                    : 'Try a different filter or play one.'}
-                </p>
-              </div>
-              {gameFilter === 'all' ? (
-                <Link
-                  href="/play"
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-card text-white text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2"
-                  style={{
-                    backgroundColor: 'var(--tile-correct)',
-                    outlineColor: 'var(--tile-correct)',
-                  }}
-                >
-                  Play a Game
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setGameFilter('all')}
-                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-card border border-border-default text-text-secondary text-sm font-semibold transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2"
-                  style={{ outlineColor: 'var(--tile-correct)' }}
-                >
-                  Show all
-                </button>
-              )}
-            </div>
           ) : (
-            /* Game rows */
-            <div className="divide-y divide-border-subtle" role="list">
-              {recentVisible.map((game, i) => {
-                const statusInfo  = STATUS_CONFIG[game.status] ?? STATUS_CONFIG.abandoned;
-                const isClickable = game.status === 'won' || game.status === 'lost';
-                const eloDelta    = game.elo_delta;
-                const showWord    =
-                  !(game.status === 'in_progress') &&
-                  !(game.status === 'abandoned' && game.mode === 'daily');
+            <GuessDistribution distribution={guessDistribution} losses={lossCount} />
+          )}
+        </div>
+      </Reveal>
 
-                const challengeCode =
-                  game.mode === 'challenge'
-                    ? challengeCodeByWord[game.target_word?.toUpperCase() ?? '']
-                    : undefined;
-                const onRowClick = () => {
-                  if (!isClickable) return;
-                  if (challengeCode) {
-                    router.push(`/challenge/${challengeCode}`);
-                  } else {
-                    router.push(`/review/${game.id}`);
-                  }
-                };
+      {/* ── NEMESIS + PACE (7/5) ───────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8">
+        <div className="md:col-span-7 min-w-0">
+          <NemesisWords words={userStats?.nemesis_words} loading={loadingStats} delay={0.05} />
+        </div>
+        <div className="md:col-span-5 min-w-0">
+          <PaceHabits
+            pace={userStats?.pace}
+            favouriteOpener={userStats?.favourite_opener}
+            classificationMix={userStats?.classification_mix}
+            loading={loadingStats}
+            delay={0.12}
+          />
+        </div>
+      </div>
 
-                return (
-                  <motion.div
-                    key={game.id}
-                    role="listitem"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: Math.min(i * 0.045, 0.4), ...easings.fade }}
-                  >
-                    <div
-                      className={clsx(
-                        'flex items-center gap-3 px-4 py-3 border-b border-border-subtle last:border-0 transition-colors',
-                        isClickable
-                          ? 'cursor-pointer hover:bg-bg-elevated/50 active:bg-bg-muted'
-                          : 'cursor-default'
-                      )}
-                      onClick={onRowClick}
+      {/* ── RECENT GAMES ───────────────────────────────────────────────── */}
+      <Reveal as="section" aria-label="Recent games">
+        <div className="rule-top pt-3 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <Label className="block mb-1">recent · {gameFilter}</Label>
+            <h2 className="font-display text-display-md text-text-primary">Last games</h2>
+          </div>
+          <Link href="/play" className="ink-link font-mono text-label uppercase text-text-primary" aria-label="Play a new game">
+            play new →
+          </Link>
+        </div>
+
+        {loadingGames ? (
+          <div className="mt-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rule-hair flex items-center gap-4 py-3">
+                <Skeleton className="h-[22px] w-[122px]" />
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-4 w-10 ml-auto" />
+                <Skeleton className="h-3 w-10" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+            ))}
+          </div>
+        ) : completedGames.length === 0 ? (
+          /* Empty state — the page's one ink block */
+          <div className="mt-6 bg-bg-ink text-text-on-ink px-6 py-10 md:px-10 md:py-14 flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <p className="font-display text-display-md max-w-md">
+              {gameFilter === 'all' ? 'Nothing on the ledger yet.' : `No ${gameFilter} games finished yet.`}
+            </p>
+            {gameFilter === 'all' ? (
+              <ButtonLink href="/play" variant="primary" size="md">play a game</ButtonLink>
+            ) : (
+              <Button variant="secondary" size="md" onClick={() => setGameFilter('all')} className="!border-text-on-ink !text-text-on-ink">
+                show all
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="rule-hair">
+                  <th scope="col" className="text-left py-2 pr-4"><Label>word</Label></th>
+                  <th scope="col" className="text-left py-2 pr-4 hidden sm:table-cell"><Label>mode</Label></th>
+                  <th scope="col" className="text-right py-2 pr-4"><Label>result</Label></th>
+                  <th scope="col" className="text-right py-2 pr-4"><Label>±elo</Label></th>
+                  <th scope="col" className="text-right py-2 pr-4 hidden sm:table-cell"><Label>time</Label></th>
+                  <th scope="col" className="text-right py-2 pr-2"><Label>when</Label></th>
+                  <th scope="col" className="py-2"><span className="sr-only">Delete</span></th>
+                </tr>
+              </thead>
+              <motion.tbody variants={staggerParent} initial="hidden" animate="show" key={`${gameFilter}-${recentClampedPage}`}>
+                {recentVisible.map((game) => {
+                  const statusLabel = STATUS_LABEL[game.status] ?? STATUS_LABEL.abandoned;
+                  const isClickable = game.status === 'won' || game.status === 'lost';
+                  const eloDelta    = game.elo_delta;
+                  const showWord    =
+                    !(game.status === 'in_progress') &&
+                    !(game.status === 'abandoned' && game.mode === 'daily');
+                  const word = showWord ? (game.target_word ?? '—') : '?????';
+                  const tileStates = showWord
+                    ? game.status === 'won'
+                      ? (['correct', 'correct', 'correct', 'correct', 'correct'] as const)
+                      : undefined
+                    : (['empty', 'empty', 'empty', 'empty', 'empty'] as const);
+
+                  const challengeCode =
+                    game.mode === 'challenge'
+                      ? challengeCodeByWord[game.target_word?.toUpperCase() ?? '']
+                      : undefined;
+                  const go = () => {
+                    if (!isClickable) return;
+                    if (challengeCode) router.push(`/challenge/${challengeCode}`);
+                    else router.push(`/review/${game.id}`);
+                  };
+
+                  const result = game.status === 'won' ? `${game.num_guesses}/6` : game.status === 'lost' ? 'X' : '—';
+
+                  return (
+                    <motion.tr
+                      key={game.id}
+                      variants={staggerChild}
+                      onClick={go}
+                      onKeyDown={(e) => {
+                        if (!isClickable) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          go();
+                        }
+                      }}
+                      tabIndex={isClickable ? 0 : undefined}
                       aria-label={
                         isClickable
                           ? (challengeCode
-                              ? `Challenge results for ${showWord ? game.target_word : '?????'}`
-                              : `Review ${showWord ? game.target_word : '?????'} — ${statusInfo.label}`)
+                              ? `Challenge results for ${word}`
+                              : `Review ${word} — ${statusLabel}`)
                           : undefined
                       }
+                      className={clsx(
+                        'border-b border-border-subtle transition-colors duration-fast',
+                        isClickable ? 'cursor-pointer hover:bg-bg-elevated' : 'cursor-default'
+                      )}
                     >
-                      {/* Mode icon */}
-                      <span className="shrink-0 w-[22px] flex items-center justify-center">
-                        <ModeIcon mode={game.mode} size={14} />
-                      </span>
-
-                      {/* Word + mode label */}
-                      <div className="flex flex-col min-w-0 flex-1 gap-0.5">
-                        <span className="font-mono text-sm font-semibold uppercase text-text-primary tracking-wide truncate">
-                          {showWord ? (game.target_word ?? '—') : '?????'}
+                      <td className="py-3 pr-4">
+                        <span className="inline-flex items-center gap-3">
+                          <MiniTiles word={word.toUpperCase().slice(0, 5)} states={tileStates ? [...tileStates] : undefined} size={22} />
+                          <span className="sm:hidden font-mono text-label uppercase text-text-tertiary">{game.mode}</span>
                         </span>
-                        <span className="font-sans text-[10px] text-text-ghost capitalize leading-none">
+                      </td>
+                      <td className="py-3 pr-4 hidden sm:table-cell">
+                        <Label>
                           {game.mode}
-                          {game.is_placement && game.mode === 'competitive' && ' · Placement'}
+                          {game.is_placement && game.mode === 'competitive' && ' · placement'}
+                          {game.hard_mode && ' · hard'}
+                        </Label>
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        <span className={clsx('font-display font-bold text-lg tabular', game.status === 'won' ? 'text-text-primary' : 'text-text-secondary')}>
+                          {result}
                         </span>
-                      </div>
-
-                      {/* Status + ELO delta */}
-                      <div className="flex flex-col items-end gap-0.5 shrink-0">
-                        <span
-                          className="font-sans text-xs font-semibold"
-                          style={{ color: statusInfo.color }}
-                        >
-                          {statusInfo.label}
-                          {game.status === 'won' && (
-                            <span className="font-mono font-normal text-[10px] ml-1 text-text-ghost">
-                              {game.num_guesses}/6
-                            </span>
-                          )}
-                        </span>
-                        {eloDelta !== null && game.rated && (
-                          <span
-                            className="font-mono text-[10px] tabular-nums font-semibold"
-                            style={{
-                              color: (eloDelta ?? 0) >= 0 ? 'var(--tile-correct)' : 'var(--red)',
-                            }}
-                          >
+                      </td>
+                      <td className="py-3 pr-4 text-right">
+                        {eloDelta !== null && game.rated ? (
+                          <span className={clsx('font-mono text-sm tabular', (eloDelta ?? 0) >= 0 ? 'text-accent' : 'text-text-tertiary')}>
                             {(eloDelta ?? 0) >= 0 ? '+' : ''}
                             {Math.round(eloDelta ?? 0)}
                           </span>
-                        )}
-                      </div>
-
-                      {/* Date + time */}
-                      <div className="flex flex-col items-end shrink-0 min-w-[52px] gap-0.5">
-                        <span className="font-sans text-[10px] text-text-ghost tabular-nums">
-                          {formatDate(game.created_at)}
-                        </span>
-                        {game.time_seconds != null && (
-                          <span className="font-sans text-[10px] text-text-ghost flex items-center gap-0.5 tabular-nums font-mono">
-                            <Clock size={8} className="shrink-0" />
-                            {Math.floor(Math.round(game.time_seconds) / 60)}:
-                            {String(Math.round(game.time_seconds) % 60).padStart(2, '0')}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Delete */}
-                      <button
-                        onClick={(e) => handleDelete(game.id, e)}
-                        disabled={deletingId === game.id}
-                        className="p-1.5 ml-1 rounded-md text-text-ghost transition-colors shrink-0 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2"
-                        style={
-                          {
-                            '--hover-color': 'var(--red)',
-                          } as React.CSSProperties
-                        }
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.color = 'var(--red)';
-                          e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--red) 10%, transparent)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.color = '';
-                          e.currentTarget.style.backgroundColor = '';
-                        }}
-                        aria-label={`Delete game — ${showWord ? game.target_word : '?????'}`}
-                      >
-                        {deletingId === game.id ? (
-                          <span className="block w-3.5 h-3.5 rounded-full border border-current border-t-transparent animate-spin" />
                         ) : (
-                          <Trash2 size={13} />
+                          <span className="font-mono text-sm text-text-ghost">·</span>
                         )}
-                      </button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
+                      </td>
+                      <td className="py-3 pr-4 text-right hidden sm:table-cell">
+                        <span className="font-mono text-xs tabular text-text-secondary">
+                          {game.time_seconds != null ? formatMMSS(game.time_seconds) : '—'}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-2 text-right">
+                        <span className="font-mono text-xs tabular text-text-tertiary whitespace-nowrap">{formatDate(game.created_at)}</span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="!px-2 !h-8"
+                          onClick={(e) => handleDelete(game.id, e)}
+                          loading={deletingId === game.id}
+                          aria-label={`Delete game — ${word}`}
+                        >
+                          {deletingId !== game.id && <Trash2 size={13} />}
+                        </Button>
+                      </td>
+                    </motion.tr>
+                  );
+                })}
+              </motion.tbody>
+            </table>
+          </div>
+        )}
 
-          {/* Pagination controls — only render when there's more than
-              one page of completed games to show. */}
-          {!loadingGames && completedGames.length > RECENT_PER_PAGE && (
-            <div
-              className="flex items-center justify-between gap-3 px-4 py-3"
-              style={{ borderTop: '1px solid var(--border-subtle)' }}
+        {/* Pagination — only when there's more than one page */}
+        {!loadingGames && completedGames.length > RECENT_PER_PAGE && (
+          <div className="flex items-center justify-between gap-3 pt-4">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setRecentPage((p) => Math.max(1, p - 1))}
+              disabled={recentClampedPage <= 1}
+              aria-label="Previous page"
             >
-              <button
-                type="button"
-                onClick={() => setRecentPage((p) => Math.max(1, p - 1))}
-                disabled={recentClampedPage <= 1}
-                className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-default)',
-                  color: 'var(--text-primary)',
-                }}
-                aria-label="Previous page"
-              >
-                ← Prev
-              </button>
-              <span
-                className="text-xs font-mono tabular-nums"
-                style={{ color: 'var(--text-secondary)' }}
-                aria-live="polite"
-              >
-                Page {recentClampedPage} of {recentTotalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setRecentPage((p) => Math.min(recentTotalPages, p + 1))}
-                disabled={recentClampedPage >= recentTotalPages}
-                className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-default)',
-                  color: 'var(--text-primary)',
-                }}
-                aria-label="Next page"
-              >
-                Next →
-              </button>
-            </div>
-          )}
-        </div>
-      </motion.section>
-
+              ← prev
+            </Button>
+            <span className="font-mono text-label uppercase tabular text-text-secondary" aria-live="polite">
+              page {recentClampedPage} / {recentTotalPages}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setRecentPage((p) => Math.min(recentTotalPages, p + 1))}
+              disabled={recentClampedPage >= recentTotalPages}
+              aria-label="Next page"
+            >
+              next →
+            </Button>
+          </div>
+        )}
+      </Reveal>
     </div>
   );
 }

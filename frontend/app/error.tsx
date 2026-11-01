@@ -1,10 +1,12 @@
 'use client';
 import { useEffect } from 'react';
-import Link from 'next/link';
+import Tile from '@/components/Tile';
+import { Button, ButtonLink, Label } from '@/components/ui';
 
 /**
  * Route-segment error boundary. Rendered inside the root layout, so the
- * theme/fonts/nav are still present. Tiles spell ERROR in the absent colour.
+ * theme/fonts/nav are still present. An ink block states the problem;
+ * the tiles spell ERROR in the absent colour (a guess that didn't land).
  */
 const WORD = 'ERROR';
 
@@ -21,47 +23,37 @@ export default function RouteError({
   }, [error]);
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100dvh-52px)] px-4 bg-bg-base">
-      <div className="flex flex-col items-center text-center max-w-md">
-        <div className="flex gap-1.5" role="img" aria-label="ERROR">
-          {WORD.split('').map((ch, i) => (
-            <span
-              key={i}
-              className="flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-tile text-white font-display font-black text-2xl sm:text-3xl select-none"
-              style={{
-                backgroundColor: 'var(--tile-absent)',
-                animation: `pop-in 260ms ease ${i * 70}ms both`,
-              }}
-            >
-              {ch}
-            </span>
-          ))}
-        </div>
+    <div className="min-h-page flex items-center bg-bg-base">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-16 w-full">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 items-end">
+          <section className="md:col-span-8 bg-bg-ink text-text-on-ink p-6 md:p-12 flex flex-col gap-8">
+            <Label className="text-text-on-ink opacity-70">error · something went wrong</Label>
+            <div className="flex" style={{ gap: 'var(--tile-gap)' }} role="img" aria-label={WORD}>
+              {WORD.split('').map((ch, i) => (
+                <Tile
+                  key={i}
+                  letter={ch}
+                  state="absent"
+                  position={i}
+                  isFlipping
+                  flipDelay={i * 0.08}
+                  size="clamp(44px, 6vw, 64px)"
+                />
+              ))}
+            </div>
+            <h1 className="font-display text-display-lg text-balance">That guess didn&apos;t land.</h1>
+            <p className="text-base max-w-md opacity-80">You can try again, or head back home.</p>
+            {error.digest && <Label className="text-text-on-ink opacity-50">ref {error.digest}</Label>}
+          </section>
 
-        <h1 className="mt-8 font-display font-black tracking-tight text-3xl text-text-primary">
-          Something went wrong
-        </h1>
-        <p className="mt-2 text-base font-sans text-text-secondary">
-          That guess didn&apos;t land. You can try again, or head back home.
-        </p>
-        {error.digest && (
-          <p className="mt-1 font-mono tabular-nums text-xs text-text-tertiary">ref {error.digest}</p>
-        )}
-
-        <div className="mt-8 flex flex-row gap-3">
-          <Link
-            href="/"
-            className="inline-flex items-center justify-center px-8 py-3 rounded-md border-2 border-border-default hover:border-border-strong text-text-primary font-bold uppercase tracking-wider text-sm transition-colors"
-          >
-            Go home
-          </Link>
-          <button
-            type="button"
-            onClick={() => reset()}
-            className="inline-flex items-center justify-center px-8 py-3 rounded-md bg-tile-correct text-white font-bold uppercase tracking-wider text-sm hover:brightness-110 transition-[filter]"
-          >
-            Try again
-          </button>
+          <div className="md:col-span-4 flex flex-col sm:flex-row md:flex-col gap-3">
+            <Button size="lg" onClick={() => reset()}>
+              Try again
+            </Button>
+            <ButtonLink href="/" variant="secondary" size="lg">
+              Go home
+            </ButtonLink>
+          </div>
         </div>
       </div>
     </div>

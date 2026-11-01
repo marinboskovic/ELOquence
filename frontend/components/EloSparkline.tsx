@@ -1,5 +1,5 @@
 'use client';
-import { useState, useId } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { EloHistoryEntry } from '@/lib/types';
 
@@ -16,19 +16,23 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/**
+ * Atelier sparkline: a crisp 1.5px ink line over a hair grid, the latest
+ * point marked in accent. No area fill, no gradient. The line draws itself
+ * on mount (pathLength 0 → 1) — the dashboard's signature moment.
+ */
 export default function EloSparkline({ data: rawData, width = 600, height = 200 }: Props) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const gradId = useId().replace(/:/g, '');
 
   if (rawData.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-text-secondary"
+        className="rule-hair flex items-center justify-center font-mono text-label uppercase text-text-tertiary"
         style={{ height }}
         role="img"
         aria-label="No rating history yet"
       >
-        No rating history yet
+        no rating history yet
       </div>
     );
   }
@@ -52,7 +56,7 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
         ]
       : rawData;
 
-  const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+  const pad = { top: 16, right: 16, bottom: 26, left: 44 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
 
@@ -63,51 +67,65 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
   const minElo = Math.floor((rawMin - range * 0.05) / 50) * 50;
   const maxElo = Math.ceil((rawMax + range * 0.05) / 50) * 50;
 
-  const xScale = (i: number) =>
-    pad.left + (i / (data.length - 1)) * plotW;
-  const yScale = (elo: number) =>
-    pad.top + plotH - ((elo - minElo) / (maxElo - minElo)) * plotH;
+  const xScale = (i: number) => pad.left + (i / (data.length - 1)) * plotW;
+  const yScale = (elo: number) => pad.top + plotH - ((elo - minElo) / (maxElo - minElo)) * plotH;
 
   const linePath = data
     .map((d, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(d.elo_after).toFixed(1)}`)
     .join(' ');
-  const areaPath =
-    linePath +
-    ` L ${xScale(data.length - 1).toFixed(1)} ${yScale(minElo).toFixed(1)}` +
-    ` L ${xScale(0).toFixed(1)} ${yScale(minElo).toFixed(1)} Z`;
 
-  const isGain = elos[elos.length - 1] >= elos[0];
-  const lineColor = isGain ? 'var(--tile-correct)' : 'var(--red)';
+  // Hair grid: four horizontal rules between min and max.
+  const gridRows = 4;
+  const gridYs = Array.from({ length: gridRows + 1 }, (_, i) => pad.top + (plotH / gridRows) * i);
 
-  const visibleThresholds = TIER_THRESHOLDS.filter(
-    (t) => t > minElo && t < maxElo
-  );
+  const visibleThresholds = TIER_THRESHOLDS.filter((t) => t > minElo && t < maxElo);
 
   const hovered = hoverIndex !== null ? data[hoverIndex] : null;
   const tooltipX = hoverIndex !== null ? xScale(hoverIndex) : 0;
   const tooltipY = hovered ? yScale(hovered.elo_after) : 0;
-  const tooltipBoxW = 110;
+  const tooltipBoxW = 112;
   const tooltipBoxH = 40;
   let tooltipLeft = tooltipX - tooltipBoxW / 2;
   tooltipLeft = Math.max(pad.left, Math.min(tooltipLeft, width - pad.right - tooltipBoxW));
-  const tooltipTop = tooltipY - tooltipBoxH - 8;
+  const tooltipTop = tooltipY - tooltipBoxH - 10;
+
+  const lastX = xScale(data.length - 1);
+  const lastY = yScale(elos[elos.length - 1]);
 
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="w-full"
+      className="w-full block"
       role="img"
       aria-label={`ELO rating history from ${elos[0]} to ${elos[elos.length - 1]}`}
       onMouseLeave={() => setHoverIndex(null)}
+      style={{ fontFamily: 'var(--font-mono), ui-monospace, monospace' }}
     >
-      <defs>
-        <linearGradient id={`elo-area-grad-${gradId}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={isGain ? 'var(--tile-correct)' : 'var(--red)'} stopOpacity="0.15" />
-          <stop offset="100%" stopColor={isGain ? 'var(--tile-correct)' : 'var(--red)'} stopOpacity="0" />
-        </linearGradient>
-      </defs>
+      {/* Hair grid */}
+      {gridYs.map((y, i) => (
+        <line
+          key={`g${i}`}
+          x1={pad.left}
+          y1={y}
+          x2={pad.left + plotW}
+          y2={y}
+          stroke="var(--border-subtle)"
+          strokeWidth={1}
+          shapeRendering="crispEdges"
+        />
+      ))}
+      {/* Left axis rule */}
+      <line
+        x1={pad.left}
+        y1={pad.top}
+        x2={pad.left}
+        y2={pad.top + plotH}
+        stroke="var(--border-subtle)"
+        strokeWidth={1}
+        shapeRendering="crispEdges"
+      />
 
-      {/* Tier threshold lines */}
+      {/* Tier thresholds — dotted hair with a mono tag */}
       {visibleThresholds.map((t) => {
         const y = yScale(t);
         return (
@@ -117,51 +135,41 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
               y1={y}
               x2={pad.left + plotW}
               y2={y}
-              stroke="var(--border-subtle)"
+              stroke="var(--text-ghost)"
               strokeWidth={1}
-              strokeDasharray="4 4"
+              strokeDasharray="2 4"
+              shapeRendering="crispEdges"
             />
-            <text
-              x={pad.left + 4}
-              y={y - 3}
-              fontSize={9}
-              fontFamily="sans-serif"
-              fill="var(--text-tertiary)"
-            >
+            <text x={pad.left + plotW} y={y - 4} fontSize={9} fill="var(--text-tertiary)" textAnchor="end" letterSpacing="0.1em">
               {t}
             </text>
           </g>
         );
       })}
 
-      {/* Area fill */}
-      <motion.path
-        d={areaPath}
-        fill={`url(#elo-area-grad-${gradId})`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.6 }}
-      />
-
-      {/* Line */}
+      {/* The line — draws itself on mount */}
       <motion.path
         d={linePath}
         fill="none"
-        stroke={lineColor}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        stroke="var(--text-primary)"
+        strokeWidth={1.5}
+        strokeLinecap="square"
+        strokeLinejoin="miter"
+        vectorEffect="non-scaling-stroke"
         initial={{ pathLength: 0 }}
         animate={{ pathLength: 1 }}
-        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 1.2, ease: [0.2, 0.8, 0.2, 1] }}
       />
 
-      {/* Last-point dot */}
-      <circle
-        cx={xScale(data.length - 1)}
-        cy={yScale(elos[elos.length - 1])}
+      {/* Last point — the live indicator, in accent */}
+      <motion.circle
+        cx={lastX}
+        cy={lastY}
         r={4}
-        fill={lineColor}
+        fill="var(--accent)"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.1, duration: 0.26, ease: [0.2, 0.8, 0.2, 1] }}
       />
 
       {/* Invisible hit areas for hover */}
@@ -181,7 +189,7 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
         );
       })}
 
-      {/* Hover vertical line + dot */}
+      {/* Hover rule + point + tooltip */}
       {hoverIndex !== null && hovered && (
         <>
           <line
@@ -191,16 +199,9 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
             y2={pad.top + plotH}
             stroke="var(--border-default)"
             strokeWidth={1}
-            strokeDasharray="3 3"
+            shapeRendering="crispEdges"
           />
-          <circle
-            cx={tooltipX}
-            cy={tooltipY}
-            r={4}
-            fill={lineColor}
-            stroke="var(--bg-base)"
-            strokeWidth={1.5}
-          />
+          <circle cx={tooltipX} cy={tooltipY} r={4} fill="var(--bg-base)" stroke="var(--border-default)" strokeWidth={1.5} />
           <foreignObject
             x={tooltipLeft}
             y={Math.max(pad.top, tooltipTop)}
@@ -209,26 +210,24 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
             style={{ overflow: 'visible' }}
           >
             <div
-              className="rounded-md border border-border-default bg-bg-base shadow-md px-3 py-2 pointer-events-none"
-              style={{ fontSize: 11, lineHeight: 1.4 }}
+              className="border-2 border-border-default bg-bg-base shadow-ink-sm px-2.5 py-1.5 pointer-events-none"
+              style={{ fontSize: 11, lineHeight: 1.3 }}
             >
-              <div className="font-sans text-text-secondary" style={{ fontSize: 10 }}>
+              <div className="font-mono text-text-secondary uppercase tracking-[0.1em]" style={{ fontSize: 9 }}>
                 {formatDate(hovered.recorded_at)}
               </div>
-              <div
-                className="font-mono font-bold tabular-nums text-text-primary"
-                style={{ fontSize: 13 }}
-              >
+              <div className="font-display font-bold tabular text-text-primary" style={{ fontSize: 14 }}>
                 {hovered.elo_after}
                 {hovered.delta !== 0 && (
                   <span
-                    className="ml-1 font-normal"
+                    className="ml-1.5 font-mono font-normal"
                     style={{
                       fontSize: 10,
-                      color: hovered.delta > 0 ? 'var(--tile-correct)' : 'var(--red)',
+                      color: hovered.delta > 0 ? 'var(--accent)' : 'var(--text-tertiary)',
                     }}
                   >
-                    {hovered.delta > 0 ? '+' : ''}{hovered.delta}
+                    {hovered.delta > 0 ? '+' : ''}
+                    {hovered.delta}
                   </span>
                 )}
               </div>
@@ -238,47 +237,19 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
       )}
 
       {/* Y-axis labels */}
-      <text
-        x={pad.left - 6}
-        y={pad.top + 4}
-        fontSize={10}
-        fontFamily="sans-serif"
-        fill="var(--text-secondary)"
-        textAnchor="end"
-      >
+      <text x={pad.left - 8} y={pad.top + 3} fontSize={9} fill="var(--text-tertiary)" textAnchor="end">
         {maxElo}
       </text>
-      <text
-        x={pad.left - 6}
-        y={pad.top + plotH}
-        fontSize={10}
-        fontFamily="sans-serif"
-        fill="var(--text-secondary)"
-        textAnchor="end"
-      >
+      <text x={pad.left - 8} y={pad.top + plotH + 3} fontSize={9} fill="var(--text-tertiary)" textAnchor="end">
         {minElo}
       </text>
 
       {/* X-axis labels */}
-      <text
-        x={pad.left}
-        y={height - 6}
-        fontSize={10}
-        fontFamily="sans-serif"
-        fill="var(--text-secondary)"
-        textAnchor="start"
-      >
-        {formatDate(data[0].recorded_at)}
+      <text x={pad.left} y={height - 6} fontSize={9} fill="var(--text-tertiary)" textAnchor="start" letterSpacing="0.1em">
+        {formatDate(data[0].recorded_at).toUpperCase()}
       </text>
-      <text
-        x={pad.left + plotW}
-        y={height - 6}
-        fontSize={10}
-        fontFamily="sans-serif"
-        fill="var(--text-secondary)"
-        textAnchor="end"
-      >
-        {formatDate(data[data.length - 1].recorded_at)}
+      <text x={pad.left + plotW} y={height - 6} fontSize={9} fill="var(--text-tertiary)" textAnchor="end" letterSpacing="0.1em">
+        {formatDate(data[data.length - 1].recorded_at).toUpperCase()}
       </text>
     </svg>
   );
