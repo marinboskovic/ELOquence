@@ -22,9 +22,9 @@ interface TileSpinnerProps {
 }
 
 const SIZE_MAP: Record<NonNullable<TileSpinnerProps['size']>, { tile: number; gap: number; radius: number }> = {
-  sm: { tile: 12, gap: 3, radius: 2 },
-  md: { tile: 22, gap: 4, radius: 3 },
-  lg: { tile: 34, gap: 6, radius: 4 },
+  sm: { tile: 12, gap: 3, radius: 0 },
+  md: { tile: 22, gap: 4, radius: 0 },
+  lg: { tile: 34, gap: 6, radius: 0 },
 };
 
 export default function TileSpinner({

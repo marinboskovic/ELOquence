@@ -1,31 +1,31 @@
 /**
- * Self-hosted variable fonts (woff2 files vendored next to this file; they
- * come from the @fontsource-variable packages, OFL licensed — see the
- * LICENSE-*.txt files). Previously these came from Google Fonts through
- * `next/font/google`, which made every production build depend on
- * fonts.googleapis.com being reachable at build time and leaked a request
- * fingerprint to Google on each cold build. `next/font/local` gives the same
- * preloading, `size-adjust` fallbacks and zero layout shift.
+ * Self-hosted variable fonts (woff2 vendored next to this file; OFL — see the
+ * LICENSE-*.txt files). No Google Fonts request at build or run time.
+ *
+ * Roles (see DESIGN.md):
+ *   --font-display  Schibsted Grotesk — headlines, tile letters, big numbers
+ *   --font-sans     IBM Plex Sans     — body & UI
+ *   --font-mono     JetBrains Mono    — data, stats, labels
  */
 import localFont from 'next/font/local';
 
-export const libreFranklin = localFont({
-  src: [
-    { path: './libre-franklin-latin-wght-normal.woff2', style: 'normal' },
-    { path: './libre-franklin-latin-wght-italic.woff2', style: 'italic' },
-  ],
-  weight: '100 900',
-  variable: '--font-sans',
+export const schibsted = localFont({
+  src: [{ path: './schibsted-grotesk-latin-wght-normal.woff2', style: 'normal' }],
+  weight: '400 900',
+  variable: '--font-display',
   display: 'swap',
   fallback: ['Helvetica Neue', 'Arial', 'sans-serif'],
 });
 
-export const robotoSlab = localFont({
-  src: [{ path: './roboto-slab-latin-wght-normal.woff2', style: 'normal' }],
-  weight: '100 900',
-  variable: '--font-display',
+export const plexSans = localFont({
+  src: [
+    { path: './ibm-plex-sans-latin-wght-normal.woff2', style: 'normal' },
+    { path: './ibm-plex-sans-latin-wght-italic.woff2', style: 'italic' },
+  ],
+  weight: '100 700',
+  variable: '--font-sans',
   display: 'swap',
-  fallback: ['Georgia', 'serif'],
+  fallback: ['Helvetica Neue', 'Arial', 'sans-serif'],
 });
 
 export const jetbrainsMono = localFont({
@@ -33,5 +33,5 @@ export const jetbrainsMono = localFont({
   weight: '100 800',
   variable: '--font-mono',
   display: 'swap',
-  fallback: ['JetBrains Mono', 'monospace'],
+  fallback: ['ui-monospace', 'SFMono-Regular', 'monospace'],
 });

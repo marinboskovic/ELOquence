@@ -1,5 +1,4 @@
 'use client';
-import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { TileState } from '@/lib/types';
 import clsx from 'clsx';
@@ -8,197 +7,82 @@ interface TileProps {
   letter?: string;
   state: TileState;
   position?: number;
-  /** When true this tile is animating its flip reveal right now */
+  /** When true this tile is animating its reveal right now */
   isFlipping?: boolean;
-  /** Seconds to delay before starting the flip */
+  /** Seconds to delay before starting the reveal */
   flipDelay?: number;
+  /** Override the CSS size (defaults to --tile-size) */
+  size?: string;
+  className?: string;
 }
 
-/**
- * OG Wordle tile rules:
- *  empty   — no background, 2px border at --tile-empty-border
- *  tbd     — no background, 2px border at --tile-tbd-border (thicker-looking; same px, darker shade)
- *  revealed — saturated fill color, no border, white text
- */
-const STATE_STYLES: Record<TileState, string> = {
-  empty:   '',   // handled inline via CSS vars
-  tbd:     '',   // handled inline via CSS vars
-  correct: 'border-2',
-  present: 'border-2',
-  absent:  'border-2',
+const INK: Record<Exclude<TileState, 'empty' | 'tbd'>, { ink: string; fg: string }> = {
+  correct: { ink: 'var(--tile-correct)', fg: '#ffffff' },
+  present: { ink: 'var(--tile-present)', fg: '#ffffff' },
+  absent: { ink: 'var(--tile-absent)', fg: 'var(--tile-absent-text)' },
 };
 
-const REVEALED_SHADOW = '0 1px 2px rgba(0, 0, 0, 0.18), 0 1px 0 rgba(0, 0, 0, 0.10)';
-
+/**
+ * Atelier tile: a square of paper with a 2px ink rule. Revealed tiles are
+ * filled by "ink pouring in" from the bottom edge (CSS `.tile-ink`), not a
+ * 3D flip — see DESIGN.md §4/§5.
+ */
 export default function Tile({
   letter = '',
   state,
   position = 0,
   isFlipping = false,
   flipDelay = 0,
+  size,
+  className,
 }: TileProps) {
   const isRevealed = state === 'correct' || state === 'present' || state === 'absent';
   const isTbd = state === 'tbd' && letter !== '';
 
-  const popKey = `${letter}-${state}`;
-
   const ariaLabel = letter
-    ? `${letter}, ${
-        state === 'correct'
-          ? 'correct'
-          : state === 'present'
-          ? 'present'
-          : state === 'absent'
-          ? 'absent'
-          : 'empty'
-      }, position ${position + 1}`
+    ? `${letter}, ${state === 'tbd' ? 'pending' : state}, position ${position + 1}`
     : `empty, position ${position + 1}`;
 
-  // Inline styles for empty/tbd states (CSS vars, theme-aware)
-  function getInlineStyle(): React.CSSProperties {
-    if (state === 'empty') {
-      return {
-        backgroundColor: 'var(--tile-empty-bg)',
-        border: '2px solid var(--tile-empty-border)',
-      };
-    }
-    if (state === 'tbd') {
-      return {
-        backgroundColor: 'var(--tile-empty-bg)',
-        border: '2px solid var(--tile-tbd-border)',
-      };
-    }
-    if (state === 'correct') {
-      return {
-        backgroundColor: 'var(--tile-correct)',
-        borderColor: 'var(--tile-correct)',
-        boxShadow: REVEALED_SHADOW,
-      };
-    }
-    if (state === 'present') {
-      return {
-        backgroundColor: 'var(--tile-present)',
-        borderColor: 'var(--tile-present)',
-        boxShadow: REVEALED_SHADOW,
-      };
-    }
-    // absent
-    return {
-      backgroundColor: 'var(--tile-absent)',
-      borderColor: 'var(--tile-absent)',
-      boxShadow: REVEALED_SHADOW,
-    };
+  const dim = size ?? 'var(--tile-size)';
+
+  let style: React.CSSProperties = {
+    width: dim,
+    height: dim,
+    border: '2px solid var(--tile-empty-border)',
+    color: 'var(--text-primary)',
+    backgroundColor: 'var(--tile-empty-bg)',
+  };
+  if (isTbd) style = { ...style, borderColor: 'var(--tile-tbd-border)' };
+  if (isRevealed) {
+    const { ink, fg } = INK[state];
+    style = isFlipping
+      ? {
+          ...style,
+          borderColor: 'var(--tile-tbd-border)',
+          ['--ink' as string]: ink,
+          ['--ink-fg' as string]: fg,
+          ['--tile-size' as string]: dim,
+          animationDelay: `${flipDelay}s`,
+        }
+      : { ...style, backgroundColor: ink, borderColor: ink, color: fg };
   }
-
-  // Text color: white for revealed tiles; theme-primary for empty/tbd
-  const textColor = isRevealed
-    ? '#ffffff'
-    : 'var(--text-primary)';
-
-  return (
-    <div
-      className="relative"
-      aria-label={ariaLabel}
-      style={{
-        width: 'var(--tile-size)',
-        height: 'var(--tile-size)',
-        perspective: '300px',
-      }}
-    >
-      {/* Pop scale when a letter is typed */}
-      <motion.div
-        key={popKey}
-        initial={isTbd ? { scale: 1.08 } : { scale: 1 }}
-        animate={{ scale: 1 }}
-        transition={{ type: 'spring', damping: 20, stiffness: 800, mass: 0.25 }}
-        className="w-full h-full"
-      >
-        {isFlipping && isRevealed ? (
-          <FlipTile letter={letter} state={state} flipDelay={flipDelay} />
-        ) : (
-          <div
-            className={clsx(
-              'w-full h-full flex items-center justify-center rounded-tile',
-              STATE_STYLES[state]
-            )}
-            style={getInlineStyle()}
-          >
-            <span
-              className="font-bold uppercase select-none font-sans"
-              style={{
-                fontSize: 'clamp(1.1rem, 3.5vw, 1.5rem)',
-                color: textColor,
-              }}
-            >
-              {letter}
-            </span>
-          </div>
-        )}
-      </motion.div>
-    </div>
-  );
-}
-
-/**
- * Two-phase flip: rotates to 90deg (edge-on), swaps face color at midpoint,
- * then rotates back to 0. Avoids flash of wrong color.
- */
-function FlipTile({
-  letter,
-  state,
-  flipDelay,
-}: {
-  letter: string;
-  state: TileState;
-  flipDelay: number;
-}) {
-  const [showRevealed, setShowRevealed] = useState(false);
-
-  const halfDuration = 0.25;
-  useEffect(() => {
-    const timer = setTimeout(
-      () => setShowRevealed(true),
-      (flipDelay + halfDuration) * 1000
-    );
-    return () => clearTimeout(timer);
-  }, [flipDelay]);
-
-  function getFaceStyle(): React.CSSProperties {
-    if (!showRevealed) {
-      return {
-        backgroundColor: 'var(--tile-empty-bg)',
-        border: '2px solid var(--tile-tbd-border)',
-      };
-    }
-    if (state === 'correct') return { backgroundColor: 'var(--tile-correct)', borderColor: 'var(--tile-correct)', border: '2px solid var(--tile-correct)', boxShadow: REVEALED_SHADOW };
-    if (state === 'present') return { backgroundColor: 'var(--tile-present)', borderColor: 'var(--tile-present)', border: '2px solid var(--tile-present)', boxShadow: REVEALED_SHADOW };
-    return { backgroundColor: 'var(--tile-absent)', borderColor: 'var(--tile-absent)', border: '2px solid var(--tile-absent)', boxShadow: REVEALED_SHADOW };
-  }
-
-  const textColor = showRevealed ? '#ffffff' : 'var(--text-primary)';
 
   return (
     <motion.div
-      className="w-full h-full flex items-center justify-center rounded-tile"
-      style={getFaceStyle()}
-      initial={{ rotateX: 0 }}
-      animate={{ rotateX: [0, 90, 0] }}
-      transition={{
-        duration: 0.5,
-        delay: flipDelay,
-        times: [0, 0.5, 1],
-        ease: 'easeInOut',
-      }}
+      key={`${letter}-${state}`}
+      role="img"
+      aria-label={ariaLabel}
+      initial={isTbd ? { scale: 0.88 } : false}
+      animate={{ scale: 1 }}
+      transition={{ type: 'spring', damping: 18, stiffness: 700, mass: 0.3 }}
+      className={clsx(
+        'flex items-center justify-center select-none font-display font-black uppercase',
+        isFlipping && isRevealed && 'tile-ink',
+        className
+      )}
+      style={{ ...style, fontSize: `calc(${dim} * 0.46)`, lineHeight: 1 }}
     >
-      <span
-        className="font-bold uppercase select-none font-sans"
-        style={{
-          fontSize: 'clamp(1.1rem, 3.5vw, 1.5rem)',
-          color: textColor,
-        }}
-      >
-        {letter}
-      </span>
+      {letter}
     </motion.div>
   );
 }

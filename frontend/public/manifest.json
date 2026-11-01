@@ -18,8 +18,8 @@
     ]
   },
   "orientation": "portrait",
-  "background_color": "#ffffff",
-  "theme_color": "#6aaa64",
+  "background_color": "#f3f3f1",
+  "theme_color": "#f3f3f1",
   "lang": "en-US",
   "dir": "ltr",
   "categories": [

@@ -24,7 +24,8 @@ function localDateStr(): string {
 }
 
 // Flip animation: 5 tiles × 0.15s stagger + 0.5s each tile = ~1.25s total
-const FLIP_ANIMATION_MS = 5 * 150 + 500 + 150;
+// Ink-fill reveal: 5 tiles × 80ms stagger + 480ms fill + settle
+const FLIP_ANIMATION_MS = 4 * 80 + 480 + 160;
 
 const TILE_WORD: Record<TileState, string> = {
   correct: 'correct',

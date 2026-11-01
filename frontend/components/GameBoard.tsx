@@ -116,8 +116,8 @@ export default function GameBoard({
                 style={
                   winReady
                     ? {
-                        animation: 'win-bounce 600ms ease',
-                        animationDelay: `${colIndex * 100}ms`,
+                        animation: 'win-bounce 600ms var(--ease-out)',
+                        animationDelay: `${colIndex * 90}ms`,
                         animationFillMode: 'both',
                       }
                     : undefined
@@ -128,7 +128,7 @@ export default function GameBoard({
                   state={row.states[colIndex]}
                   position={colIndex}
                   isFlipping={row.isFlippingRow}
-                  flipDelay={row.isFlippingRow ? colIndex * 0.15 : 0}
+                  flipDelay={row.isFlippingRow ? colIndex * 0.08 : 0}
                 />
               </div>
             );

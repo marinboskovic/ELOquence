@@ -9,7 +9,7 @@ import MotionProvider from '@/components/MotionProvider';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 
-import { jetbrainsMono, libreFranklin, robotoSlab } from './fonts';
+import { jetbrainsMono, plexSans, schibsted } from './fonts';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://el-oquence.vercel.app';
 
@@ -45,8 +45,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#121213' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f3f1' },
+    { media: '(prefers-color-scheme: dark)', color: '#121211' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -59,7 +59,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${libreFranklin.variable} ${robotoSlab.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${schibsted.variable} ${plexSans.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-[100dvh] text-text-primary antialiased bg-bg-base">
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){

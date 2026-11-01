@@ -2,108 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Light theme (default) ── */
+/* ═══════════════════════════════════════════════════════════════════════
+   ELOquence design tokens — "Atelier" (see DESIGN.md)
+   calm · editorial · paper
+   Light = cool paper + ink. Dark = warm black + chalk. Colour lives in the
+   tiles (green / ochre / grey), in washes behind sections, and in ONE
+   accent (vermilion) reserved for the primary action and live state.
+   ═══════════════════════════════════════════════════════════════════════ */
+
 :root {
   /* Surfaces */
-  --bg-base:     #ffffff;
-  --bg-elevated: #f6f7f8;
-  --bg-muted:    #edeff1;
+  --bg-base:     #f3f3f1;   /* paper */
+  --bg-elevated: #fbfbfa;   /* sheet laid on paper */
+  --bg-muted:    #e9e9e5;   /* recessed */
+  --bg-ink:      #121212;   /* inverted blocks */
 
   /* Text */
-  --text-primary:   #1a1a1b;
-  --text-secondary: #787c7e;
-  --text-tertiary:  #a4aec4;
-  --text-ghost:     #c4c8d4;
+  --text-primary:   #121212;   /* ink */
+  --text-secondary: #5c5c57;
+  --text-tertiary:  #93938c;
+  --text-ghost:     #c3c3bd;
+  --text-on-ink:    #f3f3f1;
 
-  /* Borders */
-  --border-subtle:  #e6e7eb;
-  --border-default: #d3d6da;
-  --border-strong:  #878a8c;
-  --border-focus:   rgba(106, 170, 100, 0.5);
+  /* Rules */
+  --border-subtle:  #dadad4;
+  --border-default: #121212;
+  --border-strong:  #121212;
+  --border-focus:   #e8542b;
 
-  /* Wordle tiles */
-  --tile-correct:      #6aaa64;
-  --tile-present:      #c9b458;
-  --tile-absent:       #787c7e;
+  /* Tiles — the only place the game's three colours live */
+  --tile-correct:      #1f7a4d;
+  --tile-present:      #c78c1c;
+  --tile-absent:       #c9c9c3;
+  --tile-absent-text:  #55554f;
   --tile-empty-bg:     transparent;
-  --tile-empty-border: #d3d6da;
-  --tile-tbd-border:   #878a8c;
+  --tile-empty-border: #c3c3bd;
+  --tile-tbd-border:   #121212;
 
   /* Keyboard */
-  --key-default-bg:   #d3d6da;
-  --key-default-text: #1a1a1b;
-  --key-pressed-bg:   #c3c6ca;
+  --key-default-bg:   transparent;
+  --key-default-text: #121212;
+  --key-border:       #121212;
+  --key-pressed-bg:   #121212;
 
-  /* Semantic brand */
-  --green:       #6aaa64;
-  --green-light: #6aaa64;
-  --yellow:      #c9b458;
-  --red:         #e74c3c;
-  --gold:        #c9a227;
-  --silver:      #8b95a1;
-  --bronze:      #b87333;
+  /* Accent — primary action, live/active state, links on hover */
+  --accent:      #e8542b;
+  --accent-ink:  #ffffff;
+  --accent-soft: #fbe4dc;
 
-  /* Classification palette — muted, tuned to match the Wordle tile
-     palette (≈30–55% saturation, ≈40–55% lightness). Used by the
-     move-classification pills/icons on the review page. */
-  --cls-blue:   #6485aa;
-  --cls-orange: #c98e58;
-  --cls-red:    #aa6464;
+  /* Washes — tinted paper behind sections and cards */
+  --wash-green:  #e3efe7;
+  --wash-ochre:  #f3ead3;
+  --wash-accent: #fbe4dc;
+  --wash-ink:    #e9e9e5;
 
-  /* Duration tokens (mirrored in tailwind) */
-  --dur-fast: 120ms;
-  --dur-med:  180ms;
-  --dur-slow: 260ms;
+  /* Semantic (kept for existing components) */
+  --green:       #1f7a4d;
+  --green-light: #2a9a63;
+  --yellow:      #c78c1c;
+  --red:         #d63b2f;
+  --gold:        #c78c1c;
+  --silver:      #8a8a84;
+  --bronze:      #a86a3a;
+
+  /* Move classification palette */
+  --cls-blue:   #2f5d8f;
+  --cls-orange: #c47a2c;
+  --cls-red:    #b04a3f;
 
   /* Overlays */
-  --dialog-backdrop: rgba(255, 255, 255, 0.55);
-  --shadow-modal: 0 24px 64px rgba(0,0,0,0.15);
+  --dialog-backdrop: rgba(243, 243, 241, 0.72);
+  --shadow-modal: none;
+
+  /* Motion */
+  --ease-ink:  cubic-bezier(0.7, 0, 0.2, 1);   /* decisive, "ink pours in" */
+  --ease-out:  cubic-bezier(0.2, 0.8, 0.2, 1);  /* settles */
+  --dur-fast: 140ms;
+  --dur-med:  260ms;
+  --dur-slow: 480ms;
 
   /* Layout */
-  --tile-size:  clamp(50px, calc((100dvh - 300px) / 7), 62px);
-  --tile-gap:   clamp(4px, 0.65vw, 6px);
-  --key-height: clamp(44px, 7.5vw, 56px);
+  --tile-size:  clamp(52px, calc((100dvh - 300px) / 7), 64px);
+  --tile-gap:   clamp(5px, 0.7vw, 8px);
+  --key-height: clamp(44px, 7.5vw, 54px);
+  --rule: 1px;
+  --rule-strong: 2px;
+  --nav-h: 56px;
 }
 
-/* ── Dark theme ── */
+/* ── Dark theme: warm black + chalk ── */
 [data-theme="dark"] {
-  --bg-base:     #121213;
-  --bg-elevated: #1a1a1b;
-  --bg-muted:    #272729;
+  --bg-base:     #121211;
+  --bg-elevated: #191918;
+  --bg-muted:    #222220;
+  --bg-ink:      #f1f1ec;
 
-  --text-primary:   #ffffff;
-  --text-secondary: #818384;
-  --text-tertiary:  #565758;
-  --text-ghost:     #3c3c44;
+  --text-primary:   #f1f1ec;
+  --text-secondary: #a6a69f;
+  --text-tertiary:  #73736d;
+  --text-ghost:     #40403c;
+  --text-on-ink:    #121211;
 
-  --border-subtle:  #3a3a3c;
-  --border-default: #565758;
-  --border-strong:  #818384;
-  --border-focus:   rgba(83, 141, 78, 0.5);
+  --border-subtle:  #2b2b28;
+  --border-default: #f1f1ec;
+  --border-strong:  #f1f1ec;
 
-  --tile-correct:      #538d4e;
-  --tile-present:      #b59f3b;
-  --tile-absent:       #3a3a3c;
-  --tile-empty-bg:     #121213;
-  --tile-empty-border: #3a3a3c;
-  --tile-tbd-border:   #565758;
+  --tile-correct:      #2e9a63;
+  --tile-present:      #d9a033;
+  --tile-absent:       #3a3a37;
+  --tile-absent-text:  #a6a69f;
+  --tile-empty-bg:     transparent;
+  --tile-empty-border: #40403c;
+  --tile-tbd-border:   #f1f1ec;
 
-  --key-default-bg:   #818384;
-  --key-default-text: #ffffff;
-  --key-pressed-bg:   #6e7072;
+  --key-default-text: #f1f1ec;
+  --key-border:       #f1f1ec;
+  --key-pressed-bg:   #f1f1ec;
 
-  --green:       #538d4e;
-  --green-light: #6aaa64;
-  --yellow:      #b59f3b;
-  --silver:      #a8b1bb;
-  --bronze:      #c47a3a;
+  --accent:      #ff6a3d;
+  --accent-ink:  #121211;
+  --accent-soft: #3a2017;
 
-  --cls-blue:   #4e6c8d;
-  --cls-orange: #b5793b;
-  --cls-red:    #8d4e4e;
+  --wash-green:  #172a1f;
+  --wash-ochre:  #2b2416;
+  --wash-accent: #33201a;
+  --wash-ink:    #222220;
 
-  --dialog-backdrop: rgba(0, 0, 0, 0.62);
-  --shadow-modal: 0 24px 64px rgba(0,0,0,0.5);
+  --green:       #2e9a63;
+  --green-light: #3fb677;
+  --yellow:      #d9a033;
+  --red:         #ff6a5c;
+  --silver:      #a6a69f;
+  --bronze:      #c98a55;
+
+  --cls-blue:   #6f9cd1;
+  --cls-orange: #d99a58;
+  --cls-red:    #d47a70;
+
+  --dialog-backdrop: rgba(18, 18, 17, 0.78);
 
   color-scheme: dark;
 }
@@ -124,43 +160,52 @@ body {
   -moz-osx-font-smoothing: grayscale;
   min-height: 100dvh;
   overflow-x: hidden;
+  font-feature-settings: 'ss01', 'cv11';
 }
+
+h1, h2, h3, .font-display { font-family: var(--font-display), 'Helvetica Neue', Arial, sans-serif; }
+h1, h2 { letter-spacing: -0.035em; text-wrap: balance; }
 
 /* ── Focus ring ── */
 *:focus-visible {
-  outline: 2px solid var(--green-light);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 /* ── Tabular numbers ── */
-.font-mono { font-variant-numeric: tabular-nums; }
+.font-mono, .tabular { font-variant-numeric: tabular-nums; }
 
-/* ── Shimmer skeleton ── */
-@keyframes shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-.skeleton {
-  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.04), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 2s ease-in-out infinite;
-}
-[data-theme="dark"] .skeleton {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
-  background-size: 200% 100%;
-}
+/* ── Editorial rules ── */
+.rule-top    { border-top: var(--rule-strong) solid var(--border-default); }
+.rule-bottom { border-bottom: var(--rule) solid var(--border-default); }
+.rule-hair   { border-top: var(--rule) solid var(--border-subtle); }
 
-/* ── Safe areas (iOS standalone PWA) ── */
-.pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
-.pt-safe { padding-top: env(safe-area-inset-top); }
+/* ── Ink link: underline wipes in from the left on hover ── */
+.ink-link {
+  position: relative;
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-size: 0% 2px;
+  background-position: 0 100%;
+  transition: background-size var(--dur-med) var(--ease-ink);
+}
+.ink-link:hover, .ink-link[aria-current="page"] { background-size: 100% 2px; }
 
-/* ── High-contrast / color-blind palette (orange + sky) ── */
-.colorblind,
-[data-high-contrast="true"] {
-  --tile-correct: #f5793a;
-  --tile-present: #85c0f9;
-  --green:        #f5793a;
-  --green-light:  #ff8c4a;
+/* ── Ink fill reveal (tiles) ──
+   The colour pours in from the bottom edge, then the letter flips to the
+   on-colour ink. Driven by --ink / --ink-fg set inline per state. */
+@keyframes ink-fill {
+  0%   { box-shadow: inset 0 0 0 0 var(--ink); }
+  55%  { color: var(--ink-fg); }
+  100% { box-shadow: inset 0 calc(-1 * var(--tile-size)) 0 0 var(--ink); color: var(--ink-fg); border-color: var(--ink); }
+}
+.tile-ink { animation: ink-fill var(--dur-slow) var(--ease-ink) forwards; }
+
+/* ── Typed letter pop ── */
+@keyframes pop-in {
+  0%   { transform: scale(0.88); }
+  100% { transform: scale(1); }
 }
 
 /* ── Win bounce ── */
@@ -171,10 +216,40 @@ body {
   100% { transform: translateY(0); }
 }
 
-/* ── Pop-in for typed letters ── */
-@keyframes pop-in {
-  0%   { transform: scale(0.85); }
-  100% { transform: scale(1); }
+/* ── Marquee (landing ticker) ── */
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee { animation: marquee 28s linear infinite; }
+
+/* ── Shimmer skeleton ── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.05), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  background-size: 200% 100%;
+}
+
+/* Full-height page below the sticky nav */
+.h-page { height: calc(100dvh - var(--nav-h)); }
+.min-h-page { min-height: calc(100dvh - var(--nav-h)); }
+
+/* ── Safe areas (iOS standalone PWA) ── */
+.pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+
+/* ── High-contrast / colour-blind palette (orange + sky) ── */
+.colorblind,
+[data-high-contrast="true"] {
+  --tile-correct: #e4661f;
+  --tile-present: #3a8fd9;
+  --green:        #e4661f;
+  --green-light:  #f07a33;
 }
 
 /* ── Reduced motion ── */
@@ -194,70 +269,36 @@ body {
 }
 
 /* ── Scrollbar ── */
-::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
-[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); }
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.12); }
+::-webkit-scrollbar-thumb { background: var(--text-ghost); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
-/* Inner scroller used by <ScrollArea> — hides the native bar so we can
- * render a custom thumb overlay with full opacity animation control.
- * (Chromium does not animate ::-webkit-scrollbar-thumb reliably.) */
 .hide-native-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .hide-native-scrollbar::-webkit-scrollbar { width: 0; height: 0; display: none; }
-
-/* The custom thumb the ScrollArea component overlays. Colour adapts to theme. */
-.custom-scroll-thumb { background: rgba(0,0,0,0.22); }
-[data-theme="dark"] .custom-scroll-thumb { background: rgba(255,255,255,0.20); }
+.custom-scroll-thumb { background: var(--text-ghost); }
 
 /* ── Selection ── */
 ::selection {
-  background: rgba(106, 170, 100, 0.3);
+  background: var(--accent-soft);
   color: var(--text-primary);
 }
 
-/* ── Branded loading indicator (TileSpinner) ──────────────────────────
-   A row of Wordle-style tiles whose colors cycle through the in-game
-   palette (absent → present → correct) in a 1.05s loop. The component
-   sets individual `animation-delay` per tile to produce the staggered
-   wave; everything else lives here so the markup stays minimal.
-
-   `prefers-reduced-motion` is handled by the global rule earlier in
-   this file — the spinner degrades to a near-static row, which still
-   carries the visual brand without movement. */
+/* ── Branded loading indicator (TileSpinner) ── */
 @keyframes tile-spinner-pulse {
-  0%, 100% {
-    background-color: var(--border-default);
-    transform: scaleY(0.78);
-    opacity: 0.55;
-  }
-  30% {
-    background-color: var(--tile-present);
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  60% {
-    background-color: var(--tile-correct);
-    transform: scaleY(1);
-    opacity: 1;
-  }
-  85% {
-    background-color: var(--tile-absent);
-    transform: scaleY(0.9);
-    opacity: 0.75;
-  }
+  0%, 100% { background-color: var(--tile-empty-border); transform: scaleY(0.78); opacity: 0.55; }
+  30%      { background-color: var(--tile-present); transform: scaleY(1); opacity: 1; }
+  60%      { background-color: var(--tile-correct); transform: scaleY(1); opacity: 1; }
+  85%      { background-color: var(--tile-absent); transform: scaleY(0.9); opacity: 0.75; }
 }
-
 .tile-spinner-cell {
   display: inline-block;
-  background-color: var(--border-default);
+  background-color: var(--tile-empty-border);
   animation: tile-spinner-pulse 1.05s ease-in-out infinite;
   transform-origin: center;
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
 }
 
-/* Screen-reader only utility (used by TileSpinner's a11y label). */
+/* Screen-reader only utility */
 .sr-only {
   position: absolute;
   width: 1px;

@@ -6,28 +6,23 @@ interface ToastProps {
   visible: boolean;
 }
 
+/** Ink block that drops in under the nav. */
 export default function Toast({ message, visible }: ToastProps) {
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
           key="toast"
-          initial={{ opacity: 0, y: -14, scale: 0.94 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -8, scale: 0.96 }}
-          transition={{ type: 'spring', damping: 26, stiffness: 500, mass: 0.5 }}
-          className="pointer-events-none fixed top-[72px] left-1/2 -translate-x-1/2 z-[60]"
+          initial={{ opacity: 0, y: -16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.26, ease: [0.2, 0.8, 0.2, 1] }}
+          className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-[60]"
+          style={{ top: 'calc(var(--nav-h) + 16px)' }}
           role="alert"
           aria-live="assertive"
         >
-          <div
-            className="px-5 py-2.5 rounded-full shadow-elevated text-sm font-semibold whitespace-nowrap select-none"
-            style={{
-              backgroundColor: 'var(--bg-elevated)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-primary)',
-            }}
-          >
+          <div className="px-4 py-2.5 bg-bg-ink text-text-on-ink font-display font-bold text-sm tracking-[-0.01em] whitespace-nowrap select-none shadow-ink border-2 border-border-default">
             {message}
           </div>
         </motion.div>

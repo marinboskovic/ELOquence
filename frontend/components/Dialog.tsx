@@ -3,7 +3,6 @@ import { ReactNode, useCallback, useEffect, useId, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
-import { springs } from '@/lib/animations';
 
 interface DialogProps {
   open: boolean;
@@ -125,7 +124,7 @@ export default function Dialog({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="fixed inset-0 z-[60] backdrop-blur-sm"
+            className="fixed inset-0 z-[60]"
             style={{ background: 'var(--dialog-backdrop, rgba(0,0,0,0.5))' }}
             onClick={requestClose}
             aria-hidden="true"
@@ -138,12 +137,12 @@ export default function Dialog({
               aria-labelledby={title ? titleId : undefined}
               aria-label={title ? undefined : label}
               tabIndex={-1}
-              initial={{ opacity: 0, scale: 0.88, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 12 }}
-              transition={springs.modal}
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.32, ease: [0.2, 0.8, 0.2, 1] }}
               className={clsx(
-                'relative w-full bg-bg-base rounded-2xl border border-border-subtle shadow-modal overflow-hidden pointer-events-auto outline-none',
+                'relative w-full bg-bg-base border-2 border-border-default shadow-ink overflow-hidden pointer-events-auto outline-none',
                 maxWidth,
                 className
               )}
@@ -155,14 +154,14 @@ export default function Dialog({
                   type="button"
                   onClick={requestClose}
                   disabled={locked}
-                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors disabled:opacity-40"
+                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-muted transition-colors disabled:opacity-40"
                   aria-label="Close"
                 >
                   <X size={16} />
                 </button>
               )}
               {title && (
-                <h2 id={titleId} className="font-display font-black text-lg tracking-tight text-text-primary px-5 pt-5">
+                <h2 id={titleId} className="font-display font-black text-display-sm text-text-primary px-5 pt-5">
                   {title}
                 </h2>
               )}

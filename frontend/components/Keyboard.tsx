@@ -61,20 +61,18 @@ export default function Keyboard({
   }, [onKey, onEnter, onBackspace, disablePhysicalKeyboard]);
 
   function getKeyStyle(key: string): React.CSSProperties {
-    if (key === 'ENTER' || key === 'BACK') {
-      return {
-        backgroundColor: 'var(--key-default-bg)',
-        color: 'var(--key-default-text)',
-      };
-    }
-    const state = letterStates[key];
-    if (state === 'correct') return { backgroundColor: 'var(--tile-correct)', color: '#ffffff' };
-    if (state === 'present') return { backgroundColor: 'var(--tile-present)', color: '#ffffff' };
-    if (state === 'absent')  return { backgroundColor: 'var(--tile-absent)',  color: '#ffffff' };
-    return {
+    const base: React.CSSProperties = {
       backgroundColor: 'var(--key-default-bg)',
       color: 'var(--key-default-text)',
+      border: '1.5px solid var(--key-border)',
     };
+    if (key === 'ENTER' || key === 'BACK') return base;
+    const state = letterStates[key];
+    if (state === 'correct') return { ...base, backgroundColor: 'var(--tile-correct)', borderColor: 'var(--tile-correct)', color: '#ffffff' };
+    if (state === 'present') return { ...base, backgroundColor: 'var(--tile-present)', borderColor: 'var(--tile-present)', color: '#ffffff' };
+    if (state === 'absent')
+      return { ...base, backgroundColor: 'var(--tile-absent)', borderColor: 'var(--tile-absent)', color: 'var(--tile-absent-text)' };
+    return base;
   }
 
   function getAriaLabel(key: string): string {
@@ -85,18 +83,18 @@ export default function Keyboard({
   }
 
   return (
-    <div className="flex flex-col items-center w-full max-w-[500px]" style={{ gap: '5px' }}>
+    <div className="flex flex-col items-center w-full max-w-[520px]" style={{ gap: '6px' }}>
       {ROWS.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex w-full justify-center" style={{ gap: '5px' }}>
+        <div key={rowIndex} className="flex w-full justify-center" style={{ gap: '6px' }}>
           {row.map((key) => {
             const isSpecial = key === 'ENTER' || key === 'BACK';
             return (
               <motion.button
                 key={key}
                 type="button"
-                whileHover={{ filter: 'brightness(0.92)', y: -1 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: 'spring', damping: 28, stiffness: 800, mass: 0.3 }}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.94, y: 0 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 700, mass: 0.3 }}
                 // Keep focus off the on-screen keys so a physical Enter never
                 // "clicks" the last-tapped key in addition to the window handler.
                 onMouseDown={(e) => e.preventDefault()}
@@ -107,8 +105,9 @@ export default function Keyboard({
                   else onKey(key);
                 }}
                 className={clsx(
-                  'flex items-center justify-center rounded-key font-bold text-sm select-none cursor-pointer transition-colors duration-fast font-sans',
-                  isSpecial ? 'flex-[1.5] text-xs' : 'flex-1'
+                  'flex items-center justify-center font-display font-bold text-sm select-none cursor-pointer transition-colors duration-fast',
+                  'active:!bg-[var(--key-pressed-bg)] active:!text-[var(--bg-base)]',
+                  isSpecial ? 'flex-[1.5] text-[11px] font-mono uppercase tracking-[0.12em]' : 'flex-1'
                 )}
                 style={{
                   height: 'var(--key-height)',
