@@ -18,7 +18,7 @@ export default function Toast({ message, visible }: ToastProps) {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.26, ease: [0.2, 0.8, 0.2, 1] }}
           className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-[60]"
-          style={{ top: 'calc(var(--nav-h) + 16px)' }}
+          style={{ top: 'calc(var(--nav-h) + 76px)' }}
           role="alert"
           aria-live="assertive"
         >

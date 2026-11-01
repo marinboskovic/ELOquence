@@ -122,8 +122,9 @@ export default function AchievementToast({ achievements, onDismiss }: Achievemen
     <AnimatePresence>
       {achievements.length > 0 && (
         <div
-          className="pointer-events-none fixed left-1/2 -translate-x-1/2 z-[65] flex flex-col items-stretch gap-2 w-[min(100vw-2rem,22rem)]"
-          style={{ top: 'calc(var(--nav-h) + 16px)' }}
+          // Bottom-left stack so the game-over sheet stays readable.
+          className="pointer-events-none fixed left-4 bottom-4 z-[65] flex flex-col-reverse items-stretch gap-2 w-[min(100vw-2rem,20rem)] max-h-[60dvh] overflow-hidden"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         >
           {achievements.map((ach, i) => (
             <div key={ach.type} className="pointer-events-auto w-full">

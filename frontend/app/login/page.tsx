@@ -50,7 +50,7 @@ function LoginInner() {
       }
     >
       <GoogleSignInButton next={next} />
-      <OrDivider />
+      {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && <OrDivider />}
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <AuthField
           id="email"
