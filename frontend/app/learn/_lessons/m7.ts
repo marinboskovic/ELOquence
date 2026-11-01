@@ -1,90 +1,59 @@
 import type { Module } from '../_components/challenges/types';
+import { P } from './pattern';
 
 export const MODULE_7: Module = {
   id: 'm7',
-  title: 'Where letters sit',
-  blurb: 'Where a letter sits matters as much as which letter.',
+  title: 'The numbers behind the review',
+  blurb: 'Words left, bits, Skill and Luck: what the review page is measuring.',
   lessons: [
     {
       id: 'm7l1',
       moduleId: 'm7',
-      title: 'Letters have favourite spots',
-      subtitle: 'Same letters, different spots, different clues.',
+      title: 'What the review is telling you',
+      subtitle: 'Every guess is scored by how much of the list it removed, not by whether it won.',
       challenges: [
         {
-          kind: 'reveal',
-          title: 'Letters cluster',
-          body: 'S starts ~16% of Wordle answers but ends only ~2%. E ends ~16% but starts ~3%. Pick openers that put letters where they actually live.',
-        },
-        {
-          kind: 'tile-paint',
-          prompt: 'PEARS vs PEARL — paint the pattern (positions match!).',
-          guess: 'PEARS',
-          target: 'PEARL',
-          successNote: 'Four greens. The letters AND positions both match.',
-        },
-        {
-          kind: 'tile-paint',
-          prompt: 'SPEAR vs PEARL — same letters as PEARS, but rearranged.',
-          guess: 'SPEAR',
-          target: 'PEARL',
-          successNote: 'Four yellows. Same letters, but each lands one slot off.',
+          kind: 'pool-shrink',
+          prompt: 'A real three-guess solve. The 100 dots stand for all 2,309 answers; the hidden word is DEBUT.',
+          startCount: 100,
+          steps: [
+            { label: 'SLATE: grey grey grey yellow yellow. 72 words left', remaining: 3, note: 'T and E are in the word, in other spots. 2,309 → 72 is the narrowing the review shows for guess 1.' },
+            { label: 'DETER: green green yellow grey grey. 3 words left', remaining: 1, note: 'DEBIT, DEBUT or DEPOT. 72 → 3 is a strong second guess, and that narrowing is what Skill measures.' },
+            { label: 'DEBUT: solved on guess 3', remaining: 1, note: 'Picking the right one of three is luck, and the review scores it as Luck, not Skill.' },
+          ],
+          successNote: 'Skill is the narrowing your choices earned; Luck is where the hidden word happened to land.',
         },
         {
           kind: 'multiple-choice',
-          prompt: 'Same five letters, two different positions. Which is the better opener?',
+          prompt: 'SLATE leaves about 70 of the 2,309 answers on average. How much smaller is that?',
           options: [
-            {
-              label: 'PEARS (positions matching where letters usually live)',
-              sub: 'Letters at the slots they typically occupy',
-            },
-            {
-              label: 'SPEAR (same letters, scrambled positions)',
-              sub: 'Same info about letters, less about position',
-            },
+            { label: 'About half', sub: '2,309 → 1,150' },
+            { label: 'About a tenth', sub: '2,309 → 230' },
+            { label: 'About a thirtieth', sub: '2,309 → 70' },
           ],
-          correctIdx: 0,
-          successNote: 'A great opener IS its letters + positions. Both axes matter.',
+          correctIdx: 2,
+          successNote: 'Each halving of the list is one bit, so 2,309 → 70 is five halvings, about 5 bits, which is the number the review shows next to a guess in Detailed view.',
         },
-      ],
-    },
-    {
-      id: 'm7l2',
-      moduleId: 'm7',
-      title: 'Upgrade yellows to greens',
-      subtitle: 'Move known letters into new positions to lock them.',
-      challenges: [
+        {
+          kind: 'sort-buckets',
+          prompt: 'Two games, same word (DEBUT), both solved in three. Sort what each moment adds to.',
+          buckets: [
+            { id: 'skill', label: 'Skill' },
+            { id: 'luck', label: 'Luck' },
+          ],
+          items: [
+            { id: 'a', label: 'DETER cut 72 words to 3', bucketId: 'skill' },
+            { id: 'b', label: 'Picked DEBUT out of 14', bucketId: 'luck' },
+            { id: 'c', label: 'CLIMB sorted all 7 _ATCH words', bucketId: 'skill' },
+            { id: 'd', label: 'First word landed three greens', bucketId: 'luck' },
+            { id: 'e', label: 'TEETH cut 72 words to 14', bucketId: 'skill' },
+          ],
+          successNote: 'Skill scores each guess against the best guess available at that moment, so DETER scores high and TEETH low; which words the tiles happened to leave is Luck.',
+        },
         {
           kind: 'reveal',
-          title: 'Yellow → green',
-          body: 'A yellow tells you "this letter is in the word, NOT at this position". Your next guess should try a different position for that letter.',
-        },
-        {
-          kind: 'guess-next',
-          prompt: 'SLATE returned a yellow L (pos 2) and yellow T (pos 4). Pick guess 2.',
-          history: [
-            { guess: 'SLATE', pattern: ['absent', 'present', 'absent', 'present', 'absent'] },
-          ],
-          options: [
-            {
-              word: 'PILOT',
-              revealPattern: ['absent', 'correct', 'present', 'absent', 'correct'],
-              sub: 'L at new spot (pos 3), T at new spot (pos 5) — both upgrade',
-            },
-            {
-              word: 'SLATE',
-              sub: 'Identical guess — re-tests yellows at the same wrong slots',
-            },
-          ],
-          correctIdx: 0,
-          successNote: 'PILOT moved L and T to new positions. T upgrades to green. L narrows further.',
-        },
-        {
-          kind: 'tile-paint',
-          prompt: 'Paint PILOT vs LIGHT.',
-          guess: 'PILOT',
-          target: 'LIGHT',
-          successNote: 'I locks green at pos 2, L stays yellow (still in word, not at pos 3 either), T locks green at pos 5.',
+          title: 'You know everything the engine knows.',
+          body: 'Read every row as a filter, keep one first word, test fresh letters, probe when a probe pays, spot a family early. The review in Daily and Ranked measures exactly those things. Go play.',
         },
       ],
     },

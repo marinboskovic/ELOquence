@@ -6,7 +6,6 @@ import { MODULE_4 } from './m4';
 import { MODULE_5 } from './m5';
 import { MODULE_6 } from './m6';
 import { MODULE_7 } from './m7';
-import { MODULE_8 } from './m8';
 
 export const MODULES: Module[] = [
   MODULE_1,
@@ -16,7 +15,6 @@ export const MODULES: Module[] = [
   MODULE_5,
   MODULE_6,
   MODULE_7,
-  MODULE_8,
 ];
 
 export const TOTAL_LESSONS = MODULES.reduce((n, m) => n + m.lessons.length, 0);
