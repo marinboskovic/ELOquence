@@ -251,7 +251,8 @@ h1, h2 { letter-spacing: -0.035em; text-wrap: balance; }
 
 /* ── Marquee (landing ticker) ── */
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-.marquee { animation: marquee 28s linear infinite; }
+.marquee { animation: marquee 36s linear infinite; }
+.group:hover > .marquee, .marquee:hover { animation-play-state: paused; }
 
 /* ── Shimmer skeleton ── */
 @keyframes shimmer {

@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import type { TileState } from '@/lib/types';
 import Tile from '@/components/Tile';
 import TileSpinner from '@/components/TileSpinner';
-import { ButtonLink, CountUp, Label, Reveal, SplitWords, Tag } from '@/components/ui';
+import { ButtonLink, CountUp, Label, MiniTiles, Reveal, SplitWords, Tag } from '@/components/ui';
 import ShrinkStrip from '@/components/landing/ShrinkStrip';
 import { MODES, MOVE_CLASS } from '@/lib/copy';
 
@@ -171,6 +171,40 @@ function AutoBoard() {
 }
 
 // ---------------------------------------------------------------------------
+// Marquee — best first words and how many of the 2,309 answers each leaves.
+// Same running strip as before, but every item is a fact you can act on.
+// ---------------------------------------------------------------------------
+
+const OPENERS: [string, number][] = [
+  ['SOARE', 62], ['ROATE', 60], ['RAISE', 61], ['SLATE', 71], ['CRANE', 79],
+  ['TRACE', 74], ['SALET', 60], ['ADIEU', 160], ['AUDIO', 190],
+];
+
+function OpenerMarquee() {
+  const line = (key: string, hidden?: boolean) => (
+    <span key={key} className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
+      {OPENERS.map(([w, left]) => (
+        <span key={w} className="flex items-center gap-3 px-6 md:px-9">
+          <MiniTiles word={w} states={['absent', 'absent', 'absent', 'absent', 'absent']} size={18} gap={2} />
+          <span className="font-mono text-label uppercase text-text-secondary whitespace-nowrap">
+            leaves <span className="text-text-primary font-semibold">{left}</span> of 2,309
+          </span>
+          <span className="w-1.5 h-1.5 bg-accent ml-3" aria-hidden="true" />
+        </span>
+      ))}
+    </span>
+  );
+  return (
+    <Link href="/lab" className="block rule-top border-b border-border-subtle py-3 overflow-hidden no-underline group" aria-label="Best first words — open the Word Lab">
+      <div className="marquee flex w-max">
+        {line('a')}
+        {line('b', true)}
+      </div>
+    </Link>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -229,6 +263,9 @@ export default function HomePage() {
           </Reveal>
         </div>
       </section>
+
+      {/* ── Running strip: best first words (links to the Word Lab) ── */}
+      <OpenerMarquee />
 
       {/* ── The idea, drawn: the list of answers shrinks with every guess ── */}
       <ShrinkStrip />
