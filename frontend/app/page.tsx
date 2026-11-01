@@ -11,6 +11,7 @@ import TileSpinner from '@/components/TileSpinner';
 import { ButtonLink, CountUp, Label, MiniTiles, Reveal, SplitWords, Tag } from '@/components/ui';
 import ShrinkStrip from '@/components/landing/ShrinkStrip';
 import { MODES, MOVE_CLASS } from '@/lib/copy';
+import { pulseApi, type Pulse } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Self-playing board
@@ -171,36 +172,86 @@ function AutoBoard() {
 }
 
 // ---------------------------------------------------------------------------
-// Marquee — best first words and how many of the 2,309 answers each leaves.
-// Same running strip as before, but every item is a fact you can act on.
+// Live pulse marquee — what is happening in the game right now.
+// Falls back to the best-first-words facts until /pulse answers (or if it
+// never does), so the strip is never empty. Same running strip as before;
+// every item is a fact, and most of them change every day.
 // ---------------------------------------------------------------------------
 
 const OPENERS: [string, number][] = [
-  ['SOARE', 62], ['ROATE', 60], ['RAISE', 61], ['SLATE', 71], ['CRANE', 79],
-  ['TRACE', 74], ['SALET', 60], ['ADIEU', 160], ['AUDIO', 190],
+  ['SOARE', 62], ['ROATE', 60], ['RAISE', 61], ['SLATE', 71], ['CRANE', 79], ['TRACE', 74], ['ADIEU', 160],
 ];
 
-function OpenerMarquee() {
+type MiniState = 'correct' | 'present' | 'absent' | 'empty';
+type PulseItem = { key: string; tiles?: string; tileStates?: MiniState[]; text: React.ReactNode; href: string };
+
+function fmtTime(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+}
+
+function pulseItems(p: Pulse | null): PulseItem[] {
+  const strong = (v: React.ReactNode) => <span className="text-text-primary font-semibold">{v}</span>;
+  const items: PulseItem[] = [];
+  if (p?.today_daily && p.today_daily.players > 0) {
+    const d = p.today_daily;
+    items.push({ key: 'daily', text: <>today&apos;s word · {strong(d.players.toLocaleString('en-US'))} {d.players === 1 ? 'player' : 'players'} so far</>, href: '/play' });
+    if (d.avg_guesses != null) items.push({ key: 'avg', text: <>solved in {strong(d.avg_guesses)} guesses on average</>, href: '/play' });
+    if (d.fastest_seconds != null) items.push({ key: 'fast', text: <>fastest solve today {strong(fmtTime(d.fastest_seconds))}</>, href: '/leaderboard' });
+  }
+  if (p?.hardest_this_week) {
+    const h = p.hardest_this_week;
+    items.push({ key: 'hard', tiles: h.word, text: <>hardest word this week · difficulty {strong(h.difficulty.toLocaleString('en-US'))} · solved by {strong(`${h.solve_rate}%`)}</>, href: `/lab?word=${h.word}` });
+  }
+  if (p?.easiest_this_week) {
+    const e = p.easiest_this_week;
+    items.push({ key: 'easy', tiles: e.word, tileStates: ['correct', 'correct', 'correct', 'correct', 'correct'], text: <>easiest this week · difficulty {strong(e.difficulty.toLocaleString('en-US'))}</>, href: `/lab?word=${e.word}` });
+  }
+  if (p?.season) {
+    const s = p.season;
+    if (s.leader) items.push({ key: 'leader', text: <>{s.name} season · {strong(s.leader.username)} leads with {strong(`+${s.leader.gain}`)}</>, href: '/leaderboard?tab=season' });
+    items.push({ key: 'days', text: <>{strong(s.days_left)} {s.days_left === 1 ? 'day' : 'days'} left in the season</>, href: '/leaderboard?tab=season' });
+  }
+  if (p && p.games_24h > 0) items.push({ key: 'g24', text: <>{strong(p.games_24h.toLocaleString('en-US'))} games played in the last 24 hours</>, href: '/play' });
+  // Always end with two first-word facts so the strip stays about the game, not only about numbers.
+  for (const [w, left] of OPENERS.slice(0, items.length ? 2 : OPENERS.length)) {
+    items.push({ key: `op-${w}`, tiles: w, text: <>{strong(w)} leaves {strong(left)} of 2,309 answers</>, href: `/lab?word=${w}` });
+  }
+  return items;
+}
+
+function PulseMarquee() {
+  const [pulse, setPulse] = useState<Pulse | null>(null);
+  useEffect(() => {
+    let alive = true;
+    pulseApi
+      .get()
+      .then((r) => alive && setPulse(r.data))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const items = pulseItems(pulse);
   const line = (key: string, hidden?: boolean) => (
     <span key={key} className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
-      {OPENERS.map(([w, left]) => (
-        <span key={w} className="flex items-center gap-3 px-6 md:px-9">
-          <MiniTiles word={w} states={['absent', 'absent', 'absent', 'absent', 'absent']} size={18} gap={2} />
-          <span className="font-mono text-label uppercase text-text-secondary whitespace-nowrap">
-            leaves <span className="text-text-primary font-semibold">{left}</span> of 2,309
-          </span>
+      {items.map((it) => (
+        <Link key={it.key} href={it.href} className="flex items-center gap-3 px-6 md:px-9 no-underline hover:text-text-primary">
+          {it.tiles && <MiniTiles word={it.tiles} states={it.tileStates ?? ['absent', 'absent', 'absent', 'absent', 'absent']} size={18} gap={2} />}
+          <span className="font-mono text-label uppercase text-text-secondary whitespace-nowrap">{it.text}</span>
           <span className="w-1.5 h-1.5 bg-accent ml-3" aria-hidden="true" />
-        </span>
+        </Link>
       ))}
     </span>
   );
   return (
-    <Link href="/lab" className="block rule-top border-b border-border-subtle py-3 overflow-hidden no-underline group" aria-label="Best first words — open the Word Lab">
-      <div className="marquee flex w-max">
+    <div className="rule-top border-b border-border-subtle py-3 overflow-hidden group" aria-label="Live: what is happening in the game">
+      <div className="marquee flex w-max" style={{ animationDuration: `${Math.max(24, items.length * 6)}s` }}>
         {line('a')}
         {line('b', true)}
       </div>
-    </Link>
+    </div>
   );
 }
 
@@ -265,7 +316,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Running strip: best first words (links to the Word Lab) ── */}
-      <OpenerMarquee />
+      <PulseMarquee />
 
       {/* ── The idea, drawn: the list of answers shrinks with every guess ── */}
       <ShrinkStrip />

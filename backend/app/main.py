@@ -181,6 +181,7 @@ def create_app() -> FastAPI:
     from app.routers.leaderboard import router as leaderboard_router
     from app.routers.learn import router as learn_router
     from app.routers.profiles import router as profiles_router
+    from app.routers.pulse import router as pulse_router
     from app.routers.push import router as push_router
     from app.routers.users import router as users_router
 
@@ -199,6 +200,7 @@ def create_app() -> FastAPI:
         achievements_router,
         announcements_public_router,
         push_router,
+        pulse_router,
     ):
         app.include_router(r, prefix="/api")
 

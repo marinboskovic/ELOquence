@@ -257,6 +257,19 @@ export const dailyApi = {
 };
 
 // ── Leaderboard ───────────────────────────────────────────────────────────
+export interface Pulse {
+  generated_at: string;
+  today_daily: { date: string; players: number; solved: number; avg_guesses: number | null; fastest_seconds: number | null } | null;
+  games_24h: number;
+  players_total: number;
+  hardest_this_week: { word: string; difficulty: number; plays: number; solve_rate: number } | null;
+  easiest_this_week: { word: string; difficulty: number; plays: number; solve_rate: number } | null;
+  season: { name: string; days_left: number; leader: { username: string; gain: number; rating: number } | null };
+}
+export const pulseApi = {
+  get: () => api.get<Pulse>('/pulse/'),
+};
+
 export const leaderboardApi = {
   get: (params?: { page?: number; per_page?: number }) => api.get('/leaderboard/', { params }),
   nearMe: () => api.get('/leaderboard/near-me'),

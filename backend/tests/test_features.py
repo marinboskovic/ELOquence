@@ -207,3 +207,21 @@ async def test_ai_endpoints_require_key_and_validate_payload(make_user):
     assert r.status_code == 503  # no API key in tests
     r = await u.post("/api/ai/explain-move", json={"game_id": "not-a-uuid", "move_number": 1})
     assert r.status_code == 422
+
+
+async def test_pulse_is_public_and_never_leaks_words(client, make_user):
+    a = await make_user("pulsea")
+    g = (await a.post("/api/games/", json={"mode": "competitive"})).json()
+    await play_to_win(a, g["id"])
+
+    r = await client.get("/api/pulse/")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) >= {"today_daily", "games_24h", "players_total", "hardest_this_week", "season"}
+    assert body["games_24h"] >= 1
+    assert body["season"]["days_left"] >= 0
+    # today's daily is counts only
+    if body["today_daily"]:
+        assert "word" not in body["today_daily"]
+    # cached: a second call is identical
+    assert (await client.get("/api/pulse/")).json() == body
