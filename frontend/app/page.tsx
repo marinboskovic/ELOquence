@@ -194,6 +194,9 @@ function fmtTime(sec: number) {
 function pulseItems(p: Pulse | null): PulseItem[] {
   const strong = (v: React.ReactNode) => <span className="text-text-primary font-semibold">{v}</span>;
   const items: PulseItem[] = [];
+  if (p?.today_daily && p.today_daily.players === 0) {
+    items.push({ key: 'daily0', text: <>today&apos;s word · {strong('nobody has solved it yet')} — be the first</>, href: '/play' });
+  }
   if (p?.today_daily && p.today_daily.players > 0) {
     const d = p.today_daily;
     items.push({ key: 'daily', text: <>today&apos;s word · {strong(d.players.toLocaleString('en-US'))} {d.players === 1 ? 'player' : 'players'} so far</>, href: '/play' });
@@ -211,9 +214,11 @@ function pulseItems(p: Pulse | null): PulseItem[] {
   if (p?.season) {
     const s = p.season;
     if (s.leader) items.push({ key: 'leader', text: <>{s.name} season · {strong(s.leader.username)} leads with {strong(`+${s.leader.gain}`)}</>, href: '/leaderboard?tab=season' });
+    else items.push({ key: 'noleader', text: <>{s.name} season · {strong('no leader yet')} — the first Ranked win takes it</>, href: '/leaderboard?tab=season' });
     items.push({ key: 'days', text: <>{strong(s.days_left)} {s.days_left === 1 ? 'day' : 'days'} left in the season</>, href: '/leaderboard?tab=season' });
   }
-  if (p && p.games_24h > 0) items.push({ key: 'g24', text: <>{strong(p.games_24h.toLocaleString('en-US'))} games played in the last 24 hours</>, href: '/play' });
+  if (p && p.games_24h > 0) items.push({ key: 'g24', text: <>{strong(p.games_24h.toLocaleString('en-US'))} {p.games_24h === 1 ? 'game' : 'games'} played in the last 24 hours</>, href: '/play' });
+  if (p && p.players_total > 0) items.push({ key: 'players', text: <>{strong(p.players_total.toLocaleString('en-US'))} {p.players_total === 1 ? 'player' : 'players'} on the ladder</>, href: '/leaderboard' });
   // Always end with two first-word facts so the strip stays about the game, not only about numbers.
   for (const [w, left] of OPENERS.slice(0, items.length ? 2 : OPENERS.length)) {
     items.push({ key: `op-${w}`, tiles: w, text: <>{strong(w)} leaves {strong(left)} of 2,309 answers</>, href: `/lab?word=${w}` });

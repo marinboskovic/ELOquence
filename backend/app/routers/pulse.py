@@ -92,9 +92,11 @@ async def pulse(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
             )
             .where(Game.status.in_(("won", "lost")), Game.completed_at >= week_ago, Game.word_difficulty.is_not(None))
             .group_by(Game.target_word)
-            .having(func.count() >= 2)
         )
     ).all()
+    # Prefer words several people met; on a quiet week fall back to any played word.
+    if sum(1 for r in word_rows if int(r.plays) >= 2) >= 2:
+        word_rows = [r for r in word_rows if int(r.plays) >= 2]
     scored = [
         {
             "word": row.word,
