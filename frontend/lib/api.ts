@@ -259,6 +259,15 @@ export const dailyApi = {
 // ── Leaderboard ───────────────────────────────────────────────────────────
 export interface Pulse {
   generated_at: string;
+  community: {
+    achievements_24h: number;
+    latest_achievement: { username: string; name: string } | null;
+    longest_streak: { username: string; days: number } | null;
+    biggest_jump_24h: { username: string; gain: number; guesses: number; word_difficulty: number | null } | null;
+    hard_mode_wins_week: number;
+    popular_opener_24h: { word: string; count: number } | null;
+    two_guess_hero: { username: string } | null;
+  };
   today_daily: { date: string; players: number; solved: number; avg_guesses: number | null; fastest_seconds: number | null } | null;
   games_24h: number;
   players_total: number;

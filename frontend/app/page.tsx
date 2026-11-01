@@ -211,6 +211,17 @@ function pulseItems(p: Pulse | null): PulseItem[] {
     const e = p.easiest_this_week;
     items.push({ key: 'easy', tiles: e.word, tileStates: ['correct', 'correct', 'correct', 'correct', 'correct'], text: <>easiest this week · difficulty {strong(e.difficulty.toLocaleString('en-US'))}</>, href: `/lab?word=${e.word}` });
   }
+  // Community — real people doing real things (public profiles only).
+  const c = p?.community;
+  if (c?.biggest_jump_24h) {
+    const j = c.biggest_jump_24h;
+    items.push({ key: 'jump', text: <>{strong(j.username)} gained {strong(`+${j.gain}`)} rating today{j.word_difficulty ? <> · beat a {strong(j.word_difficulty.toLocaleString('en-US'))} word in {j.guesses}</> : null}</>, href: `/u/${encodeURIComponent(j.username)}` });
+  }
+  if (c?.longest_streak) items.push({ key: 'streak', text: <>{strong(c.longest_streak.username)} is on a {strong(`${c.longest_streak.days}-day`)} daily streak</>, href: `/u/${encodeURIComponent(c.longest_streak.username)}` });
+  if (c?.two_guess_hero) items.push({ key: 'two', text: <>{strong(c.two_guess_hero.username)} solved a word in {strong('2 guesses')} today</>, href: `/u/${encodeURIComponent(c.two_guess_hero.username)}` });
+  if (c?.latest_achievement) items.push({ key: 'ach', text: <>{strong(c.latest_achievement.username)} just unlocked {strong(c.latest_achievement.name)}{c.achievements_24h > 1 ? <> · {c.achievements_24h.toLocaleString('en-US')} badges earned today</> : null}</>, href: '/achievements' });
+  if (c?.popular_opener_24h) items.push({ key: 'popop', tiles: c.popular_opener_24h.word, text: <>most popular first word today · {strong(c.popular_opener_24h.count.toLocaleString('en-US'))} {c.popular_opener_24h.count === 1 ? 'player' : 'players'}</>, href: `/lab?word=${c.popular_opener_24h.word}` });
+  if (c && c.hard_mode_wins_week > 0) items.push({ key: 'hardmode', text: <>{strong(c.hard_mode_wins_week.toLocaleString('en-US'))} {c.hard_mode_wins_week === 1 ? 'win' : 'wins'} in hard mode this week</>, href: '/faq#hardmode' });
   if (p?.season) {
     const s = p.season;
     if (s.leader) items.push({ key: 'leader', text: <>{s.name} season · {strong(s.leader.username)} leads with {strong(`+${s.leader.gain}`)}</>, href: '/leaderboard?tab=season' });

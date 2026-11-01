@@ -1,7 +1,9 @@
 """Seed the database with faux users, game histories, and ELO records.
 
 Usage (run from backend container or with backend venv):
-    python -m scripts.seed_users
+    python -m scripts.seed_users            # 30 users with histories + the last 7 days of activity
+    python -m scripts.seed_users --today    # only add today's activity (run any day to keep the ticker alive)
+    python -m scripts.seed_users --today --days=3
 
 Or via docker:
     docker compose exec backend python -m scripts.seed_users
@@ -415,6 +417,161 @@ async def seed():
     await engine.dispose()
 
 
+# ---------------------------------------------------------------------------
+# "Today" pass — fresh activity for the faux users so the landing ticker,
+# season board and streaks have something to show. Safe to run every day.
+# ---------------------------------------------------------------------------
+
+ACHIEVEMENT_TYPES = [
+    "first_win", "quick_solve", "bullseye", "sharpshooter", "precision", "streak_7",
+    "speedster", "blitz", "hardcore", "clean_play", "flawless", "regular",
+]
+
+
+async def seed_today(days: int = 1) -> None:
+    """Add games finished in the last ``days`` days (default: today) for the
+    existing faux users: everyone's daily on today's actual word, a batch of
+    ranked games with rating changes, a few hard-mode wins, achievements."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    from app.config import settings
+
+    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    answers_path = Path(__file__).resolve().parent.parent / "data" / "answers.txt"
+    words = [w.strip().upper() for w in open(answers_path) if w.strip()]
+    now = datetime.now(UTC)
+
+    async with SessionLocal() as session:
+        users = [
+            dict(r._mapping)
+            for r in (
+                await session.execute(
+                    text("SELECT id, username, elo_rating, games_played, current_streak, max_streak FROM users WHERE email LIKE '%@eloquence.fake'")
+                )
+            ).all()
+        ]
+        if not users:
+            print("No faux users yet — run the full seed first (python -m scripts.seed_users).")
+            await engine.dispose()
+            return
+
+        for day_offset in range(days - 1, -1, -1):
+            day = (now - timedelta(days=day_offset)).date()
+            # Today's (or that day's) daily word — create it if the app hasn't yet.
+            row = (await session.execute(text("SELECT word FROM daily_words WHERE date = :d"), {"d": day})).first()
+            if row:
+                daily_word = row.word.upper()
+            else:
+                daily_word = random.choice(words)
+                await session.execute(
+                    text("INSERT INTO daily_words (word, date, difficulty, created_at) VALUES (:w, :d, :diff, :c)"),
+                    {"w": daily_word.lower(), "d": day, "diff": rand_between(900, 1300), "c": now},
+                )
+
+            active = random.sample(users, k=max(3, int(len(users) * rand_between(0.45, 0.7))))
+            ranked_word_pool = random.sample(words, 6)  # a few shared words so "hardest this week" has 2+ plays
+            print(f"{day}: {len(active)} players active, daily word set")
+
+            for u in active:
+                uid, elo, gp, streak, max_streak = u["id"], float(u["elo_rating"]), int(u["games_played"]), int(u["current_streak"]), int(u["max_streak"])
+                skill = min(0.97, max(0.2, (elo - 600) / 1000))  # 800 → 0.2, 1500 → 0.9
+                # ── daily ──
+                won = random.random() < (0.55 + skill * 0.4)
+                n = max(2, min(6, round(random.gauss(5.4 - skill * 2.2, 0.8)))) if won else 6
+                secs = int(rand_between(18, 90) if skill > 0.8 else rand_between(40, 400))
+                played_at = datetime(day.year, day.month, day.day, random.randint(6, 22), random.randint(0, 59), tzinfo=UTC)
+                if played_at > now:
+                    played_at = now - timedelta(minutes=random.randint(1, 120))
+                hard = random.random() < 0.2
+                gid = uuid.uuid4()
+                await session.execute(
+                    text("""INSERT INTO games (id, user_id, mode, target_word, word_difficulty, status, num_guesses, time_seconds, rated,
+                              accuracy_score, elo_before, elo_after, elo_delta, is_placement, hard_mode, constraint_violations, traps_encountered, created_at, completed_at)
+                            VALUES (:id, :uid, 'daily', :tw, :wd, :st, :ng, :ts, false, :acc, :elo, :elo, 0, false, :hard, 0, 0, :ca, :coa)"""),
+                    {"id": gid, "uid": uid, "tw": daily_word, "wd": rand_between(900, 1300), "st": "won" if won else "lost", "ng": n, "ts": secs,
+                     "acc": round(rand_between(55, 98) if won else rand_between(20, 60), 1), "elo": elo, "hard": hard,
+                     "ca": played_at - timedelta(seconds=secs), "coa": played_at},
+                )
+                await _insert_moves(session, gid, daily_word, n, won, words)
+                streak = streak + 1 if won else 0
+                max_streak = max(max_streak, streak)
+
+                # ── ranked (1–3 games) ──
+                for _ in range(random.randint(1, 3)):
+                    target = random.choice(ranked_word_pool) if random.random() < 0.6 else random.choice(words)
+                    won = random.random() < (0.5 + skill * 0.42)
+                    n = max(2, min(6, round(random.gauss(5.3 - skill * 2.1, 0.8)))) if won else 6
+                    secs = int(rand_between(20, 70) if skill > 0.8 else rand_between(45, 420))
+                    word_elo = rand_between(850, 1550)
+                    expected = 1.0 / (1.0 + 10.0 ** ((word_elo - elo) / 400.0))
+                    perf = rand_between(0.6, 1.0) if won else rand_between(0.0, 0.35)
+                    k = 128.0 if gp < 5 else 32.0
+                    delta = round(k * (perf - expected))
+                    before, elo = elo, max(100.0, elo + delta)
+                    gp += 1
+                    hard = random.random() < 0.15
+                    at = played_at + timedelta(minutes=random.randint(5, 180))
+                    if at > now:
+                        at = now - timedelta(minutes=random.randint(1, 60))
+                    gid = uuid.uuid4()
+                    await session.execute(
+                        text("""INSERT INTO games (id, user_id, mode, target_word, word_difficulty, status, num_guesses, time_seconds, rated,
+                                  accuracy_score, elo_before, elo_after, elo_delta, is_placement, hard_mode, constraint_violations, traps_encountered, created_at, completed_at)
+                                VALUES (:id, :uid, 'competitive', :tw, :wd, :st, :ng, :ts, true, :acc, :eb, :ea, :ed, :ip, :hard, 0, 0, :ca, :coa)"""),
+                        {"id": gid, "uid": uid, "tw": target, "wd": round(word_elo), "st": "won" if won else "lost", "ng": n, "ts": secs,
+                         "acc": round(rand_between(55, 98) if won else rand_between(20, 60), 1), "eb": round(before, 1), "ea": round(elo, 1), "ed": delta,
+                         "ip": gp <= 5, "hard": hard, "ca": at - timedelta(seconds=secs), "coa": at},
+                    )
+                    await _insert_moves(session, gid, target, n, won, words)
+                    await session.execute(
+                        text("""INSERT INTO elo_history (id, user_id, game_id, elo_before, elo_after, delta, accuracy_score, recorded_at)
+                                VALUES (:id, :uid, :gid, :eb, :ea, :d, :acc, :ra)"""),
+                        {"id": uuid.uuid4(), "uid": uid, "gid": gid, "eb": round(before, 1), "ea": round(elo, 1), "d": delta, "acc": round(rand_between(40, 95), 1), "ra": at},
+                    )
+
+                # ── achievements (one or two new ones, no duplicates) ──
+                have = {r.achievement_type for r in (await session.execute(text("SELECT achievement_type FROM achievements WHERE user_id = :u"), {"u": uid})).all()}
+                for a in random.sample(ACHIEVEMENT_TYPES, k=random.randint(0, 2)):
+                    if a in have:
+                        continue
+                    await session.execute(
+                        text("INSERT INTO achievements (id, user_id, achievement_type, unlocked_at) VALUES (:id, :u, :a, :t)"),
+                        {"id": uuid.uuid4(), "u": uid, "a": a, "t": played_at},
+                    )
+
+                await session.execute(
+                    text("""UPDATE users SET elo_rating = :elo, games_played = :gp, is_placement = :ip, current_streak = :cs, max_streak = :ms,
+                            last_played_date = :lpd, total_wins = total_wins + :tw WHERE id = :id"""),
+                    {"elo": elo, "gp": gp, "ip": gp < 5, "cs": streak, "ms": max_streak, "lpd": day, "tw": 1 if won else 0, "id": uid},
+                )
+                # carry the new numbers into the next day of the loop
+                u.update(elo_rating=elo, games_played=gp, current_streak=streak, max_streak=max_streak)
+
+        await session.commit()
+        print("Done — fresh activity added. Open the landing page.")
+    await engine.dispose()
+
+
+async def _insert_moves(session, game_id, target: str, n: int, won: bool, words: list[str]) -> None:
+    from sqlalchemy import text
+
+    for i in range(n):
+        guess = random.choice(COMMON_OPENERS) if i == 0 else (target if (won and i == n - 1) else random.choice(words[:800]))
+        remaining = max(1, int(2309 * (0.035 ** (i + 1)))) if i < n - 1 else (1 if won else random.randint(2, 6))
+        cls = "best" if (won and i == n - 1) else random.choices(CLASSIFICATIONS, weights=[3, 18, 28, 22, 15, 10, 4])[0]
+        await session.execute(
+            text("""INSERT INTO moves (id, game_id, move_number, guess_word, pattern, remaining_words, entropy_before, entropy_after,
+                      info_gained, optimal_info, efficiency_ratio, bits_lost, classification, game_phase, constraint_violation, trap_detected, is_book_move, created_at)
+                    VALUES (:id, :gid, :mn, :g, :p, :rw, :eb, :ea, :ig, :oi, :er, :bl, :cls, :ph, false, false, :book, :ca)"""),
+            {"id": uuid.uuid4(), "gid": game_id, "mn": i + 1, "g": guess, "p": encode_pattern(guess, target), "rw": remaining,
+             "eb": round(max(0.0, 11.2 - i * 3.0), 2), "ea": round(max(0.0, 11.2 - (i + 1) * 3.0), 2), "ig": round(rand_between(1.5, 4.8), 2),
+             "oi": round(rand_between(3.0, 5.9), 2), "er": round(rand_between(0.5, 1.1), 2), "bl": round(rand_between(0.0, 1.5), 2),
+             "cls": cls, "ph": "opening" if i == 0 else ("endgame" if i == n - 1 else "midgame"), "book": i == 0, "ca": datetime.now(UTC)},
+        )
+
+
 if __name__ == "__main__":
     import os
     import sys
@@ -422,4 +579,9 @@ if __name__ == "__main__":
     # Never seed shared-password accounts into a production database.
     if os.environ.get("ENV", "development") == "production" and "--i-know-this-is-production" not in sys.argv:
         sys.exit("Refusing to seed demo users with ENV=production (pass --i-know-this-is-production to override).")
-    asyncio.run(seed())
+    if "--today" in sys.argv:
+        n = next((int(a.split("=", 1)[1]) for a in sys.argv if a.startswith("--days=")), 1)
+        asyncio.run(seed_today(days=n))
+    else:
+        asyncio.run(seed())
+        asyncio.run(seed_today(days=7))

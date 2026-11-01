@@ -217,7 +217,8 @@ async def test_pulse_is_public_and_never_leaks_words(client, make_user):
     r = await client.get("/api/pulse/")
     assert r.status_code == 200
     body = r.json()
-    assert set(body) >= {"today_daily", "games_24h", "players_total", "hardest_this_week", "season"}
+    assert set(body) >= {"today_daily", "games_24h", "players_total", "hardest_this_week", "season", "community"}
+    assert body["community"]["biggest_jump_24h"]["username"] == "pulsea"
     assert body["games_24h"] >= 1
     assert body["season"]["days_left"] >= 0
     # today's daily is counts only

@@ -17,11 +17,16 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.achievement import Achievement
 from app.models.daily_word import DailyWord
 from app.models.elo_history import EloHistory
 from app.models.game import Game
+from app.models.move import Move
 from app.models.user import User
+from app.services.achievements import ALL_ACHIEVEMENTS
 from app.services.rate_limit import rate_limited
+
+_ACH_NAME = {a["type"]: a["name"] for a in ALL_ACHIEVEMENTS}
 
 router = APIRouter(prefix="/pulse", tags=["pulse"])
 
@@ -145,8 +150,92 @@ async def pulse(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
         await db.execute(select(func.count()).select_from(User).where(User.is_banned.is_(False), User.is_admin.is_(False)))
     ).scalar_one()
 
+    # ── Community: what people did lately (public profiles only) ─────────
+    public_user = (User.is_banned.is_(False), User.is_admin.is_(False), User.profile_public.is_(True))
+    day_ago = utc_now - timedelta(hours=24)
+
+    ach_count = (
+        await db.execute(select(func.count()).select_from(Achievement).where(Achievement.unlocked_at >= day_ago))
+    ).scalar_one()
+    latest_ach = (
+        await db.execute(
+            select(User.username, Achievement.achievement_type)
+            .select_from(Achievement)
+            .join(User, User.id == Achievement.user_id)
+            .where(Achievement.unlocked_at >= day_ago, *public_user)
+            .order_by(Achievement.unlocked_at.desc())
+            .limit(1)
+        )
+    ).first()
+
+    streak_row = (
+        await db.execute(
+            select(User.username, User.current_streak).where(User.current_streak >= 2, *public_user).order_by(User.current_streak.desc()).limit(1)
+        )
+    ).first()
+
+    jump_row = (
+        await db.execute(
+            select(User.username, Game.elo_delta, Game.num_guesses, Game.word_difficulty)
+            .select_from(Game)
+            .join(User, User.id == Game.user_id)
+            .where(Game.status == "won", Game.rated.is_(True), Game.completed_at >= day_ago, Game.elo_delta.is_not(None), *public_user)
+            .order_by(Game.elo_delta.desc())
+            .limit(1)
+        )
+    ).first()
+
+    hard_wins = (
+        await db.execute(
+            select(func.count()).select_from(Game).where(Game.status == "won", Game.hard_mode.is_(True), Game.completed_at >= week_ago)
+        )
+    ).scalar_one()
+
+    opener_row = (
+        await db.execute(
+            select(Move.guess_word, func.count().label("n"))
+            .select_from(Move)
+            .join(Game, Game.id == Move.game_id)
+            .where(Move.move_number == 1, Game.completed_at >= day_ago)
+            .group_by(Move.guess_word)
+            .order_by(func.count().desc())
+            .limit(1)
+        )
+    ).first()
+
+    one_guess = (
+        await db.execute(
+            select(User.username)
+            .select_from(Game)
+            .join(User, User.id == Game.user_id)
+            .where(Game.status == "won", Game.num_guesses <= 2, Game.completed_at >= day_ago, *public_user)
+            .order_by(Game.completed_at.desc())
+            .limit(1)
+        )
+    ).first()
+
+    community = {
+        "achievements_24h": int(ach_count or 0),
+        "latest_achievement": (
+            {"username": latest_ach.username, "name": _ACH_NAME.get(latest_ach.achievement_type, latest_ach.achievement_type.replace("_", " ").title())}
+            if latest_ach
+            else None
+        ),
+        "longest_streak": {"username": streak_row.username, "days": int(streak_row.current_streak)} if streak_row else None,
+        "biggest_jump_24h": (
+            {"username": jump_row.username, "gain": int(round(float(jump_row.elo_delta))), "guesses": int(jump_row.num_guesses),
+             "word_difficulty": int(round(float(jump_row.word_difficulty))) if jump_row.word_difficulty is not None else None}
+            if jump_row and float(jump_row.elo_delta) > 0
+            else None
+        ),
+        "hard_mode_wins_week": int(hard_wins or 0),
+        "popular_opener_24h": {"word": opener_row.guess_word.upper(), "count": int(opener_row.n)} if opener_row else None,
+        "two_guess_hero": {"username": one_guess.username} if one_guess else None,
+    }
+
     data = {
         "generated_at": utc_now.isoformat(),
+        "community": community,
         "today_daily": today_daily,
         "games_24h": int(games_24h or 0),
         "players_total": int(players_total or 0),
