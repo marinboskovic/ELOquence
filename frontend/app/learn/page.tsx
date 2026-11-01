@@ -13,7 +13,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Lock } from 'lucide-react';
-import { Button, Label, SplitWords, Reveal } from '@/components/ui';
+import { Button, ButtonLink, Label, SplitWords, Reveal } from '@/components/ui';
+import { useAuth } from '@/lib/hooks/useAuth';
 import clsx from 'clsx';
 import LessonRunner from './_components/challenges/LessonRunner';
 import ScrollArea from '@/components/ScrollArea';
@@ -22,6 +23,8 @@ import { learnApi } from '@/lib/api';
 import { hasSession } from '@/lib/session';
 
 const STORAGE_KEY = 'eloquence.trainer.progress';
+/* Guests can try this many lessons (Module 1); the rest need a free account. */
+const GUEST_FREE_LESSONS = 3;
 
 /* Progress map: lessonId → number of challenges completed (high-water mark
  * across all sessions). A lesson is "done" when this value ≥ challenges.length. */
@@ -84,6 +87,9 @@ function localExceedsRemote(local: Progress, remote: Progress): boolean {
 export default function LearnPage() {
   const [progress, setProgress] = useState<Progress>({});
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const guest = !user;
+  const guestLocked = useCallback((lessonId: string) => guest && LESSON_ORDER.indexOf(lessonId) >= GUEST_FREE_LESSONS, [guest]);
 
   useEffect(() => {
     // 1. Show the local cache immediately so there's no flash of empty state.
@@ -158,13 +164,13 @@ export default function LearnPage() {
     // Auto-advance to the next lesson; if none, return to overview.
     const currentIdx = LESSON_ORDER.indexOf(activeLessonId);
     const nextId = LESSON_ORDER[currentIdx + 1];
-    if (nextId) {
+    if (nextId && !guestLocked(nextId)) {
       setActiveLessonId(nextId);
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setActiveLessonId(null);
     }
-  }, [activeLessonId]);
+  }, [activeLessonId, guestLocked]);
 
   const activeLesson = activeLessonId ? findLesson(activeLessonId) : null;
 
@@ -181,9 +187,10 @@ export default function LearnPage() {
     (lessonId: string): boolean => {
       const idx = LESSON_ORDER.indexOf(lessonId);
       if (idx === -1) return false;
+      if (guestLocked(lessonId)) return false;
       return idx <= firstIncompleteIdx;
     },
-    [firstIncompleteIdx],
+    [firstIncompleteIdx, guestLocked],
   );
 
   // Active lesson view — the scroll container is the inner bounded column,
@@ -244,7 +251,7 @@ export default function LearnPage() {
                 <div className="rule-top pt-3 flex flex-col gap-3">
                   <Label>start here</Label>
                   <p className="font-sans text-sm text-text-secondary leading-relaxed">
-                    Module 1 · {MODULES[0].title} — {firstLesson.title}. A few minutes, no account needed.
+                    Module 1 · {MODULES[0].title} — {firstLesson.title}. A few minutes, no account needed for the first {GUEST_FREE_LESSONS}.
                   </p>
                   <Button size="md" onClick={() => handleStart(firstLesson.id)} className="self-start">
                     Start lesson 1
@@ -277,6 +284,21 @@ export default function LearnPage() {
               )}
             </Reveal>
           </header>
+
+          {guest && (
+            /* Guests: the first module is a free taste; the rest needs an account so progress can be kept. */
+            <Reveal className="bg-wash-green px-5 md:px-8 py-5 mb-12 md:mb-16 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <Label className="block mb-1">free to try</Label>
+                <p className="font-sans text-sm text-text-primary max-w-xl">
+                  The first {GUEST_FREE_LESSONS} lessons are open to everyone. A free account unlocks all {TOTAL_LESSONS} and keeps your progress on every device.
+                </p>
+              </div>
+              <ButtonLink href="/register?next=/learn" size="md" className="shrink-0 self-start md:self-auto">
+                Create a free account
+              </ButtonLink>
+            </Reveal>
+          )}
 
           {/* Modules: an editorial index */}
           <div className="flex flex-col gap-12 md:gap-16">
@@ -366,7 +388,9 @@ export default function LearnPage() {
 
                               <span className="flex items-center gap-3 shrink-0">
                                 {isNext && <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden="true" />}
-                                {locked ? (
+                                {locked && guestLocked(l.id) ? (
+                                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-tertiary">free account</span>
+                                ) : locked ? (
                                   <Lock size={12} className="text-text-tertiary" aria-hidden="true" />
                                 ) : (
                                   <span className="font-mono text-xs tabular text-text-tertiary">
