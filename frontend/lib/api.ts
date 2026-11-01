@@ -43,7 +43,12 @@ let refreshing: Promise<boolean> | null = null;
 export function refreshSession(): Promise<boolean> {
   if (refreshing) return refreshing;
   const refresh = getRefreshToken();
-  if (!refresh) return Promise.resolve(false);
+  if (!refresh) {
+    // Nothing to refresh with (e.g. a pre-2.0 token or a token from another
+    // dev DB): drop the dead access token, or every 401 bounces to /login forever.
+    clearTokens();
+    return Promise.resolve(false);
+  }
   refreshing = axios
     .post<TokenPair>(`${API_URL}/api/auth/refresh`, { refresh_token: refresh }, { timeout: 15_000 })
     .then((res) => {
@@ -62,6 +67,9 @@ export function refreshSession(): Promise<boolean> {
 
 function redirectToLogin() {
   if (typeof window === 'undefined') return;
+  // Already on /login: a full navigation would reload the page and re-fire the
+  // same 401, i.e. an infinite reload loop.
+  if (window.location.pathname.startsWith('/login')) return;
   const here = window.location.pathname + window.location.search;
   const next = here.startsWith('/login') || here === '/' ? '' : `?next=${encodeURIComponent(here)}`;
   window.location.href = `/login${next}`;
@@ -83,7 +91,9 @@ api.interceptors.response.use(
         config._retried = true;
         const ok = await refreshSession();
         if (ok) return api.request(config);
-        redirectToLogin();
+        // /auth/me only asks "who am I?" (public pages call it too). A dead
+        // session there just means logged out; protected pages redirect themselves.
+        if (!url.includes('/auth/me')) redirectToLogin();
       } else if (!isStepUp && !hasSession()) {
         // No credentials at all: a protected page was opened logged-out.
         if (code !== 'not_authenticated' || !url.includes('/auth/me')) redirectToLogin();

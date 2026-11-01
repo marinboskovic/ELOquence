@@ -51,6 +51,9 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Server-side routes (Google OAuth callback) run inside this container,
+      # where localhost is the frontend itself; reach the backend by service name.
+      INTERNAL_API_URL: http://backend:8000/api
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       WATCHPACK_POLLING: "true"
     depends_on:
