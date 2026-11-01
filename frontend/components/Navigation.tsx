@@ -170,7 +170,7 @@ export default function Navigation() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-bg-base/95 backdrop-blur-[2px] border-b border-border-subtle" style={{ height: NAV_HEIGHT }}>
+      <header className="sticky top-0 z-50 bg-bg-base border-b border-border-subtle" style={{ height: NAV_HEIGHT }}>
         <div ref={barRef} className="max-w-6xl mx-auto px-4 md:px-8 h-full flex items-center justify-between gap-6">
           {/* Wordmark */}
           <Link
@@ -301,7 +301,7 @@ export default function Navigation() {
       {/* Bottom tab bar — mobile */}
       {!isAdmin && (
         <nav
-          className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bg-base/95 backdrop-blur-[2px] border-t-2 border-border-default"
+          className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bg-base border-t-2 border-border-default"
           style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           aria-label="Main navigation"
         >
