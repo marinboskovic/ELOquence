@@ -163,10 +163,10 @@ export default function AdminAnnouncementsPage() {
                 onChange={(e) => setNewText(e.target.value)}
                 rows={3}
                 placeholder="Short, declarative. One line reads best."
-                className="w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-ghost outline-none transition-colors duration-fast resize-none"
+                className="w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary outline-none transition-colors duration-fast resize-none"
               />
             </Field>
-            {createError && <p className="text-sm text-accent" role="alert">{createError}</p>}
+            {createError && <p className="text-sm text-[var(--red)]" role="alert">{createError}</p>}
             <Button type="submit" size="lg" className="w-full" loading={creating}>
               Post announcement
             </Button>

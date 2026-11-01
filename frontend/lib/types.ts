@@ -174,10 +174,10 @@ export const CLASSIFICATION_CONFIG: Record<
 };
 
 export const RATING_TIERS = [
-  { name: 'Novice', min: 0, max: 1199, color: '#818384' },
-  { name: 'Veteran', min: 1200, max: 1399, color: '#b59f3b' },
-  { name: 'Master', min: 1400, max: 1599, color: '#6aaa64' },
-  { name: 'Grandmaster', min: 1600, max: 9999, color: '#1565c0' },
+  { name: 'Novice', min: 0, max: 1199, color: 'var(--tier-novice)' },
+  { name: 'Veteran', min: 1200, max: 1399, color: 'var(--tier-veteran)' },
+  { name: 'Master', min: 1400, max: 1599, color: 'var(--tier-master)' },
+  { name: 'Grandmaster', min: 1600, max: 9999, color: 'var(--tier-grandmaster)' },
 ];
 
 export function getRatingTier(elo: number) {

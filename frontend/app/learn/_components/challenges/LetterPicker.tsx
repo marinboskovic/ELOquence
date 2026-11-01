@@ -118,7 +118,7 @@ export default function LetterPicker({
         ))}
       </div>
 
-      <p style={{ fontSize: 11, color: 'var(--text-ghost)', margin: 0 }}>
+      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
         Build any 5-letter probe. Grayed-out letters are already ruled out.
       </p>
 

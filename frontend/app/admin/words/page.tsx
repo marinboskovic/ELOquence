@@ -160,7 +160,7 @@ export default function AdminWordsPage() {
               </div>
             </div>
 
-            {formError && <p className="text-sm text-accent" role="alert">{formError}</p>}
+            {formError && <p className="text-sm text-[var(--red)]" role="alert">{formError}</p>}
             {success && (
               <p className="inline-flex items-center gap-1.5 text-sm text-text-primary" role="status">
                 <Check size={14} style={{ color: 'var(--tile-correct)' }} aria-hidden="true" />

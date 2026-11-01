@@ -344,7 +344,7 @@ export default function LearnPage() {
                               <span className="flex items-center gap-3 shrink-0">
                                 {isNext && <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden="true" />}
                                 {locked ? (
-                                  <Lock size={12} className="text-text-ghost" aria-hidden="true" />
+                                  <Lock size={12} className="text-text-tertiary" aria-hidden="true" />
                                 ) : (
                                   <span className="font-mono text-xs tabular text-text-tertiary">
                                     {challengesDone}/{total}

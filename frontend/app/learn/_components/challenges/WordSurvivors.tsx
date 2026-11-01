@@ -149,7 +149,7 @@ export default function WordSurvivors({
         })}
       </div>
 
-      <p style={{ fontSize: 11, color: 'var(--text-ghost)', margin: 0 }}>
+      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
         Tap each word that still fits the constraints. {selected.size} selected.
       </p>
 
@@ -182,7 +182,7 @@ export default function WordSurvivors({
               borderRadius: 0,
               border: 'none',
               background: selected.size === 0 ? 'var(--bg-muted)' : 'var(--accent)',
-              color: selected.size === 0 ? 'var(--text-ghost)' : 'var(--accent-ink)',
+              color: selected.size === 0 ? 'var(--text-tertiary)' : 'var(--accent-ink)',
               fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.14em',
               cursor: selected.size === 0 ? 'not-allowed' : 'pointer',
               transition: 'all 200ms ease',

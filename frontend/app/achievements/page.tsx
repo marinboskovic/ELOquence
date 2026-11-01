@@ -370,7 +370,7 @@ export default function AchievementsPage() {
       <div
         role="tablist"
         aria-label="Filter achievements by category"
-        className="flex gap-6 overflow-x-auto hide-native-scrollbar border-b border-border-subtle"
+        className="flex gap-6 overflow-x-auto hide-native-scrollbar scroll-fade-x md:[mask-image:none] border-b border-border-subtle"
       >
         {FILTERS.map((opt) => {
           const active = filter === opt.key;

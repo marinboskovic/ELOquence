@@ -122,7 +122,7 @@ function ModeRow({ title, copy, status, tag, extra, onClick, disabled, loading, 
           </span>
           <ArrowRight
             size={18}
-            className="shrink-0 text-text-ghost transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-1"
+            className="shrink-0 text-text-tertiary transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-1"
             aria-hidden="true"
           />
         </div>
@@ -548,7 +548,7 @@ export default function PlayPage() {
               entropy · bits
               <ArrowUpRight
                 size={16}
-                className="text-text-ghost transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                className="text-text-tertiary transition-[color,transform] duration-fast ease-out group-hover:text-accent group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
                 aria-hidden="true"
               />
             </span>

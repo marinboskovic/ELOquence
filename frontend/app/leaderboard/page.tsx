@@ -33,7 +33,7 @@ function TierDot({ elo }: { elo: number }) {
 
 /** Rank numeral: oversized display type for the podium, mono for the rest. */
 function Rank({ rank }: { rank: number | null }) {
-  if (rank == null) return <span className="font-mono text-sm text-text-ghost">—</span>;
+  if (rank == null) return <span className="font-mono text-sm text-text-tertiary">—</span>;
   if (rank <= 3) {
     return (
       <span className="font-display text-display-md text-text-primary tabular leading-none" aria-label={`Rank ${rank}`}>

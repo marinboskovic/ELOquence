@@ -24,11 +24,11 @@ import { Button, Label, Reveal, SectionHead, SplitWords, Tag } from '@/component
 
 /** Underline input — the one text-field style across Atelier forms. */
 const INPUT_CLS =
-  'w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-ghost outline-none transition-colors duration-fast disabled:opacity-40';
+  'w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary outline-none transition-colors duration-fast disabled:opacity-40';
 
 function ErrorNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="flex items-start gap-2 text-sm text-accent" role="alert">
+    <p className="flex items-start gap-2 text-sm text-[var(--red)]" role="alert">
       <AlertCircle size={15} aria-hidden="true" className="shrink-0 mt-0.5" />
       <span>{children}</span>
     </p>
@@ -68,15 +68,15 @@ function Toggle({
       aria-label={label}
       disabled={disabled}
       className={clsx(
-        'relative shrink-0 w-10 h-[22px] border-2 transition-colors duration-fast disabled:opacity-40 disabled:cursor-not-allowed',
+        'relative shrink-0 w-11 h-6 border-2 transition-colors duration-fast disabled:opacity-40 disabled:cursor-not-allowed',
         checked ? 'bg-accent border-accent' : 'bg-transparent border-border-default'
       )}
     >
       <span
         aria-hidden="true"
         className={clsx(
-          'absolute top-[2px] left-[2px] w-[14px] h-[14px] transition-transform duration-fast ease-out',
-          checked ? 'translate-x-[18px] bg-accent-ink' : 'translate-x-0 bg-border-default'
+          'absolute top-[2px] left-[2px] w-4 h-4 transition-transform duration-fast ease-out',
+          checked ? 'translate-x-5 bg-accent-ink' : 'translate-x-0 bg-border-default'
         )}
       />
     </button>

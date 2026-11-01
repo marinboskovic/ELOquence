@@ -82,7 +82,7 @@ export default function SortIntoBuckets({
         }}
       >
         {unsorted.length === 0 ? (
-          <span style={{ fontSize: 11, color: 'var(--text-ghost)', alignSelf: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', alignSelf: 'center' }}>
             All sorted — submit when ready
           </span>
         ) : (
@@ -137,7 +137,7 @@ export default function SortIntoBuckets({
                   fontSize: 11,
                   textTransform: 'uppercase',
                   letterSpacing: '0.08em',
-                  color: 'var(--text-ghost)',
+                  color: 'var(--text-tertiary)',
                   fontWeight: 700,
                 }}
               >
@@ -188,7 +188,7 @@ export default function SortIntoBuckets({
               borderRadius: 0,
               border: 'none',
               background: allAssigned ? 'var(--accent)' : 'var(--bg-muted)',
-              color: allAssigned ? 'var(--accent-ink)' : 'var(--text-ghost)',
+              color: allAssigned ? 'var(--accent-ink)' : 'var(--text-tertiary)',
               fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.14em',
               cursor: allAssigned ? 'pointer' : 'not-allowed',
               transition: 'all 200ms ease',

@@ -7,7 +7,7 @@
    calm · editorial · paper
    Light = cool paper + ink. Dark = warm black + chalk. Colour lives in the
    tiles (green / ochre / grey), in washes behind sections, and in ONE
-   accent (vermilion) reserved for the primary action and live state.
+   accent (the Wordle green) reserved for the primary action and live state.
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -20,7 +20,7 @@
   /* Text */
   --text-primary:   #121212;   /* ink */
   --text-secondary: #5c5c57;
-  --text-tertiary:  #93938c;
+  --text-tertiary:  #6a6a64;
   --text-ghost:     #c3c3bd;
   --text-on-ink:    #f3f3f1;
 
@@ -28,7 +28,7 @@
   --border-subtle:  #dadad4;
   --border-default: #121212;
   --border-strong:  #121212;
-  --border-focus:   #e8542b;
+  --border-focus:   #1f7a4d;
 
   /* Tiles — the only place the game's three colours live */
   --tile-correct:      #1f7a4d;
@@ -45,10 +45,11 @@
   --key-border:       #121212;
   --key-pressed-bg:   #121212;
 
-  /* Accent — primary action, live/active state, links on hover */
-  --accent:      #e8542b;
+  /* Accent — primary action, live/active state. Wordle's own green: the
+     colour that means "correct" is also the colour that means "go". */
+  --accent:      #1f7a4d;
   --accent-ink:  #ffffff;
-  --accent-soft: #fbe4dc;
+  --accent-soft: #e3efe7;
 
   /* Washes — tinted paper behind sections and cards */
   --wash-green:  #e3efe7;
@@ -60,7 +61,11 @@
   --green:       #1f7a4d;
   --green-light: #2a9a63;
   --yellow:      #c78c1c;
-  --red:         #d63b2f;
+  --red:         #b8291f;
+  /* Tile colours as *text* (≥ 4.5:1 on paper) — use for coloured numbers/labels, never for tiles */
+  --text-correct: #1f7a4d;
+  --text-present: #9a6a0f;
+  --tier-novice: #6a6a64; --tier-veteran: #8a6212; --tier-master: #1f7a4d; --tier-grandmaster: #2f5d8f;
   --gold:        #c78c1c;
   --silver:      #8a8a84;
   --bronze:      #a86a3a;
@@ -99,7 +104,7 @@
 
   --text-primary:   #f1f1ec;
   --text-secondary: #a6a69f;
-  --text-tertiary:  #73736d;
+  --text-tertiary:  #8a8a83;
   --text-ghost:     #40403c;
   --text-on-ink:    #121211;
 
@@ -119,9 +124,9 @@
   --key-border:       #f1f1ec;
   --key-pressed-bg:   #f1f1ec;
 
-  --accent:      #ff6a3d;
+  --accent:      #2e9a63;
   --accent-ink:  #121211;
-  --accent-soft: #3a2017;
+  --accent-soft: #172a1f;
 
   --wash-green:  #172a1f;
   --wash-ochre:  #2b2416;
@@ -132,6 +137,9 @@
   --green-light: #3fb677;
   --yellow:      #d9a033;
   --red:         #ff6a5c;
+  --text-correct: #3fb677;
+  --text-present: #d9a033;
+  --tier-novice: #8a8a83; --tier-veteran: #d9a033; --tier-master: #3fb677; --tier-grandmaster: #5b8fc7;
   --silver:      #a6a69f;
   --bronze:      #c98a55;
 
@@ -181,16 +189,40 @@ h1, h2 { letter-spacing: -0.035em; text-wrap: balance; }
 .rule-hair   { border-top: var(--rule) solid var(--border-subtle); }
 
 /* ── Ink link: underline wipes in from the left on hover ── */
-.ink-link {
-  position: relative;
-  text-decoration: none;
-  background-image: linear-gradient(currentColor, currentColor);
-  background-repeat: no-repeat;
-  background-size: 0% 2px;
-  background-position: 0 100%;
-  transition: background-size var(--dur-med) var(--ease-ink);
+@layer components {
+  .ink-link {
+    position: relative;
+    text-decoration: none;
+    /* Hit area (WCAG 2.5.8): a 6px vertical pad, pulled back with a negative
+       margin so layout is unchanged; the underline is drawn on the content box. */
+    display: inline-block;
+    padding-block: 6px;
+    margin-block: -6px;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-origin: content-box;
+    background-clip: content-box;
+    background-size: 0% 2px;
+    background-position: 0 100%;
+    transition: background-size var(--dur-med) var(--ease-ink);
+  }
+  .ink-link:hover, .ink-link[aria-current="page"] { background-size: 100% 2px; }
 }
-.ink-link:hover, .ink-link[aria-current="page"] { background-size: 100% 2px; }
+
+/* ── Skip link: visible only on keyboard focus ── */
+.skip-link {
+  position: fixed; top: 8px; left: 8px; z-index: 100;
+  padding: 10px 14px; background: var(--bg-ink); color: var(--text-on-ink);
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  transform: translateY(-200%); transition: transform var(--dur-fast) var(--ease-out);
+}
+.skip-link:focus-visible { transform: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Horizontal scrollers: fade the clipped edge so overflow is discoverable ── */
+.scroll-fade-x {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
 
 /* ── Ink fill reveal (tiles) ──
    The colour pours in from the bottom edge, then the letter flips to the
@@ -250,6 +282,8 @@ h1, h2 { letter-spacing: -0.035em; text-wrap: balance; }
   --tile-present: #3a8fd9;
   --green:        #e4661f;
   --green-light:  #f07a33;
+  --accent:       #e4661f;
+  --accent-soft:  #fbe4d6;
 }
 
 /* ── Reduced motion ── */

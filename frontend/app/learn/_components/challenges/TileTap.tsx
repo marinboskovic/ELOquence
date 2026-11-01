@@ -73,7 +73,7 @@ export default function TileTap({
         })}
       </motion.div>
 
-      <div style={{ fontSize: 12, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         Target: {challenge.target}
       </div>
 

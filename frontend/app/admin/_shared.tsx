@@ -164,7 +164,7 @@ export function Pager({
 /* ── Form atoms ───────────────────────────────────────────────────── */
 
 export const INPUT =
-  'w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-ghost outline-none transition-colors duration-fast disabled:opacity-40';
+  'w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary outline-none transition-colors duration-fast disabled:opacity-40';
 
 export const SELECT =
   'w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-2.5 pr-6 text-sm text-text-primary outline-none transition-colors duration-fast cursor-pointer';

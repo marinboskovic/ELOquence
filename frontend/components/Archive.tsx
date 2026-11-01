@@ -105,7 +105,7 @@ function CalendarCell({ day, entry, future, isToday, loading, inStreak, onClick 
         inStreak && 'bg-wash-ochre',
         isPlayable && 'cursor-pointer hover:bg-bg-elevated focus-visible:z-10',
         !isPlayable && 'cursor-default',
-        future && 'text-text-ghost',
+        future && 'text-text-tertiary',
         loading && 'skeleton'
       )}
     >
@@ -115,7 +115,7 @@ function CalendarCell({ day, entry, future, isToday, loading, inStreak, onClick 
       <span
         className={clsx(
           'font-mono text-[11px] md:text-xs tabular leading-none',
-          future ? 'text-text-ghost' : isRevealed ? 'text-text-primary' : 'text-text-secondary'
+          future ? 'text-text-tertiary' : isRevealed ? 'text-text-primary' : 'text-text-secondary'
         )}
       >
         {String(day).padStart(2, '0')}

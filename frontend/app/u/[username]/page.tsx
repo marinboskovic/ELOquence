@@ -72,7 +72,7 @@ function GameCard({ game }: { game: PublicProfile['recent_games'][number] }) {
           {game.hard_mode && <span className="text-text-tertiary">*</span>}
         </span>
         <span
-          className={clsx('font-mono text-[10px] tabular', delta == null ? 'text-text-ghost' : delta >= 0 ? 'text-accent' : 'text-text-tertiary')}
+          className={clsx('font-mono text-[10px] tabular', delta == null ? 'text-text-tertiary' : delta >= 0 ? 'text-accent' : 'text-text-tertiary')}
         >
           {delta == null ? '·' : `${delta >= 0 ? '+' : ''}${Math.round(delta)}`}
         </span>
@@ -276,7 +276,7 @@ function ProfileBody({ profile, onShare }: { profile: PublicProfile; onShare: ()
               <Label className="block mb-1">distribution</Label>
               <h2 className="font-display text-display-sm text-text-primary">Guesses to solve</h2>
             </div>
-            {profile.completed > 0 && <span className="font-mono text-xs tabular text-text-tertiary">{profile.completed} games</span>}
+            {profile.completed > 0 && <span className="font-mono text-xs tabular text-text-tertiary">{profile.completed} {profile.completed === 1 ? 'game' : 'games'}</span>}
           </div>
           <div className="mt-4">
             {profile.completed > 0 ? (

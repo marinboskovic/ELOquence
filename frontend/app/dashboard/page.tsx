@@ -361,7 +361,7 @@ export default function DashboardPage() {
         <div
           role="tablist"
           aria-label="Filter by mode"
-          className="flex gap-6 overflow-x-auto hide-native-scrollbar border-b border-border-subtle"
+          className="flex gap-6 overflow-x-auto hide-native-scrollbar scroll-fade-x md:[mask-image:none] border-b border-border-subtle"
         >
           {FILTERS.map((opt) => {
             const active = gameFilter === opt.key;
@@ -484,7 +484,7 @@ export default function DashboardPage() {
             )}
           </div>
         ) : (
-          <div className="mt-4 overflow-x-auto">
+          <div className="relative mt-4 overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="rule-hair">
@@ -574,7 +574,7 @@ export default function DashboardPage() {
                             {Math.round(eloDelta ?? 0)}
                           </span>
                         ) : (
-                          <span className="font-mono text-sm text-text-ghost">·</span>
+                          <span className="font-mono text-sm text-text-tertiary">·</span>
                         )}
                       </td>
                       <td className="py-3 pr-4 text-right hidden sm:table-cell">

@@ -200,7 +200,7 @@ const SECTIONS: SectionDef[] = [
               try to solve in six guesses. After you finish, ELOquence breaks down every move.
             </p>
             <InnerCard className="space-y-2">
-              <p className="font-sans text-[10px] text-text-ghost uppercase tracking-wider">
+              <p className="font-sans text-[10px] text-text-tertiary uppercase tracking-wider">
                 What the colors mean
               </p>
               <div className="space-y-2">
@@ -285,13 +285,13 @@ const SECTIONS: SectionDef[] = [
               <div className="space-y-2">
                 <div className="flex items-center gap-3">
                   <TileRow word="SALET" pattern={['gray', 'yellow', 'gray', 'yellow', 'gray']} />
-                  <span className="font-sans text-[10px] text-text-ghost">
+                  <span className="font-sans text-[10px] text-text-tertiary">
                     A and E are in CRANE, wrong spots
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <TileRow word="CRANE" pattern={['green', 'green', 'green', 'green', 'green']} />
-                  <span className="font-sans text-[10px] text-text-ghost">Solved!</span>
+                  <span className="font-sans text-[10px] text-text-tertiary">Solved!</span>
                 </div>
               </div>
             </InnerCard>
@@ -452,7 +452,7 @@ const SECTIONS: SectionDef[] = [
               would have gotten. It&apos;s the closest thing to a per-move grade.
             </p>
             <InnerCard className="space-y-2">
-              <p className="font-sans text-[10px] text-text-ghost uppercase tracking-wider">
+              <p className="font-sans text-[10px] text-text-tertiary uppercase tracking-wider">
                 Example — SALET as opener
               </p>
               <div className="flex items-center gap-3">
@@ -461,11 +461,11 @@ const SECTIONS: SectionDef[] = [
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-sans text-xs mt-1">
                 <div className="flex justify-between">
-                  <span className="text-text-ghost">Info gained</span>
+                  <span className="text-text-tertiary">Info gained</span>
                   <span className="font-mono text-text-primary">5.43 bits</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-text-ghost">Words remaining</span>
+                  <span className="text-text-tertiary">Words remaining</span>
                   <span className="font-mono text-text-primary">53</span>
                 </div>
               </div>
@@ -508,7 +508,7 @@ const SECTIONS: SectionDef[] = [
                 </div>
               ))}
             </div>
-            <p className="font-sans text-xs text-text-ghost leading-relaxed">
+            <p className="font-sans text-xs text-text-tertiary leading-relaxed">
               <span className="font-semibold text-text-secondary">Brilliant</span> is genuinely
               rare — it means you identified an option the algorithm under-ranked. When you see
               it, it&apos;s real.
@@ -560,21 +560,21 @@ const SECTIONS: SectionDef[] = [
               letter you already locked in.
             </p>
             <InnerCard className="space-y-2">
-              <p className="font-sans text-[10px] text-text-ghost uppercase tracking-wider">
+              <p className="font-sans text-[10px] text-text-tertiary uppercase tracking-wider">
                 Example: VERGE → TRACE → SHRUG
               </p>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-3">
                   <TileRow word="VERGE" pattern={['gray', 'yellow', 'green', 'gray', 'yellow']} />
-                  <span className="font-sans text-[10px] text-text-ghost">E locked in pos 3; R and E elsewhere</span>
+                  <span className="font-sans text-[10px] text-text-tertiary">E locked in pos 3; R and E elsewhere</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <TileRow word="TRACE" pattern={['gray', 'green', 'yellow', 'gray', 'green']} />
-                  <span className="font-sans text-[10px] text-text-ghost">Ignores green E — tests R, A, C</span>
+                  <span className="font-sans text-[10px] text-text-tertiary">Ignores green E — tests R, A, C</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <TileRow word="SHRUG" pattern={['gray', 'gray', 'green', 'gray', 'gray']} />
-                  <span className="font-sans text-[10px] text-text-ghost">Covers remaining unknowns</span>
+                  <span className="font-sans text-[10px] text-text-tertiary">Covers remaining unknowns</span>
                 </div>
               </div>
             </InnerCard>
@@ -745,24 +745,24 @@ const SECTIONS: SectionDef[] = [
             <div className="grid sm:grid-cols-2 gap-4">
               <InnerCard className="space-y-2">
                 <p className="font-sans text-xs font-semibold text-text-primary">Guess BATCH</p>
-                <p className="font-sans text-[10px] text-text-ghost leading-relaxed">
+                <p className="font-sans text-[10px] text-text-tertiary leading-relaxed">
                   If BATCH is right, all-green. Otherwise, B comes back gray and you still have
                   four candidates left — no new info beyond ruling out B.
                 </p>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <TileRow word="BATCH" pattern={['green', 'green', 'green', 'green', 'green']} />
-                    <span className="font-sans text-[10px] text-text-ghost">BATCH ✓</span>
+                    <span className="font-sans text-[10px] text-text-tertiary">BATCH ✓</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <TileRow word="BATCH" pattern={['gray', 'green', 'green', 'green', 'green']} />
-                    <span className="font-sans text-[10px] text-text-ghost">4 words left</span>
+                    <span className="font-sans text-[10px] text-text-tertiary">4 words left</span>
                   </div>
                 </div>
               </InnerCard>
               <InnerCard className="space-y-2">
                 <p className="font-sans text-xs font-semibold text-text-primary">Guess BLIMP</p>
-                <p className="font-sans text-[10px] text-text-ghost leading-relaxed">
+                <p className="font-sans text-[10px] text-text-tertiary leading-relaxed">
                   BLIMP shares no letters with any of the five words. Every solution gives a
                   different pattern — five groups of one.
                 </p>
@@ -770,7 +770,7 @@ const SECTIONS: SectionDef[] = [
                   {(['BATCH', 'CATCH', 'LATCH', 'MATCH', 'PATCH'] as const).map((w) => (
                     <div key={w} className="flex items-center gap-2">
                       <TileRow word="BLIMP" pattern={['gray', 'gray', 'gray', 'gray', 'gray']} />
-                      <span className="font-sans text-[10px] text-text-ghost">→ {w}</span>
+                      <span className="font-sans text-[10px] text-text-tertiary">→ {w}</span>
                     </div>
                   ))}
                 </div>
@@ -797,7 +797,7 @@ const SECTIONS: SectionDef[] = [
               1-in-6 shot each turn — which could cost you the game.
             </p>
             <InnerCard className="space-y-2">
-              <p className="font-sans text-[10px] text-text-ghost uppercase tracking-wider">
+              <p className="font-sans text-[10px] text-text-tertiary uppercase tracking-wider">
                 The _IGHT trap
               </p>
               <div className="space-y-1">
@@ -816,7 +816,7 @@ const SECTIONS: SectionDef[] = [
                         <Tile key={i} letter={ch} color="green" size="sm" />
                       ))}
                     </div>
-                    <span className="font-sans text-[10px] text-text-ghost">{w}</span>
+                    <span className="font-sans text-[10px] text-text-tertiary">{w}</span>
                   </div>
                 ))}
               </div>
@@ -933,7 +933,7 @@ const SECTIONS: SectionDef[] = [
                 { n: '3', name: 'Summary', desc: 'How unique your game was versus the community, your projected ELO change (rated games), and links back to play or share.' },
               ].map((tab) => (
                 <InnerCard key={tab.n} className="flex gap-2.5">
-                  <span className="font-mono text-[10px] text-text-ghost bg-bg-muted w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="font-mono text-[10px] text-text-tertiary bg-bg-muted w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
                     {tab.n}
                   </span>
                   <div>
@@ -1132,22 +1132,22 @@ const SECTIONS: SectionDef[] = [
               you lose more.
             </p>
             <InnerCard className="space-y-2">
-              <p className="font-sans text-[10px] text-text-ghost uppercase tracking-wider">
+              <p className="font-sans text-[10px] text-text-tertiary uppercase tracking-wider">
                 Example: win against a hard word
               </p>
               <div className="flex items-center gap-4">
                 <div className="text-center">
                   <p className="font-display text-lg font-bold text-text-primary">1057</p>
-                  <p className="font-sans text-[10px] text-text-ghost">Before</p>
+                  <p className="font-sans text-[10px] text-text-tertiary">Before</p>
                 </div>
                 <div className="flex flex-col items-center gap-0.5">
                   <span className="font-sans text-xs font-bold" style={{ color: 'var(--tile-correct)' }}>+43</span>
                   <div className="w-12 h-px bg-border-subtle" />
-                  <span className="font-sans text-[9px] text-text-ghost">Word difficulty: 1420</span>
+                  <span className="font-sans text-[9px] text-text-tertiary">Word difficulty: 1420</span>
                 </div>
                 <div className="text-center">
                   <p className="font-display text-lg font-bold" style={{ color: 'var(--tile-correct)' }}>1100</p>
-                  <p className="font-sans text-[10px] text-text-ghost">After</p>
+                  <p className="font-sans text-[10px] text-text-tertiary">After</p>
                 </div>
               </div>
             </InnerCard>
@@ -1175,7 +1175,7 @@ const SECTIONS: SectionDef[] = [
                   <span className={clsx('w-2 h-2 rounded-full shrink-0', t.cls)} />
                   <div>
                     <span className="font-sans text-xs font-semibold text-text-primary">{t.name}</span>
-                    <span className="font-sans text-[10px] text-text-ghost ml-1.5">{t.range}</span>
+                    <span className="font-sans text-[10px] text-text-tertiary ml-1.5">{t.range}</span>
                   </div>
                 </InnerCard>
               ))}

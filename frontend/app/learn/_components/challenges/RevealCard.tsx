@@ -52,7 +52,7 @@ export default function RevealCard({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          style={{ fontSize: 11, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+          style={{ fontSize: 11, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
         >
           {challenge.guess ? `vs ${challenge.target}` : challenge.target}
         </motion.span>

@@ -77,13 +77,15 @@ export function Label({ children, className }: { children: React.ReactNode; clas
   return <span className={clsx('font-mono text-label uppercase text-text-secondary', className)}>{children}</span>;
 }
 
-type Tone = 'neutral' | 'green' | 'ochre' | 'accent' | 'ink';
+type Tone = 'neutral' | 'green' | 'ochre' | 'accent' | 'ink' | 'on-ink';
 const TONE: Record<Tone, string> = {
   neutral: 'border-border-subtle text-text-secondary',
   green: 'bg-wash-green border-transparent text-text-primary',
   ochre: 'bg-wash-ochre border-transparent text-text-primary',
   accent: 'bg-accent-soft border-transparent text-text-primary',
   ink: 'bg-bg-ink border-transparent text-text-on-ink',
+  // Outlined tag for use inside an ink block (inverted surface).
+  'on-ink': 'bg-transparent border-[var(--text-on-ink)] text-text-on-ink',
 };
 export function Tag({ children, tone = 'neutral', className, dot }: { children: React.ReactNode; tone?: Tone; className?: string; dot?: string }) {
   return (
@@ -150,10 +152,37 @@ export function Stat({
 
 /* ───────────────────────── Motion helpers ───────────────────────── */
 
+/**
+ * "Has the user seen this yet?" — true once the element enters the viewport,
+ * OR once it has been scrolled past (a fast fling can jump over a section
+ * between two IntersectionObserver ticks, which would leave count-ups at 0
+ * and reveals invisible forever). Checked on scroll, throttled to a frame.
+ */
+export function useSeen<T extends Element>(ref: React.RefObject<T>, margin = '-10% 0px') {
+  const inView = useInView(ref, { once: true, margin: margin as never });
+  const [passed, setPassed] = useState(false);
+  useEffect(() => {
+    if (inView || passed) return;
+    let raf = 0;
+    const check = () => {
+      raf = 0;
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top < window.innerHeight) setPassed(true);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(check); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    const t = window.setTimeout(check, 1200); // safety net: never leave a number at 0 past ~1s
+    return () => { window.removeEventListener('scroll', onScroll); window.clearTimeout(t); if (raf) cancelAnimationFrame(raf); };
+  }, [inView, passed, ref]);
+  return inView || passed;
+}
+
 /** Count a number up on first view (800ms, ease-out). Respects reduced motion. */
 export function CountUp({ value, decimals, duration = 800, format }: { value: number; decimals?: number; duration?: number; format?: (n: number) => string }) {
   const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-10% 0px' });
+  const inView = useSeen(ref);
   const reduced = useReducedMotion();
   const [shown, setShown] = useState(reduced ? value : 0);
   const d = decimals ?? (Number.isInteger(value) ? 0 : 1);
@@ -184,6 +213,22 @@ export function CountUp({ value, decimals, duration = 800, format }: { value: nu
 /** Rise-and-fade on enter (page sections). */
 export function Reveal({ children, delay = 0, className, as = 'div', once = true, ...rest }: HTMLMotionProps<'div'> & { delay?: number; once?: boolean; as?: 'div' | 'section' | 'li' }) {
   const Comp = (motion as unknown as Record<string, typeof motion.div>)[as] ?? motion.div;
+  const ref = useRef<HTMLDivElement>(null);
+  const seen = useSeen(ref, '-8% 0px');
+  if (once) {
+    return (
+      <Comp
+        ref={ref}
+        initial={{ opacity: 0, y: 14 }}
+        animate={seen ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
+        transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1], delay }}
+        className={className}
+        {...rest}
+      >
+        {children}
+      </Comp>
+    );
+  }
   return (
     <Comp
       initial={{ opacity: 0, y: 14 }}

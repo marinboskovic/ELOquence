@@ -135,7 +135,7 @@ export default function EloSparkline({ data: rawData, width = 600, height = 200 
               y1={y}
               x2={pad.left + plotW}
               y2={y}
-              stroke="var(--text-ghost)"
+              stroke="var(--text-tertiary)"
               strokeWidth={1}
               strokeDasharray="2 4"
               shapeRendering="crispEdges"

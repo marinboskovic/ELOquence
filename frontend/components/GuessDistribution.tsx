@@ -77,7 +77,7 @@ export default function GuessDistribution({ distribution, losses, highlight }: P
             </div>
 
             {/* Count — mono, right-aligned */}
-            <span className={clsx('font-mono text-xs tabular text-right', count === 0 ? 'text-text-ghost' : 'text-text-primary')}>
+            <span className={clsx('font-mono text-xs tabular text-right', count === 0 ? 'text-text-tertiary' : 'text-text-primary')}>
               {count}
             </span>
           </div>

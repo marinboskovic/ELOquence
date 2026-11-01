@@ -18,22 +18,24 @@ Precedence: this file → `app/globals.css` tokens → `tailwind.config.ts`. Nev
 | Recessed | `#e9e9e5` | `#222220` | `bg-bg-muted` |
 | Ink block (inverted) | `#121212` | `#f1f1ec` | `bg-bg-ink` + `text-text-on-ink` |
 | Ink (text) | `#121212` | `#f1f1ec` | `text-text-primary` |
-| Secondary / tertiary / ghost | `#5c5c57 / #93938c / #c3c3bd` | `#a6a69f / #73736d / #40403c` | `text-text-secondary …` |
+| Secondary / tertiary | `#5c5c57 / #6a6a64` | `#a6a69f / #8a8a83` | `text-text-secondary / -tertiary` (both ≥ 4.5:1 on paper) |
+| Ghost (decoration only, never text) | `#c3c3bd` | `#40403c` | `--text-ghost` — scrollbars, hairlines, placeholders are **not** allowed |
 | Rule, hair | `#dadad4` | `#2b2b28` | `border-border-subtle` |
 | Rule, ink | `#121212` | `#f1f1ec` | `border-border-default` |
-| **Accent (vermilion)** | `#e8542b` | `#ff6a3d` | `bg-accent text-accent-ink`, `--accent` |
-| Accent wash | `#fbe4dc` | `#3a2017` | `bg-accent-soft` |
+| **Accent (Wordle green)** | `#1f7a4d` (white ink) | `#2e9a63` (**ink text** — white fails AA on it) | `bg-accent text-accent-ink`, `--accent` |
+| Accent wash | `#e3efe7` | `#172a1f` | `bg-accent-soft` |
 | Tile correct / present / absent | `#1f7a4d / #c78c1c / #c9c9c3` | `#2e9a63 / #d9a033 / #3a3a37` | `var(--tile-*)` |
 | Washes (section tints) | green `#e3efe7`, ochre `#f3ead3`, accent `#fbe4dc` | `#172a1f / #2b2416 / #33201a` | `bg-wash-green / -ochre / -accent` |
 
 Rules:
-- **One accent per surface.** Vermilion is for the primary action, the live/active indicator and the
+- **One accent per surface.** The green is for the primary action, the live/active indicator and the
   current nav item. Never for body text, never for decoration. Tile colours are *semantic*, they are
   not accents.
 - **Washes add warmth.** A section or card may sit on a wash (green for wins/positive, ochre for
   streaks/warnings/placement, accent for danger-adjacent or "new"). Max one wash per viewport band.
 - **Ink blocks** (inverted black panels with chalk text) are the editorial drama device: hero
   statements, game-over, big numbers. Use sparingly; one per page.
+- **Targets:** every link or control accepts at least a 24×24 hit (WCAG 2.5.8); `.ink-link` gets it from an invisible ±6px pseudo-element, nav items from `py-2`.
 - Absent tiles carry `color: var(--tile-absent-text)`; correct/present tiles use white text.
 
 ## 2. Typography

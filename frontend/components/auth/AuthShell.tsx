@@ -101,7 +101,7 @@ export function AuthField({
         {...input}
         className={[
           'w-full border-0 border-b-2 border-border-default focus:border-accent bg-transparent px-0 py-3',
-          'text-base text-text-primary placeholder:text-text-ghost outline-none transition-colors duration-fast',
+          'text-base text-text-primary placeholder:text-text-tertiary outline-none transition-colors duration-fast',
           'disabled:opacity-40',
           className ?? '',
         ].join(' ')}
@@ -118,7 +118,7 @@ export function AuthError({ message }: { message: string }) {
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15 }}
-      className="flex items-start gap-2 text-sm text-accent"
+      className="flex items-start gap-2 text-sm text-[var(--red)]"
       role="alert"
     >
       <AlertCircle size={16} aria-hidden="true" className="flex-shrink-0 mt-0.5" />

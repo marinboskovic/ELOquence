@@ -1463,7 +1463,7 @@ function ReviewPage() {
                     aria-selected={active}
                     aria-label={label}
                     onClick={() => goToStep(i)}
-                    className="group py-2 px-0.5"
+                    className="group min-w-6 min-h-6 flex items-center py-2.5 px-0.5"
                   >
                     <span
                       className={clsx(

@@ -61,6 +61,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${schibsted.variable} ${plexSans.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-[100dvh] text-text-primary antialiased bg-bg-base">
+        <a href="#main" className="skip-link">Skip to content</a>
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
             if(localStorage.getItem('eloquence_colorblind')==='true')document.documentElement.classList.add('colorblind');
@@ -74,7 +75,7 @@ export default function RootLayout({
           <AuthProvider>
             <Navigation />
             <AnnouncementBanner />
-            <main className="relative z-10">{children}</main>
+            <main id="main" tabIndex={-1} className="relative z-10 outline-none">{children}</main>
             <InstallCapture />
           </AuthProvider>
         </MotionProvider>

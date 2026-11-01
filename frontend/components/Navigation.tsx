@@ -99,7 +99,7 @@ export default function Navigation() {
                 href={link.href}
                 aria-current={active ? 'page' : undefined}
                 className={clsx(
-                  'ink-link py-1 text-[13px] font-medium tracking-[0.01em] transition-colors duration-fast',
+                  'ink-link px-1 text-[13px] font-medium tracking-[0.01em] transition-colors duration-fast',
                   active ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'
                 )}
                 style={active ? { backgroundImage: 'linear-gradient(var(--accent), var(--accent))' } : undefined}
@@ -117,7 +117,7 @@ export default function Navigation() {
               {!isAdmin && tier && (
                 <Link
                   href={`/u/${encodeURIComponent(user.username)}`}
-                  className="flex items-baseline gap-2 no-underline group"
+                  className="flex items-baseline gap-2 py-2 no-underline group"
                   aria-label={`ELO rating ${Math.round(user.elo_rating)}, ${tier.name}. View your profile`}
                   title="Your public profile"
                 >
@@ -132,7 +132,7 @@ export default function Navigation() {
               <Link
                 href="/settings"
                 aria-current={pathname === '/settings' ? 'page' : undefined}
-                className={clsx('p-1.5 transition-colors duration-fast', pathname === '/settings' ? 'text-accent' : 'text-text-secondary hover:text-text-primary')}
+                className={clsx('p-2 transition-colors duration-fast', pathname === '/settings' ? 'text-accent' : 'text-text-secondary hover:text-text-primary')}
                 aria-label="Settings"
               >
                 <Settings size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -142,7 +142,7 @@ export default function Navigation() {
               </button>
             </>
           ) : (
-            <Link href="/login" className="ink-link text-[13px] font-medium text-text-primary">
+            <Link href="/login" className="ink-link px-1 text-[13px] font-medium text-text-primary">
               Sign in →
             </Link>
           )}

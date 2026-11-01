@@ -179,15 +179,15 @@ function OpenerResults({
           </div>
         </div>
         <div className="md:col-span-5 flex md:justify-end items-center gap-2 flex-wrap">
-          <Tag tone={report.facts.is_possible_answer ? 'green' : 'neutral'} className={clsx(!report.facts.is_possible_answer && 'border-current text-text-on-ink opacity-80')}>
+          <Tag tone={report.facts.is_possible_answer ? 'green' : 'on-ink'}>
             {report.facts.is_possible_answer ? 'possible answer' : 'not an answer word'}
           </Tag>
-          <Tag tone="neutral" className="border-current text-text-on-ink opacity-80">{report.facts.unique_letters} unique</Tag>
-          <Tag tone="neutral" className="border-current text-text-on-ink opacity-80">
+          <Tag tone="on-ink">{report.facts.unique_letters} unique</Tag>
+          <Tag tone="on-ink">
             {report.facts.vowels} vowel{report.facts.vowels === 1 ? '' : 's'}
           </Tag>
           {report.facts.repeated_letters > 0 && <Tag tone="ochre">{report.facts.repeated_letters} repeated</Tag>}
-          <Tag tone="neutral" className="border-current text-text-on-ink opacity-80">difficulty {formatInt(report.facts.difficulty_elo)}</Tag>
+          <Tag tone="on-ink">difficulty {formatInt(report.facts.difficulty_elo)}</Tag>
         </div>
       </div>
 
@@ -199,7 +199,7 @@ function OpenerResults({
           decimals={2}
           unit="bits"
           sub={`best ${report.best_entropy.toFixed(2)} · ${Math.round(report.efficiency * 100)}% of max`}
-          accent={verdict.state === 'absent' ? undefined : `var(--tile-${verdict.state})`}
+          accent={verdict.state === 'absent' ? undefined : `var(--text-${verdict.state})`}
           delay={0}
         />
         <StatTile label="rank" prefix="#" value={report.rank} decimals={0} sub={`of ${formatInt(report.total_guesses)} guesses`} delay={0.04} />
@@ -259,7 +259,7 @@ function OpenerResults({
                 </div>
                 <span className="font-mono text-[11px] text-text-tertiary truncate lowercase">
                   {b.examples.slice(0, 3).join(' · ')}
-                  {b.count > 3 && <span className="text-text-ghost"> · +{formatInt(b.count - 3)}</span>}
+                  {b.count > 3 && <span className="text-text-tertiary"> · +{formatInt(b.count - 3)}</span>}
                 </span>
               </div>
               <span className="font-mono text-sm font-semibold tabular text-text-primary w-12 text-right shrink-0">

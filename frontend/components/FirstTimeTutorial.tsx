@@ -138,7 +138,7 @@ export default function FirstTimeTutorial({ openSignal }: { openSignal?: number 
                 className="block h-1.5 transition-all duration-med ease-ink"
                 style={{
                   width: i === step ? 20 : 6,
-                  backgroundColor: i === step ? 'var(--accent)' : 'var(--text-ghost)',
+                  backgroundColor: i === step ? 'var(--accent)' : 'var(--text-tertiary)',
                 }}
               />
             ))}

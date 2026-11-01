@@ -54,7 +54,7 @@ export default function TilePaint({
         {challenge.prompt}
       </p>
 
-      <div style={{ fontSize: 12, color: 'var(--text-ghost)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         You guessed {challenge.guess} · target is {challenge.target}
       </div>
 
@@ -74,7 +74,7 @@ export default function TilePaint({
         ))}
       </motion.div>
 
-      <p style={{ fontSize: 11, color: 'var(--text-ghost)', margin: 0 }}>
+      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', margin: 0 }}>
         Tap each tile to cycle: gray → yellow → green
       </p>
 
