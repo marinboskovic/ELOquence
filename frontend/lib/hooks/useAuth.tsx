@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { authApi } from '../api';
 import {
+  clearLearnProgress,
   clearPerAccountCaches,
   clearTokens,
   getRefreshToken,
@@ -122,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     clearTokens();
     clearPerAccountCaches();
+    clearLearnProgress();
     cachedUser = null;
     setUserState(null);
   };

@@ -91,6 +91,13 @@ function notify() {
   });
 }
 
+/** Learn progress cache. Kept across sign-in (guest progress migrates up), dropped on sign-out. */
+export const LEARN_PROGRESS_KEY = 'eloquence.trainer.progress';
+
+export function clearLearnProgress(): void {
+  storage()?.removeItem(LEARN_PROGRESS_KEY);
+}
+
 /**
  * Keys that belong to a specific account and must not leak into the next
  * sign-in on a shared device (Learn progress, daily grid caches…).

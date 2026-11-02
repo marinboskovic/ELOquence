@@ -10,7 +10,7 @@
  *      mini-challenges. Closing the runner returns to the overview.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Lock } from 'lucide-react';
 import { Button, ButtonLink, Label, SplitWords, Reveal } from '@/components/ui';
@@ -20,9 +20,7 @@ import LessonRunner from './_components/challenges/LessonRunner';
 import ScrollArea from '@/components/ScrollArea';
 import { MODULES, TOTAL_LESSONS, findLesson, LESSON_ORDER } from './_lessons';
 import { learnApi } from '@/lib/api';
-import { hasSession } from '@/lib/session';
-
-const STORAGE_KEY = 'eloquence.trainer.progress';
+import { hasSession, LEARN_PROGRESS_KEY as STORAGE_KEY } from '@/lib/session';
 /* Guests can try this many lessons (Module 1); the rest need a free account. */
 const GUEST_FREE_LESSONS = 3;
 
@@ -122,14 +120,21 @@ export default function LearnPage() {
     };
   }, []);
 
+  // A guest can't have finished a locked lesson — anything there is a leftover
+  // account cache (e.g. the session expired without a sign-out), so hide it.
+  const shown = useMemo<Progress>(
+    () => (guest ? Object.fromEntries(Object.entries(progress).filter(([id]) => !guestLocked(id))) : progress),
+    [progress, guest, guestLocked],
+  );
+
   // Lesson is fully complete when the stored count ≥ its challenges length.
   const lessonDone = useCallback(
     (lessonId: string): boolean => {
       const lesson = findLesson(lessonId)?.lesson;
       if (!lesson) return false;
-      return (progress[lessonId] || 0) >= lesson.challenges.length;
+      return (shown[lessonId] || 0) >= lesson.challenges.length;
     },
-    [progress],
+    [shown],
   );
 
   const completedCount = LESSON_ORDER.filter((id) => lessonDone(id)).length;
@@ -305,12 +310,12 @@ export default function LearnPage() {
             {MODULES.map((mod, mi) => {
               // Aggregate challenge counts across the module: how many done, how many total.
               const modChallengesDone = mod.lessons.reduce(
-                (sum, l) => sum + Math.min(progress[l.id] || 0, l.challenges.length),
+                (sum, l) => sum + Math.min(shown[l.id] || 0, l.challenges.length),
                 0,
               );
               const modChallengesTotal = mod.lessons.reduce((sum, l) => sum + l.challenges.length, 0);
               const lessonsFullyDone = mod.lessons.filter(
-                (l) => (progress[l.id] || 0) >= l.challenges.length,
+                (l) => (shown[l.id] || 0) >= l.challenges.length,
               ).length;
               const totalInMod = mod.lessons.length;
               const modDone = modChallengesTotal > 0 && modChallengesDone >= modChallengesTotal;
@@ -341,7 +346,7 @@ export default function LearnPage() {
                     {/* Lessons as hair-ruled rows */}
                     <ul className="md:col-span-7 flex flex-col list-none m-0 p-0">
                       {mod.lessons.map((l, li) => {
-                        const challengesDone = Math.min(progress[l.id] || 0, l.challenges.length);
+                        const challengesDone = Math.min(shown[l.id] || 0, l.challenges.length);
                         const total = l.challenges.length;
                         const done = challengesDone >= total;
                         const inProgress = challengesDone > 0 && !done;
