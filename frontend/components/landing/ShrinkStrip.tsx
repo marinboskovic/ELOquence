@@ -100,7 +100,7 @@ export default function ShrinkStrip() {
     <section ref={ref} className="rule-top border-b border-border-subtle" aria-label="How the list of possible answers shrinks">
       <div className="max-w-6xl mx-auto w-full px-4 md:px-8 py-8 md:py-10 grid grid-cols-1 md:grid-cols-12 gap-x-8 gap-y-6">
         <div className="md:col-span-3">
-          <Label className="block">one real game</Label>
+          <Label className="block">a game of elimination</Label>
           <p className="mt-2 font-display text-display-sm text-text-primary text-balance">
             Every guess makes the list of possible answers shorter.
           </p>

@@ -4,7 +4,7 @@
  * Styling rules live in DESIGN.md; keep this file the single source for
  * button / tag / stat / section-head markup so pages stay consistent.
  */
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence, useInView, useReducedMotion, type HTMLMotionProps } from 'framer-motion';
 import clsx from 'clsx';
@@ -246,15 +246,17 @@ export function Reveal({ children, delay = 0, className, as = 'div', once = true
 }
 
 /** Headline whose words rise in one after another. */
-export function SplitWords({ text, className, delay = 0, as: Tag = 'h1' }: { text: string; className?: string; delay?: number; as?: 'h1' | 'h2' | 'p' }) {
+export function SplitWords({ text, className, style, delay = 0, as: Tag = 'h1' }: { text: string; className?: string; style?: CSSProperties; delay?: number; as?: 'h1' | 'h2' | 'p' }) {
   const words = text.split(' ');
   return (
-    <Tag className={className} aria-label={text}>
+    <Tag className={className} style={style} aria-label={text}>
       {words.map((w, i) => (
-        <span key={i} className="inline-block overflow-hidden align-bottom pr-[0.22em] last:pr-0">
+        // The mask needs room below the tight display line-height or descenders (g, p, y) get clipped;
+        // the negative margin gives that room back so line spacing is unchanged.
+        <span key={i} className="inline-block overflow-hidden align-bottom pr-[0.22em] last:pr-0 pb-[0.18em] -mb-[0.18em]">
           <motion.span
             className="inline-block"
-            initial={{ y: '110%' }}
+            initial={{ y: '130%' }}
             animate={{ y: 0 }}
             transition={{ duration: 0.6, ease: [0.2, 0.8, 0.2, 1], delay: delay + i * 0.045 }}
             aria-hidden="true"

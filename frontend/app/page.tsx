@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useReducedMotion } from 'framer-motion';
@@ -10,6 +10,7 @@ import Tile from '@/components/Tile';
 import TileSpinner from '@/components/TileSpinner';
 import { ButtonLink, CountUp, Label, MiniTiles, Reveal, SplitWords, Tag } from '@/components/ui';
 import ShrinkStrip from '@/components/landing/ShrinkStrip';
+import { scoreGuess } from '@/app/learn/_components/challenges/score';
 import { MODES, MOVE_CLASS } from '@/lib/copy';
 import { pulseApi, type Pulse } from '@/lib/api';
 
@@ -178,9 +179,58 @@ function AutoBoard() {
 // every item is a fact, and most of them change every day.
 // ---------------------------------------------------------------------------
 
-const OPENERS: [string, number][] = [
-  ['SOARE', 62], ['ROATE', 60], ['RAISE', 61], ['SLATE', 71], ['CRANE', 79], ['TRACE', 74], ['ADIEU', 160],
+// [word, expected answers left of 2,309, optional aside]. Numbers are the same "expected remaining"
+// the Lab shows; recompute if the answer list changes. Good openers and silly ones, shuffled together.
+type FirstWord = [string, number, string?];
+const GOOD_OPENERS: FirstWord[] = [
+  ['ROATE', 60], ['RAISE', 61], ['SOARE', 62], ['SLATE', 71], ['TRACE', 74], ['CRANE', 79],
 ];
+const FUNNY_OPENERS: FirstWord[] = [
+  ['NERDS', 121, 'better than ADIEU'],
+  ['ADIEU', 123, 'all those vowels, still meh'],
+  ['FARTS', 137, 'honestly not bad'],
+  ['PENIS', 141, 'a bold opener'],
+  ['PIZZA', 453, 'delicious, not informative'],
+  ['LLAMA', 434, 'spits out almost nothing'],
+  ['MUMMY', 818, 'three Ms, zero help'],
+  ['FUZZY', 854, 'about as clear as it sounds'],
+  ['XYLYL', 855, 'yes, it is allowed'],
+  ['QAJAQ', 923, 'a real word, sadly'],
+];
+
+function shuffled<T>(xs: T[]): T[] {
+  const a = [...xs];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const FIRST_WORDS: FirstWord[] = [...GOOD_OPENERS, ...FUNNY_OPENERS];
+
+// Ticker tiles show real Wordle feedback against an ordinary answer, so the strip reads like
+// actual play instead of a row of grays. Picked from the word itself (hash), not Math.random,
+// so server and client render the same colours.
+const TICKER_TARGETS = [
+  'PLAZA', 'CRATE', 'SHORE', 'TIGER', 'PLANT', 'STONE', 'HEART', 'BRAIN', 'MOUSE', 'LUNAR',
+  'DIRTY', 'NOISE', 'FUNNY', 'QUAKE', 'EXTRA', 'MAMBO', 'SALAD', 'FAIRY', 'DUSKY', 'PENNY',
+];
+
+function tickerStates(word: string): MiniState[] {
+  let h = 0;
+  for (const ch of word) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  let fallback: MiniState[] | null = null;
+  for (let k = 0; k < TICKER_TARGETS.length; k++) {
+    const target = TICKER_TARGETS[(h + k) % TICKER_TARGETS.length];
+    if (target === word) continue;
+    const s = scoreGuess(word, target) as MiniState[];
+    const lit = s.filter((x) => x !== 'absent').length;
+    if (lit >= 2 && lit <= 3) return s;
+    if (!fallback && lit >= 1) fallback = s;
+  }
+  return fallback ?? ['absent', 'absent', 'absent', 'absent', 'absent'];
+}
 
 type MiniState = 'correct' | 'present' | 'absent' | 'empty';
 type PulseItem = { key: string; tiles?: string; tileStates?: MiniState[]; text: React.ReactNode; href: string };
@@ -193,7 +243,7 @@ function fmtTime(sec: number) {
   return `${s} ${s === 1 ? 'second' : 'seconds'}`;
 }
 
-function pulseItems(p: Pulse | null): PulseItem[] {
+function pulseItems(p: Pulse | null, openers: FirstWord[]): PulseItem[] {
   const strong = (v: React.ReactNode) => <span className="text-text-primary font-semibold">{v}</span>;
   const items: PulseItem[] = [];
   if (p?.today_daily && p.today_daily.players === 0) {
@@ -232,15 +282,23 @@ function pulseItems(p: Pulse | null): PulseItem[] {
   }
   if (p && p.games_24h > 0) items.push({ key: 'g24', text: <>{strong(p.games_24h.toLocaleString('en-US'))} {p.games_24h === 1 ? 'game' : 'games'} played in the last 24 hours</>, href: '/play' });
   if (p && p.players_total > 0) items.push({ key: 'players', text: <>{strong(p.players_total.toLocaleString('en-US'))} {p.players_total === 1 ? 'player' : 'players'} on the ladder</>, href: '/leaderboard' });
-  // Always end with two first-word facts so the strip stays about the game, not only about numbers.
-  for (const [w, left] of OPENERS.slice(0, items.length ? 2 : OPENERS.length)) {
-    items.push({ key: `op-${w}`, tiles: w, text: <>{strong(w)} leaves {strong(left)} of 2,309 answers</>, href: `/lab?word=${w}` });
+  // Good and silly first words; the marquee shuffles them in among the live items.
+  for (const [w, left, aside] of openers) {
+    items.push({
+      key: `op-${w}`,
+      tiles: w,
+      text: <>{strong(w)} leaves {strong(left.toLocaleString('en-US'))} of 2,309 answers{aside ? <> · {aside}</> : null}</>,
+      href: `/lab?word=${w}`,
+    });
   }
   return items;
 }
 
 function PulseMarquee() {
   const [pulse, setPulse] = useState<Pulse | null>(null);
+  // Shuffle only after mount: a random order on the server would mismatch hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
     let alive = true;
     pulseApi
@@ -251,12 +309,16 @@ function PulseMarquee() {
       alive = false;
     };
   }, []);
-  const items = pulseItems(pulse);
+  // Live facts and first words all mixed together, a fresh order every visit.
+  const items = useMemo(() => {
+    const all = pulseItems(pulse, FIRST_WORDS);
+    return mounted ? shuffled(all) : all;
+  }, [pulse, mounted]);
   const line = (key: string, hidden?: boolean) => (
     <span key={key} className="flex shrink-0 items-center" aria-hidden={hidden || undefined}>
       {items.map((it) => (
         <Link key={it.key} href={it.href} className="flex items-center gap-3 px-6 md:px-9 no-underline hover:text-text-primary">
-          {it.tiles && <MiniTiles word={it.tiles} states={it.tileStates ?? ['absent', 'absent', 'absent', 'absent', 'absent']} size={18} gap={2} />}
+          {it.tiles && <MiniTiles word={it.tiles} states={it.tileStates ?? tickerStates(it.tiles)} size={18} gap={2} />}
           <span className="font-mono text-label uppercase text-text-secondary whitespace-nowrap">{it.text}</span>
           <span className="w-1.5 h-1.5 bg-accent ml-3" aria-hidden="true" />
         </Link>
@@ -274,12 +336,57 @@ function PulseMarquee() {
 }
 
 // ---------------------------------------------------------------------------
+// Hero headline — a different one on every visit
+// ---------------------------------------------------------------------------
+
+const HEADLINES = [
+  'Wordle, with a coach.',
+  'Competitive Wordle.',
+  'Wordle, but it has ELO.',
+  'Wordle, for people with too much free time.',
+  'Five letters. Six tries. One rating.',
+  'Your guesses, graded.',
+  'Wordle, with stakes.',
+  'Wordle, but someone is watching.',
+  'Information theory, disguised as a game.',
+  'Stop opening with PENIS.',
+  'Your streak is not a personality.',
+];
+
+const LAST_HEADLINE_KEY = 'eloquence:last-headline';
+
+/**
+ * Long lines (or one long word, which can't wrap) shrink a little so the hero stays 2–4 lines and
+ * inside its column. Words up to ~12 letters fit at this size; keep new headlines within that.
+ */
+function headlineStyle(text: string): CSSProperties | undefined {
+  const longestWord = Math.max(...text.split(' ').map((w) => w.length));
+  return text.length <= 22 && longestWord <= 8 ? undefined : { fontSize: 'clamp(3rem, 7vw, 6rem)' };
+}
+
+/** Picked after mount (random on the server would mismatch hydration); never repeats the last one. */
+function useRandomHeadline(): string | null {
+  const [headline, setHeadline] = useState<string | null>(null);
+  useEffect(() => {
+    let last = -1;
+    try { last = Number(localStorage.getItem(LAST_HEADLINE_KEY) ?? -1); } catch {}
+    const hasLast = Number.isInteger(last) && last >= 0 && last < HEADLINES.length;
+    let i = Math.floor(Math.random() * (HEADLINES.length - (hasLast ? 1 : 0)));
+    if (hasLast && i >= last) i += 1;
+    try { localStorage.setItem(LAST_HEADLINE_KEY, String(i)); } catch {}
+    setHeadline(HEADLINES[i]);
+  }, []);
+  return headline;
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function HomePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const headline = useRandomHeadline();
 
   useEffect(() => {
     if (!loading && user) {
@@ -301,11 +408,16 @@ export default function HomePage() {
       <section className="max-w-6xl mx-auto w-full px-4 md:px-8 pt-12 md:pt-20 pb-14 md:pb-24">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-10 md:gap-8 items-center">
           <div className="md:col-span-7 min-w-0">
-            <Label className="block mb-4">free · one word a day · no account needed</Label>
-            <SplitWords text="Wordle, with a coach." as="h1" className="font-display text-display-xl text-text-primary" />
+            <SplitWords
+              key={headline ?? ''}
+              text={headline ?? HEADLINES[0]}
+              as="h1"
+              className={`font-display text-display-xl text-text-primary ${headline ? '' : 'invisible'}`}
+              style={headlineStyle(headline ?? HEADLINES[0])}
+            />
             <Reveal delay={0.25}>
               <p className="mt-6 md:mt-8 text-lg md:text-xl text-text-secondary max-w-md leading-snug">
-                Play the daily word. Then see which guess cost you — and what a stronger one was.
+                Play a game. Then see which guess cost you — and what a stronger one was.
               </p>
             </Reveal>
             <Reveal delay={0.35} className="mt-8 md:mt-10 flex flex-wrap items-center gap-3">
@@ -316,14 +428,6 @@ export default function HomePage() {
               <ButtonLink href="/lab" size="lg" variant="secondary">
                 Try a first word
               </ButtonLink>
-            </Reveal>
-            <Reveal delay={0.45}>
-              <p className="mt-6 text-sm text-text-secondary">
-                Have an account?{' '}
-                <Link href="/login" className="ink-link font-semibold text-text-primary">
-                  Sign in
-                </Link>
-              </p>
             </Reveal>
           </div>
 
