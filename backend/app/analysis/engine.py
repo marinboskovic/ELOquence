@@ -184,8 +184,11 @@ def precompute_pattern_matrix() -> None:
     PATTERN_MATRIX = matrix
 
     # Atomic write: never leave a half-written .npy for the next boot to load.
+    # Save through a file handle: given a path, np.save appends ".npy" to any
+    # name not ending in it, so the rename below would miss the real file.
     tmp_path = cache_path.with_suffix(".npy.tmp")
-    np.save(tmp_path, matrix)
+    with open(tmp_path, "wb") as f:
+        np.save(f, matrix)
     tmp_path.replace(cache_path)
 
 
