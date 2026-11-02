@@ -21,7 +21,7 @@ import { errorMessage } from '@/lib/api';
  */
 
 const WORD = 'ENTER';
-const STATES: TileState[] = ['correct', 'absent', 'present', 'correct', 'tbd'];
+const STATES: TileState[] = ['correct', 'absent', 'present', 'correct', 'absent'];
 
 export function AuthShell({
   title,
@@ -64,7 +64,8 @@ export function AuthShell({
           ))}
         </div>
 
-        <Label className="hidden md:block">eloquence · wordle with a rating</Label>
+        {/* Bottom slot of the justify-between column; keeps the tiles centred. */}
+        <div className="hidden md:block" aria-hidden="true" />
       </aside>
 
       {/* ── Right: the form on paper ─────────────────────── */}

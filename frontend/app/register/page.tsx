@@ -42,7 +42,7 @@ function RegisterInner() {
     <AuthShell
       title="Create account"
       eyebrow="free account"
-      manifesto="Every guess is a move. Every game is rated."
+      manifesto="Your guesses, graded. Your rating, earned."
       footer={
         <>
           Already have an account?{' '}
@@ -76,7 +76,7 @@ function RegisterInner() {
           minLength={3}
           maxLength={30}
           autoComplete="username"
-          placeholder="wordsmith"
+          placeholder="e.g. wordleProMaster67"
           hint="The name other players see. You can change it later."
         />
         <AuthField
