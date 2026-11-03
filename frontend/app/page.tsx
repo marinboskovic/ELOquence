@@ -339,18 +339,20 @@ function PulseMarquee() {
 // Hero headline — a different one on every visit
 // ---------------------------------------------------------------------------
 
-const HEADLINES = [
-  'Wordle, with a coach.',
-  'Competitive Wordle.',
-  'Wordle, but it has ELO.',
-  'Wordle, for people with too much free time.',
-  'Five letters. Six tries. One rating.',
-  'Your guesses, graded.',
-  'Wordle, with stakes.',
-  'Wordle, but someone is watching.',
-  'Information theory, disguised as a game.',
-  'Stop opening with PENIS.',
-  'Your streak is not a personality.',
+// [headline, tail]. Every tail still says the one thing the page is for — play, then see which
+// guess cost you and what a stronger one was — but picks up where its headline left off.
+const HEADLINES: [string, string][] = [
+  ['Wordle, with a coach.', 'Play a game. The coach points at the guess that cost you — and shows what it would have played.'],
+  ['Competitive Wordle.', 'Play a game. Then see which guess cost you, and what a stronger one was. The rating comes after.'],
+  ['Wordle, but it has ELO.', 'Play a game. Then see which guess cost you, and what a stronger one was. Then we talk numbers.'],
+  ['Wordle, for people with too much free time.', 'Play a game. Then spend the rest of it finding out which guess cost you — and what a stronger one was.'],
+  ['Five letters. Six tries. One rating.', 'Play a game. After it, every guess gets a verdict, and the costly ones get a better word.'],
+  ['Your guesses, graded.', 'Play a game. Then see which guess cost you — and what a stronger one was. No red pen. Mostly.'],
+  ['Wordle, with stakes.', 'Play a game. Then see which guess cost you, and what a stronger one was. Nobody else has to know.'],
+  ['Wordle, but someone is watching.', 'Play a game. Then see which guess cost you — and what a stronger one was. We saw it too.'],
+  ['Information theory, disguised as a game.', 'Play a game. Then see which guess cost you, and what a stronger one was. The maths stays hidden until you ask.'],
+  ['Stop opening with PENIS.', 'Play a game. Then see which guess cost you (we both know which one) — and what a stronger one was.'],
+  ['Your streak is not a personality.', 'But do extend it today. Then see which guess cost you — and what a stronger one was. We will be gentle.'],
 ];
 
 const LAST_HEADLINE_KEY = 'eloquence:last-headline';
@@ -365,8 +367,8 @@ function headlineStyle(text: string): CSSProperties | undefined {
 }
 
 /** Picked after mount (random on the server would mismatch hydration); never repeats the last one. */
-function useRandomHeadline(): string | null {
-  const [headline, setHeadline] = useState<string | null>(null);
+function useRandomHeadline(): [string, string] | null {
+  const [headline, setHeadline] = useState<[string, string] | null>(null);
   useEffect(() => {
     let last = -1;
     try { last = Number(localStorage.getItem(LAST_HEADLINE_KEY) ?? -1); } catch {}
@@ -386,7 +388,8 @@ function useRandomHeadline(): string | null {
 export default function HomePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const headline = useRandomHeadline();
+  const pick = useRandomHeadline();
+  const [headline, tail] = pick ?? [null, HEADLINES[0][1]];
 
   useEffect(() => {
     if (!loading && user) {
@@ -410,15 +413,14 @@ export default function HomePage() {
           <div className="md:col-span-7 min-w-0">
             <SplitWords
               key={headline ?? ''}
-              text={headline ?? HEADLINES[0]}
+              text={headline ?? HEADLINES[0][0]}
               as="h1"
               className={`font-display text-display-xl text-text-primary ${headline ? '' : 'invisible'}`}
-              style={headlineStyle(headline ?? HEADLINES[0])}
+              style={headlineStyle(headline ?? HEADLINES[0][0])}
             />
             <Reveal delay={0.25}>
-              <p className="mt-6 md:mt-8 text-lg md:text-xl text-text-secondary max-w-md leading-snug">
-                Play a game. Then see which guess cost you — and what a stronger one was.
-              </p>
+              {/* Hidden with the headline until the pair is picked, so the two never mismatch. */}
+              <p className={`mt-6 md:mt-8 text-lg md:text-xl text-text-secondary max-w-md leading-snug ${headline ? '' : 'invisible'}`}>{tail}</p>
             </Reveal>
             <Reveal delay={0.35} className="mt-8 md:mt-10 flex flex-wrap items-center gap-3">
               <ButtonLink href="/play" size="lg">
