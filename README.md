@@ -3,7 +3,7 @@
 Competitive Wordle with an ELO ladder, a post-game move analyzer, an AI coach — and, since 2.0, an
 interactive Opener Lab, public profiles, monthly seasons and proper account security.
 
-**Live:** https://el-oquence.vercel.app · **Changes:** [CHANGELOG.md](CHANGELOG.md)
+**Live:** https://el-oquence.vercel.app
 
 ## What it does
 
