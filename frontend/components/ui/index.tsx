@@ -82,12 +82,16 @@ export function Label({ children, className }: { children: React.ReactNode; clas
   return <span className={clsx('font-mono text-label uppercase', !hasColour && 'text-text-secondary', className)}>{children}</span>;
 }
 
-type Tone = 'neutral' | 'green' | 'ochre' | 'accent' | 'ink' | 'on-ink';
+type Tone = 'neutral' | 'green' | 'ochre' | 'accent' | 'warn' | 'ink' | 'on-ink';
+// Toned tags carry a translucent ink edge: on a wash section (dark mode especially) a
+// wash-on-wash tag with no border disappeared, and the subtle hairline matched the wash.
 const TONE: Record<Tone, string> = {
-  neutral: 'border-border-subtle text-text-secondary',
-  green: 'bg-wash-green border-transparent text-text-primary',
-  ochre: 'bg-wash-ochre border-transparent text-text-primary',
-  accent: 'bg-accent-soft border-transparent text-text-primary',
+  neutral: 'border-[var(--tag-border)] text-text-secondary',
+  green: 'bg-wash-green border-[var(--tag-border)] text-text-primary',
+  ochre: 'bg-wash-ochre border-[var(--tag-border)] text-text-primary',
+  accent: 'bg-accent-soft border-[var(--tag-border)] text-text-primary',
+  // Danger-adjacent wash (the accent wash is green in light mode, so "bad" needs its own tone).
+  warn: 'bg-wash-accent border-[var(--tag-border)] text-text-primary',
   ink: 'bg-bg-ink border-transparent text-text-on-ink',
   // Outlined tag for use inside an ink block (inverted surface).
   'on-ink': 'bg-transparent border-[var(--text-on-ink)] text-text-on-ink',

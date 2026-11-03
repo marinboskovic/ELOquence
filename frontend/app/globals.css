@@ -29,6 +29,7 @@
   --border-default: #121212;
   --border-strong:  #121212;
   --border-focus:   #1f7a4d;
+  --tag-border:     rgba(18, 18, 18, 0.22);   /* edge for toned tags so they read on washes */
 
   /* Tiles — the only place the game's three colours live */
   --tile-correct:      #1f7a4d;
@@ -115,6 +116,7 @@
   --border-subtle:  #2b2b28;
   --border-default: #f1f1ec;
   --border-strong:  #f1f1ec;
+  --tag-border:     rgba(241, 241, 236, 0.3);
 
   --tile-correct:      #2e9a63;
   --tile-present:      #c4901f; /* kept close to the light value: lighter ochre drops white text to 2.3:1 */
