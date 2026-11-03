@@ -149,11 +149,12 @@ export default function ShrinkStrip() {
                 </div>
 
                 {/* the count */}
-                <div className="text-right w-[5.5ch] md:w-[7ch] shrink-0">
+                {/* 7ch fits "2,309"; the note wraps on phones so the row never spills past the gutter. */}
+                <div className="text-right w-[7ch] shrink-0">
                   <div className="font-display font-black tabular leading-none tracking-[-0.03em] text-xl md:text-2xl text-text-primary">
                     <CountDown from={from} to={s.left} active={active} reduced={reduced} />
                   </div>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-secondary mt-1 whitespace-nowrap">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-text-secondary mt-1 leading-tight md:whitespace-nowrap">
                     {active ? s.note : i === 0 ? s.note : 'left'}
                   </div>
                 </div>

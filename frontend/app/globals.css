@@ -87,7 +87,10 @@
   --dur-slow: 480ms;
 
   /* Layout */
-  --tile-size:  clamp(52px, calc((100dvh - 300px) / 7), 64px);
+  /* Capped by height (header + keyboard + the mobile tab bar must still fit six rows)
+     AND by width (five tiles + gaps inside the game page's 8px gutters), so short or
+     narrow phones never push the board under the keyboard or past the edges. */
+  --tile-size:  clamp(40px, min(calc((100dvh - var(--tabbar-h) - 300px) / 7), calc((100vw - 40px) / 5)), 64px);
   --tile-gap:   clamp(5px, 0.7vw, 8px);
   --key-height: clamp(44px, 7.5vw, 54px);
   --rule: 1px;
@@ -114,7 +117,7 @@
   --border-strong:  #f1f1ec;
 
   --tile-correct:      #2e9a63;
-  --tile-present:      #d9a033;
+  --tile-present:      #c4901f; /* kept close to the light value: lighter ochre drops white text to 2.3:1 */
   --tile-absent:       #3a3a37;
   --tile-absent-text:  #a6a69f;
   --tile-empty-bg:     transparent;

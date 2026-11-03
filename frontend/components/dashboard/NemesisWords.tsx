@@ -70,10 +70,10 @@ export default function NemesisWords({ words, loading = false, delay = 0 }: Neme
               <motion.li
                 key={n.word}
                 variants={staggerChild}
-                className="rule-hair flex items-center gap-4 py-3 hover:bg-bg-elevated transition-colors duration-fast -mx-2 px-2"
+                className="rule-hair flex items-center gap-3 sm:gap-4 py-3 hover:bg-bg-elevated transition-colors duration-fast -mx-2 px-2"
               >
                 <MiniTiles word={n.word.toUpperCase().slice(0, 5)} size={22} />
-                <span className="text-sm text-text-secondary whitespace-nowrap">
+                <span className="text-sm text-text-secondary min-w-0">
                   beat you <span className="font-mono tabular font-semibold text-text-primary">{n.losses}</span> time{n.losses !== 1 ? 's' : ''}
                 </span>
                 <Detail>

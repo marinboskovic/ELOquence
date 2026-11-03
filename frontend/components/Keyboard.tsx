@@ -85,7 +85,7 @@ export default function Keyboard({
   return (
     <div className="flex flex-col items-center w-full max-w-[520px]" style={{ gap: '6px' }}>
       {ROWS.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex w-full justify-center" style={{ gap: '6px' }}>
+        <div key={rowIndex} className="flex w-full justify-center" style={{ gap: 'clamp(4px, 1.5vw, 6px)' }}>
           {row.map((key) => {
             const isSpecial = key === 'ENTER' || key === 'BACK';
             return (
@@ -107,11 +107,12 @@ export default function Keyboard({
                 className={clsx(
                   'flex items-center justify-center font-display font-bold text-sm select-none cursor-pointer transition-colors duration-fast',
                   'active:!bg-[var(--key-pressed-bg)] active:!text-[var(--bg-base)]',
-                  isSpecial ? 'flex-[1.5] text-[11px] font-mono uppercase tracking-[0.12em]' : 'flex-1'
+                  isSpecial ? 'flex-[1.5] text-[clamp(9px,3.2vw,11px)] font-mono uppercase tracking-[0.12em]' : 'flex-1'
                 )}
                 style={{
                   height: 'var(--key-height)',
-                  minWidth: isSpecial ? '54px' : '30px',
+                  // Floors scale with the viewport so the 10-key row fits a 320px phone.
+                  minWidth: isSpecial ? 'min(54px, 14vw)' : 'min(30px, 7.2vw)',
                   ...getKeyStyle(key),
                 }}
                 aria-label={getAriaLabel(key)}

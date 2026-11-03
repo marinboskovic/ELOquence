@@ -81,10 +81,10 @@ function SkeletonRows({ count, cols }: { count: number; cols: number }) {
     <>
       {Array.from({ length: count }).map((_, i) => (
         <tr key={i} className="border-b border-border-subtle">
-          <td className="py-3 pl-3 pr-2 w-14"><div className="skeleton bg-bg-muted h-3 w-6" /></td>
-          <td className="py-3 pr-4"><div className="skeleton bg-bg-muted h-4 w-32" /></td>
+          <td className="py-3 pl-2 sm:pl-3 pr-2 w-10 sm:w-14"><div className="skeleton bg-bg-muted h-3 w-6" /></td>
+          <td className="py-3 pr-2 sm:pr-4"><div className="skeleton bg-bg-muted h-4 w-32" /></td>
           {Array.from({ length: cols - 2 }).map((__, j) => (
-            <td key={j} className="py-3 pr-4"><div className="skeleton bg-bg-muted h-3 w-10 ml-auto" /></td>
+            <td key={j} className="py-3 pr-2 sm:pr-4"><div className="skeleton bg-bg-muted h-3 w-10 ml-auto" /></td>
           ))}
         </tr>
       ))}
@@ -138,12 +138,12 @@ function OpenersPanel() {
       <table className="w-full border-collapse">
         <thead>
           <tr className="rule-top">
-            <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
-            <th scope="col" className={clsx(TH, 'pr-4')}><Label><Hint term="opener">first word</Hint></Label></th>
-            <th scope="col" className={clsx(TH, 'pr-4 hidden md:table-cell w-[28%]')}><Label>how often</Label></th>
-            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label><Hint title="Used" body="Share of all finished games that started with this word.">used</Hint></Label></th>
-            <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label><Hint title="Solved" body="How often games that started with this word were solved.">solved</Hint></Label></th>
-            <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label><Hint title="Guesses" body="Average number of guesses to solve, when this first word was used.">guesses</Hint></Label></th>
+            <th scope="col" className={clsx(TH, 'pl-2 sm:pl-3 pr-2 w-10 sm:w-14')}><Label>#</Label></th>
+            <th scope="col" className={clsx(TH, 'pr-2 sm:pr-4')}><Label><Hint term="opener">first word</Hint></Label></th>
+            <th scope="col" className={clsx(TH, 'pr-2 sm:pr-4 hidden md:table-cell w-[28%]')}><Label>how often</Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-4 w-11 sm:w-16')}><Label><Hint title="Used" body="Share of all finished games that started with this word.">used</Hint></Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-4 w-11 sm:w-16')}><Label><Hint title="Solved" body="How often games that started with this word were solved.">solved</Hint></Label></th>
+            <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-3 w-10 sm:w-14')}><Label><Hint title="Guesses" body="Average number of guesses to solve, when this first word was used.">guesses</Hint></Label></th>
           </tr>
         </thead>
         <tbody>
@@ -154,9 +154,9 @@ function OpenersPanel() {
           ) : (
             rows.map((r) => (
               <tr key={r.opener} className="border-b border-border-subtle hover:bg-bg-elevated transition-colors duration-fast">
-                <td className="py-3 pl-3 pr-2"><Rank rank={r.rank} /></td>
-                <td className="py-3 pr-4"><MiniTiles word={r.opener.toUpperCase().slice(0, 5)} size={22} /></td>
-                <td className="py-3 pr-4 hidden md:table-cell">
+                <td className="py-3 pl-2 sm:pl-3 pr-2"><Rank rank={r.rank} /></td>
+                <td className="py-3 pr-2 sm:pr-4"><MiniTiles word={r.opener.toUpperCase().slice(0, 5)} size={22} /></td>
+                <td className="py-3 pr-2 sm:pr-4 hidden md:table-cell">
                   <div className="relative h-4 w-full">
                     <motion.span
                       className="absolute left-0 top-1/2 h-0.5 bg-bg-ink"
@@ -168,9 +168,9 @@ function OpenersPanel() {
                     />
                   </div>
                 </td>
-                <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{r.popularity_pct}%</td>
-                <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-primary">{r.solve_rate}%</td>
-                <td className="py-3 pr-3 text-right font-mono text-xs tabular text-text-secondary">
+                <td className="py-3 pr-2 sm:pr-4 text-right font-mono text-xs tabular text-text-secondary">{r.popularity_pct}%</td>
+                <td className="py-3 pr-2 sm:pr-4 text-right font-mono text-xs tabular text-text-primary">{r.solve_rate}%</td>
+                <td className="py-3 pr-2 sm:pr-3 text-right font-mono text-xs tabular text-text-secondary">
                   {r.avg_guesses_win != null ? r.avg_guesses_win.toFixed(1) : '—'}
                 </td>
               </tr>
@@ -206,17 +206,17 @@ function EloGain({ gain }: { gain: number }) {
 function SeasonRow({ entry, isMe, pinned = false }: { entry: SeasonEntry; isMe: boolean; pinned?: boolean }) {
   return (
     <motion.tr variants={staggerChild} className={rowClass(entry.rank, isMe, pinned)}>
-      <td className={clsx('py-3 pr-2 w-14', isMe ? 'pl-2' : 'pl-3')}><Rank rank={entry.rank} /></td>
-      <td className="py-3 pr-4">
-        <span className="inline-flex items-center gap-2 min-w-0">
+      <td className={clsx('py-3 pr-2 w-10 sm:w-14', isMe ? 'pl-2' : 'pl-2 sm:pl-3')}><Rank rank={entry.rank} /></td>
+      <td className="py-3 pr-2 sm:pr-4 max-w-0">
+        <span className="flex items-center gap-2 min-w-0">
           <TierDot elo={Math.round(entry.elo_rating)} />
           <Name username={entry.username} isMe={isMe} />
         </span>
       </td>
-      <td className="py-3 pr-4 text-right"><EloGain gain={entry.elo_gain} /></td>
-      <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.games}</td>
-      <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.wins}</td>
-      <td className="py-3 pr-3 text-right font-mono text-xs tabular text-text-secondary hidden sm:table-cell">
+      <td className="py-3 pr-2 sm:pr-4 text-right"><EloGain gain={entry.elo_gain} /></td>
+      <td className="py-3 pr-2 sm:pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.games}</td>
+      <td className="py-3 pr-2 sm:pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.wins}</td>
+      <td className="py-3 pr-2 sm:pr-3 text-right font-mono text-xs tabular text-text-secondary hidden sm:table-cell">
         {entry.peak_elo != null ? Math.round(entry.peak_elo) : '—'}
       </td>
     </motion.tr>
@@ -316,12 +316,12 @@ function SeasonPanel({ currentUserId }: { currentUserId: string | null }) {
         <table className="w-full border-collapse">
           <thead>
             <tr className="rule-top">
-              <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
-              <th scope="col" className={clsx(TH, 'pr-4')}><Label>player</Label></th>
-              <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label><Hint title="Gained" body="How much this player's rating went up (or down) in Ranked games this month.">gained</Hint></Label></th>
-              <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>games</Label></th>
-              <th scope="col" className={clsx(TH_R, 'pr-4 w-14')}><Label>wins</Label></th>
-              <th scope="col" className={clsx(TH_R, 'pr-3 w-16 hidden sm:table-cell')}><Label><Hint title="Best" body="The highest rating this player reached this month.">best</Hint></Label></th>
+              <th scope="col" className={clsx(TH, 'pl-2 sm:pl-3 pr-2 w-10 sm:w-14')}><Label>#</Label></th>
+              <th scope="col" className={clsx(TH, 'pr-2 sm:pr-4')}><Label>player</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-4 w-14 sm:w-20')}><Label><Hint title="Gained" body="How much this player's rating went up (or down) in Ranked games this month.">gained</Hint></Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-4 w-11 sm:w-16')}><Label>games</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-4 w-10 sm:w-14')}><Label>wins</Label></th>
+              <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-3 w-11 sm:w-16 hidden sm:table-cell')}><Label><Hint title="Best" body="The highest rating this player reached this month.">best</Hint></Label></th>
             </tr>
           </thead>
           {loading ? (
@@ -468,11 +468,11 @@ function LeaderboardInner() {
           <table className="w-full border-collapse">
             <thead>
               <tr className="rule-top">
-                <th scope="col" className={clsx(TH, 'pl-3 pr-2 w-14')}><Label>#</Label></th>
-                <th scope="col" className={clsx(TH, 'pr-4')}><Label>player</Label></th>
-                <th scope="col" className={clsx(TH_R, 'pr-4 w-20')}><Label><Hint term="rating">rating</Hint></Label></th>
-                <th scope="col" className={clsx(TH_R, 'pr-4 w-16')}><Label>games</Label></th>
-                <th scope="col" className={clsx(TH_R, 'pr-3 w-14')}><Label><Hint title="Solved" body="Share of Ranked games this player solved.">solved</Hint></Label></th>
+                <th scope="col" className={clsx(TH, 'pl-2 sm:pl-3 pr-2 w-10 sm:w-14')}><Label>#</Label></th>
+                <th scope="col" className={clsx(TH, 'pr-2 sm:pr-4')}><Label>player</Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-4 w-14 sm:w-20')}><Label><Hint term="rating">rating</Hint></Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-4 w-11 sm:w-16')}><Label>games</Label></th>
+                <th scope="col" className={clsx(TH_R, 'pr-2 sm:pr-3 w-10 sm:w-14')}><Label><Hint title="Solved" body="Share of Ranked games this player solved.">solved</Hint></Label></th>
               </tr>
             </thead>
             {loading ? (
@@ -488,18 +488,18 @@ function LeaderboardInner() {
                   const winRate = entry.games_played > 0 ? Math.round((entry.wins / entry.games_played) * 100) : 0;
                   return (
                     <motion.tr key={entry.user_id} variants={staggerChild} className={rowClass(entry.rank, isMe)}>
-                      <td className={clsx('py-3 pr-2 w-14 align-middle', isMe ? 'pl-2' : 'pl-3')}><Rank rank={entry.rank} /></td>
-                      <td className="py-3 pr-4">
-                        <span className="inline-flex items-center gap-2 min-w-0">
+                      <td className={clsx('py-3 pr-2 w-10 sm:w-14 align-middle', isMe ? 'pl-2' : 'pl-2 sm:pl-3')}><Rank rank={entry.rank} /></td>
+                      <td className="py-3 pr-2 sm:pr-4 max-w-0">
+                        <span className="flex items-center gap-2 min-w-0">
                           <TierDot elo={Math.round(entry.elo_rating)} />
                           <Name username={entry.username} isMe={isMe} />
                         </span>
                       </td>
-                      <td className="py-3 pr-4 text-right">
+                      <td className="py-3 pr-2 sm:pr-4 text-right">
                         <span className="font-display font-bold text-base tabular text-text-primary">{Math.round(entry.elo_rating)}</span>
                       </td>
-                      <td className="py-3 pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.games_played}</td>
-                      <td className="py-3 pr-3 text-right font-mono text-xs tabular text-text-secondary">{winRate}%</td>
+                      <td className="py-3 pr-2 sm:pr-4 text-right font-mono text-xs tabular text-text-secondary">{entry.games_played}</td>
+                      <td className="py-3 pr-2 sm:pr-3 text-right font-mono text-xs tabular text-text-secondary">{winRate}%</td>
                     </motion.tr>
                   );
                 })}
