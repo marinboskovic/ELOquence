@@ -48,24 +48,6 @@ alembic upgrade head && uvicorn app.main:app --reload
 cd frontend && pnpm install && pnpm dev
 ```
 
-## Tests
-
-```bash
-cd backend && pytest            # needs Postgres; TEST_DATABASE_URL overrides the default test DB
-cd frontend && npx tsc --noEmit && pnpm lint && pnpm build
-```
-
-CI runs both on every push (`.github/workflows/ci.yml`).
-
-## Configuration
-
-Every variable is documented in [`.env.example`](.env.example). Production notes:
-
-- `ENV=production` makes the backend refuse to boot with the default `JWT_SECRET` and disables `/docs`.
-- `CLIENT_IP_HEADER=Fly-Client-IP` (set in `fly.toml`) is how rate limits see the real client IP.
-- `FRONTEND_URL` is used for Google's redirect URI and the password-reset links.
-- `RESEND_API_KEY` enables password-reset e-mails; without it the link is printed to the backend log.
-
 ## Project layout
 
 ```
