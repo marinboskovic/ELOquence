@@ -62,6 +62,10 @@ function setDomTheme(resolved: 'light' | 'dark') {
   } else {
     delete root.dataset.theme;
   }
+  // The <meta theme-color> tags from layout.tsx only follow the OS; a theme forced
+  // in Settings must recolour the browser chrome too, or a light bar sits on a dark page.
+  const colour = resolved === 'dark' ? '#121211' : '#f3f3f1';
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', colour));
 }
 
 // Module-level listener so that only one `change` handler is attached no

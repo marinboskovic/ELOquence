@@ -24,7 +24,7 @@ Precedence: this file → `app/globals.css` tokens → `tailwind.config.ts`. Nev
 | Rule, ink | `#121212` | `#f1f1ec` | `border-border-default` |
 | **Accent (Wordle green)** | `#1f7a4d` (white ink) | `#2e9a63` (**ink text** — white fails AA on it) | `bg-accent text-accent-ink`, `--accent` |
 | Accent wash | `#e3efe7` | `#172a1f` | `bg-accent-soft` |
-| Tile correct / present / absent | `#1f7a4d / #c78c1c / #c9c9c3` | `#2e9a63 / #d9a033 / #3a3a37` | `var(--tile-*)` |
+| Tile correct / present / absent | `#1f7a4d / #c78c1c / #c9c9c3` | `#2e9a63 / #c4901f / #3a3a37` | `var(--tile-*)` |
 | Washes (section tints) | green `#e3efe7`, ochre `#f3ead3`, accent `#fbe4dc` | `#172a1f / #2b2416 / #33201a` | `bg-wash-green / -ochre / -accent` |
 
 Rules:

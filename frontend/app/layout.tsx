@@ -68,7 +68,10 @@ export default function RootLayout({
             if(localStorage.getItem('eloquence_colorblind')==='true')document.documentElement.classList.add('colorblind');
             if(localStorage.getItem('eloquence_reduced_motion')==='true')document.documentElement.classList.add('reduce-motion');
             var t=localStorage.getItem('eloquence_theme');
-            if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.setAttribute('data-theme','dark');
+            var dark=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if(dark)document.documentElement.setAttribute('data-theme','dark');
+            // theme-color metas above follow the OS only; a forced theme must recolour the browser bar too.
+            document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.setAttribute('content',dark?'#121211':'#f3f3f1')});
             if(localStorage.getItem('eloquence_keyboard_only')==='true')document.documentElement.setAttribute('data-keyboard-only','true');
           })();
         `}} />

@@ -76,7 +76,10 @@ export function ButtonLink({ variant = 'primary', size = 'md', className, childr
 /* ───────────────────────── Labels & tags ───────────────────────── */
 
 export function Label({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <span className={clsx('font-mono text-label uppercase text-text-secondary', className)}>{children}</span>;
+  // A colour passed in (e.g. text-text-on-ink on an ink band) must win; with both classes
+  // present the stylesheet order decided, and the default grey won on dark bands.
+  const hasColour = /(^|\s)!?text-(text-|accent|cls-)/.test(className ?? '');
+  return <span className={clsx('font-mono text-label uppercase', !hasColour && 'text-text-secondary', className)}>{children}</span>;
 }
 
 type Tone = 'neutral' | 'green' | 'ochre' | 'accent' | 'ink' | 'on-ink';
