@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field, field_validator
 
 # Hosts browsers actually use for Web Push. The server POSTs to the endpoint
-# on demand (``/push/test``), so without an allowlist it is an SSRF primitive.
+# on demand (a push), so without an allowlist it is an SSRF primitive.
 _PUSH_HOST_SUFFIXES = (
     "fcm.googleapis.com",
     "android.googleapis.com",
@@ -68,12 +68,6 @@ class PushVapidPublicKey(BaseModel):
     """Response for GET /push/vapid-public-key."""
     public_key: str
     enabled: bool
-
-
-class PushTestResponse(BaseModel):
-    """Response for POST /push/test."""
-    sent: int
-    removed: int = 0
 
 
 class NotificationPreferencesPayload(BaseModel):

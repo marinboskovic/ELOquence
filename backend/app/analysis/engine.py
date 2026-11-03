@@ -629,7 +629,6 @@ def bot_solve_path(
     guesses: list[str],
     patterns: list[int],
     hard_mode: bool = False,
-    use_past_solutions: bool = False,
 ) -> list[str]:
     """Simulate the bot's optimal solve path from the game's opening.
 
@@ -641,7 +640,6 @@ def bot_solve_path(
         guesses: Actual player guesses (uppercase), in order.
         patterns: Corresponding ternary-encoded patterns.
         hard_mode: Use hard-mode constraints for bot selection.
-        use_past_solutions: If True, consider past solutions in the pool.
 
     Returns:
         List of bot-optimal words, one per turn (same length as guesses).

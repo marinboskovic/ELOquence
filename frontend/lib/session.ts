@@ -60,18 +60,6 @@ export function hasSession(): boolean {
   return !!getAccessToken() || !!getRefreshToken();
 }
 
-/** Decode the JWT payload without verifying (for expiry hints only). */
-export function accessTokenExpiresAt(): number | null {
-  const token = getAccessToken();
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
-}
-
 // ── Change notifications (same tab) ──────────────────────────────────────
 type Listener = () => void;
 const listeners = new Set<Listener>();

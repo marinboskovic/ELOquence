@@ -23,17 +23,6 @@ export const LESSON_ORDER: string[] = MODULES.flatMap((m) =>
   m.lessons.map((l) => l.id),
 );
 
-export function lessonLocation(lessonId: string): { moduleIdx: number; lessonIdx: number } | null {
-  for (let mi = 0; mi < MODULES.length; mi++) {
-    for (let li = 0; li < MODULES[mi].lessons.length; li++) {
-      if (MODULES[mi].lessons[li].id === lessonId) {
-        return { moduleIdx: mi, lessonIdx: li };
-      }
-    }
-  }
-  return null;
-}
-
 export function findLesson(lessonId: string) {
   for (const m of MODULES) {
     const l = m.lessons.find((x) => x.id === lessonId);

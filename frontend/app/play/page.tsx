@@ -237,7 +237,6 @@ export default function PlayPage() {
       } else {
         const res = await gamesApi.create({
           mode: modeId,
-          word_pool: modeId === 'competitive' ? 'competitive' : 'standard',
           hard_mode: settings.hardMode,
         });
         gameId = res.data.id;

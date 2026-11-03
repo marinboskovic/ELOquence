@@ -96,10 +96,6 @@ export function MiniWord({
   );
 }
 
-/** Micro-label used above numbers and table columns (the kit's mono Label). */
-export function MicroLabel({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <Label className={className}>{children}</Label>;
-}
 
 /**
  * Headline number: hair rule + mono label + display number. Numeric values

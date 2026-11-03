@@ -153,8 +153,6 @@ export interface SectionDef {
   items: FAQItem[];
 }
 
-/** "Part 01", "Part 02", … from the section's position — sections are ordered beginner-first. */
-export const partLabel = (i: number) => `Part ${String(i + 1).padStart(2, '0')}`;
 
 /* ------------------------------------------------------------------ */
 /*  Section data                                                        */
@@ -445,8 +443,8 @@ export const SECTIONS: SectionDef[] = [
               {(
                 [
                   { cls: 'brilliant', pct: '> 100%', w: 100 },
-                  { cls: 'best', pct: '95–100%', w: 97 },
-                  { cls: 'good', pct: '85–95%', w: 90 },
+                  { cls: 'best', pct: '97–100%', w: 97 },
+                  { cls: 'good', pct: '85–97%', w: 90 },
                   { cls: 'okay', pct: '70–85%', w: 77 },
                   { cls: 'inaccuracy', pct: '50–70%', w: 60 },
                   { cls: 'mistake', pct: '30–50%', w: 40 },
@@ -469,7 +467,8 @@ export const SECTIONS: SectionDef[] = [
               ))}
             </div>
             <p className="font-sans text-xs text-text-secondary leading-relaxed">
-              The percentage is efficiency: how much of the best available narrowing your guess achieved.{' '}
+              The percentage is efficiency: how much of the best available narrowing your guess achieved
+              (with ten or fewer words left the bar is a little lower: 90 / 75 / 60 / 40 / 30).{' '}
               <span className="font-semibold text-text-primary">Brilliant</span> is genuinely rare — it means you found
               a word the engine under-rated. When you see it, it is real.
             </p>
@@ -736,19 +735,6 @@ export const SECTIONS: SectionDef[] = [
           </div>
         ),
       },
-      {
-        q: 'What does "expected steps until solution" mean?',
-        plain:
-          'This is the bot\'s estimate of how many more guesses the average player would need from this point in the game, given the remaining words. If it says 1.8, the bot expects most paths from here to end in under 2 moves. It is a forward-looking measure: lower is better.',
-        a: (
-          <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            This is the bot&apos;s estimate of how many more guesses the average player would need
-            from this point in the game, given the remaining words. If it says 1.8, the bot expects
-            most paths from here to end in under 2 moves. It is a forward-looking measure: lower is
-            better. A well-placed guess drops it by more than 1; a wasteful guess barely moves it.
-          </p>
-        ),
-      },
     ],
   },
 
@@ -817,14 +803,14 @@ export const SECTIONS: SectionDef[] = [
       {
         q: 'Hard mode still allows reusing gray letters — why?',
         plain:
-          'Hard mode only enforces the positive constraints: use your greens and yellows. It does not force you to exclude gray letters. That asymmetry is a deliberate design choice in Wordle itself. ELOquence flags gray-letter reuse as a soft constraint violation in the analysis, but it does not prevent you from submitting the guess.',
+          'Hard mode only enforces the positive constraints: use your greens and yellows. It does not force you to exclude gray letters. That asymmetry is a deliberate design choice in Wordle itself. ELOquence still accepts the guess, but the review treats reusing a gray letter as a hard constraint violation and labels the move Big miss.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
             Hard mode only enforces the positive constraints: use your greens and yellows. It does
             not force you to exclude gray letters. That asymmetry is a deliberate design choice in
-            Wordle itself — ELOquence follows the same rules. Reusing a gray letter is allowed but
-            flagged as a soft constraint violation in the post-game analysis, since it wastes
-            information you already had.
+            Wordle itself — ELOquence follows the same rules. Reusing a gray letter is still
+            allowed, but the review treats it as a hard constraint violation — you threw away
+            information you already had — and labels the move <ClassBadge cls="blunder" />.
           </p>
         ),
       },
@@ -939,7 +925,7 @@ export const SECTIONS: SectionDef[] = [
       {
         q: 'What is a constraint violation?',
         plain:
-          'A hard violation means you ignored information you definitely had — for example, reusing a gray letter or placing a yellow letter in the same position it already appeared. A soft violation means you omitted a letter you know is in the word. Soft violations are sometimes strategically correct — the escape-word play deliberately does this.',
+          'A hard violation means you ignored information you definitely had — for example, reusing a gray letter or placing a yellow letter in the same position it already appeared. It is labelled Big miss. A soft violation means you omitted a letter you know is in the word. Soft violations are sometimes strategically correct — the escape-word play deliberately does this.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
@@ -952,7 +938,7 @@ export const SECTIONS: SectionDef[] = [
               <p className="font-sans text-xs text-text-secondary leading-relaxed">
                 You used a gray letter again, or put a yellow letter in the exact position it
                 already appeared. This is never strategically correct — it throws away guaranteed
-                information. Marked with a <ClassBadge cls="miss" /> badge.
+                information. Labelled <ClassBadge cls="blunder" />.
               </p>
             </div>
             <InnerCard className="space-y-2">
@@ -1022,7 +1008,7 @@ export const SECTIONS: SectionDef[] = [
       {
         q: "What's on the review page?",
         plain:
-          'The review page is your main post-game tool. It walks you through the game one step at a time: an overview of all your moves, then a card for each guess comparing it to the bot’s optimal pick, then a final summary with community stats and your rating change. Move between steps with the arrow keys or the on-screen arrows.',
+          'The review page is your main post-game tool. It walks you through the game one step at a time: an overview of all your moves, then a card for each guess comparing it to the bot’s optimal pick, then a final summary with community stats. Your rating change sits in the header the whole time. Move between steps with the arrow keys or the on-screen arrows.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
@@ -1034,7 +1020,7 @@ export const SECTIONS: SectionDef[] = [
               {[
                 { n: '1', name: 'Overview', desc: 'Your full guess grid plus a stats table summarising every move — skill, luck, words left and info gained, row by row. Click any row to jump straight to that move.' },
                 { n: '2', name: 'Per-move cards', desc: 'One card per guess: its classification, a “Comparing our guesses” table (your guess vs. the bot’s optimal pick), the bits of information gained, and how each guess split the remaining solutions into groups. Expand the optimal pick to see runner-up alternatives.' },
-                { n: '3', name: 'Summary', desc: 'How unique your game was versus the community, your projected rating change (Ranked games), and links back to play or share.' },
+                { n: '3', name: 'Summary', desc: 'How unique your game was versus the community, and links back to play or share. Your rating change (Ranked games) is shown in the header throughout.' },
               ].map((tab) => (
                 <InnerCard key={tab.n} className="flex gap-2.5">
                   <span className="font-mono text-[10px] text-text-tertiary bg-bg-muted w-5 h-5 flex items-center justify-center shrink-0 mt-0.5">
@@ -1091,14 +1077,14 @@ export const SECTIONS: SectionDef[] = [
       {
         q: 'What’s on the final summary (community stats)?',
         plain:
-          'The last step of the review pulls back from individual moves and compares your whole game to everyone else who solved the same word: how many players got it, how your guess count stacks up, and how unique your exact sequence of guesses was. Ranked games also show your projected rating change here.',
+          'The last step of the review pulls back from individual moves and compares your whole game to everyone else who solved the same word: how many players got it, how your guess count stacks up, and how unique your exact sequence of guesses was.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
             The final step looks at the whole game in context. It shows community stats for the
             same answer — how many people solved it and how your number of guesses compares — plus
-            how unique your particular path was, since identical games share a fingerprint. For
-            Ranked games, your projected rating change is shown here too. From this step you can jump
-            back to play or share the game.
+            how unique your particular path was, since identical games share a fingerprint. Your
+            rating change for a Ranked game is in the header the whole time. From this step you can
+            jump back to play or share the game.
           </p>
         ),
       },
@@ -1199,11 +1185,11 @@ export const SECTIONS: SectionDef[] = [
       {
         q: 'Are there limits?',
         plain:
-          'Each game session has a 10-message limit. This resets when you start a review for a new game. The limit exists to keep the service sustainable — 10 messages is enough for a thorough debrief of any single game.',
+          'Each game has a 10-message limit, and there is a cap of 40 coach messages per day. The limits exist to keep the service sustainable — 10 messages is enough for a thorough debrief of any single game.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            Each game session has a 10-message limit. This resets when you start a review for a new
-            game. The limit exists to keep the service sustainable — 10 messages is enough for a
+            Each game has a 10-message limit, and there is a cap of 40 coach messages per day. The
+            limits exist to keep the service sustainable — 10 messages is enough for a
             thorough debrief of any single game. If you find yourself needing more, that is a sign
             you are asking broad questions; try focusing on a specific move instead.
           </p>
@@ -1217,38 +1203,33 @@ export const SECTIONS: SectionDef[] = [
     slug: 'wordlists',
     title: 'Word lists',
     icon: <FileText size={16} />,
-    intro: 'Four different word lists power different parts of the game.',
+    intro: 'Three word lists power different parts of the game.',
     items: [
       {
         q: "How many words does ELOquence know?",
         plain:
-          'ELOquence works with four distinct word lists. 15,000 valid guesses — anything you can submit. 5,500 Ranked answers — the pool used for Ranked mode. 4,500 bot suggestion words — the pool the bot draws its top-pick recommendations from. 2,309 standard daily words — the classic Wordle answer list.',
+          'ELOquence works with three word lists. 12,953 legal guesses — anything you can submit, and the pool the engine ranks when it recommends a word. 2,309 answers — the classic Wordle list, used for the Daily, Practice and Friends. 5,009 Ranked answers — the 2,309 plus 2,700 fair but less common words, so a Ranked word cannot be memorised.',
         a: (
           <div className="space-y-3">
             <p className="font-sans text-sm text-text-secondary leading-relaxed">
-              ELOquence works with four distinct word lists, each serving a different purpose.
+              ELOquence works with three word lists, each serving a different purpose.
             </p>
             <div className="space-y-2">
               {[
                 {
-                  n: '15,000',
-                  label: 'Valid guesses',
-                  desc: 'Anything you can submit. The full dictionary ELOquence recognizes as a legal guess.',
-                },
-                {
-                  n: '5,500',
-                  label: 'Ranked answers',
-                  desc: 'The pool used for Ranked games. Broader than the daily list — includes less common but still fair words.',
-                },
-                {
-                  n: '4,500',
-                  label: 'Bot suggestion pool',
-                  desc: "Words the bot can recommend as top picks. Filtered for fairness — no obscure words that would feel like a trick.",
+                  n: '12,953',
+                  label: 'Legal guesses',
+                  desc: 'Anything you can submit. Also the pool the engine ranks when it recommends a guess, so a recommendation can be any legal word.',
                 },
                 {
                   n: '2,309',
-                  label: 'Standard daily words',
-                  desc: "The classic Wordle answer list. If you played the NYT's original Wordle, you know these words. Used for Daily mode.",
+                  label: 'Answers',
+                  desc: "The classic Wordle answer list. Daily, Practice and Friends games pick their word from it.",
+                },
+                {
+                  n: '5,009',
+                  label: 'Ranked answers',
+                  desc: 'The 2,309 plus 2,700 fair but less common words, so a Ranked word cannot be memorised from the classic list.',
                 },
               ].map((w) => (
                 <InnerCard key={w.n} className="flex gap-3 items-start">
@@ -1273,38 +1254,25 @@ export const SECTIONS: SectionDef[] = [
       {
         q: 'Can I guess a word that is not on any list?',
         plain:
-          'No. ELOquence only accepts guesses from the 15,000-word valid guess dictionary. If you type a word and it does not submit, it is not in the dictionary. Proper nouns, abbreviations, and most words fewer than five letters are excluded.',
+          'No. ELOquence only accepts guesses from the 12,953-word list of legal guesses. If you type a word and it does not submit, it is not in the dictionary. Proper nouns, abbreviations, and most words fewer than five letters are excluded.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            No. ELOquence only accepts guesses from the 15,000-word valid-guess dictionary. If you
+            No. ELOquence only accepts guesses from the 12,953-word list of legal guesses. If you
             type a word and it is not accepted, it is simply not in the list. Proper nouns,
-            abbreviations, and most obscure technical terms are excluded. The 15,000-word list
-            covers essentially all common English five-letter words.
-          </p>
-        ),
-      },
-      {
-        q: 'Are past solutions excluded from future daily puzzles?',
-        plain:
-          'Yes, by default the bot and top-picks list exclude words that have already been the daily solution. You can toggle this behavior off in the analysis settings if you want to see what the bot would recommend without that filter.',
-        a: (
-          <p className="font-sans text-sm text-text-secondary leading-relaxed">
-            Yes, by default the bot and top-picks list exclude words that have already appeared as
-            the daily solution. You can toggle this off in the analysis settings if you want to see
-            what the bot would recommend without the past-solutions filter — useful for
-            understanding how the recommendations change when you lift that constraint.
+            abbreviations, and most obscure technical terms are excluded. The list still
+            covers essentially every common English five-letter word.
           </p>
         ),
       },
       {
         q: 'Why does the bot sometimes suggest a word I have never heard of?',
         plain:
-          'The bot optimizes for information gain, not familiarity. If an unusual word splits the remaining candidates perfectly, it goes to the top of the list. It is always drawn from the 4,500-word suggestion pool, so it is always a real word — just possibly one you did not know.',
+          'The bot optimizes for information gain, not familiarity. If an unusual word splits the remaining candidates perfectly, it goes to the top of the list. Every recommendation comes from the same 12,953 legal guesses you can type, so it is always a real word — just possibly one you did not know.',
         a: (
           <p className="font-sans text-sm text-text-secondary leading-relaxed">
             The bot optimizes for information gain, not familiarity. If an unusual word splits the
             remaining candidates perfectly, it goes to the top of the list regardless of how common
-            it is. All suggestions are drawn from the 4,500-word suggestion pool, so every
+            it is. Every suggestion comes from the same 12,953 legal guesses you can type, so every
             recommendation is a real word — just possibly one that lives at the edge of everyday
             vocabulary. The bot has no sentimental attachment to common words.
           </p>

@@ -6,10 +6,6 @@ export const springs = {
   slide: { type: 'spring' as const, damping: 28, stiffness: 350, mass: 0.8 },
 };
 
-export const easings = {
-  fade: { duration: 0.2, ease: [0.25, 0.1, 0.25, 1] as const },
-};
-
 export const stagger = {
   fast: { staggerChildren: 0.05, delayChildren: 0.1 },
   medium: { staggerChildren: 0.08, delayChildren: 0.15 },

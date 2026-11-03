@@ -157,7 +157,3 @@ export async function unsubscribeFromPush(): Promise<PushState> {
   return { status: 'unsubscribed', endpoint: null };
 }
 
-export async function sendTestPush(): Promise<{ sent: number; removed: number }> {
-  const res = await pushApi.test();
-  return res.data;
-}

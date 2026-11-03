@@ -61,7 +61,10 @@ export default function Tile({
           borderColor: 'var(--tile-tbd-border)',
           ['--ink' as string]: ink,
           ['--ink-fg' as string]: fg,
-          ['--tile-size' as string]: dim,
+          // The ink-fill keyframe reads --tile-size for its inset shadow. Only override it
+          // for an explicit size: setting it to var(--tile-size) on the tile itself is a
+          // cycle, which invalidates width/height and shrinks the row to its letters.
+          ...(size ? { ['--tile-size' as string]: size } : {}),
           animationDelay: `${flipDelay}s`,
         }
       : { ...style, backgroundColor: ink, borderColor: ink, color: fg };

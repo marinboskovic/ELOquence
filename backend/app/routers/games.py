@@ -54,7 +54,7 @@ async def start_game(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> GameResponse:
     """Create and return a new game session."""
-    game = await create_game(db, current_user, payload.mode, payload.word_pool, hard_mode=payload.hard_mode)
+    game = await create_game(db, current_user, payload.mode, hard_mode=payload.hard_mode)
     return _build_game_response(game)
 
 

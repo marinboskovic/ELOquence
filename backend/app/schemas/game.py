@@ -10,7 +10,6 @@ class GameCreate(BaseModel):
     """Payload for starting a new game."""
 
     mode: Literal["daily", "competitive", "practice"]
-    word_pool: Literal["standard", "competitive"] = "standard"
     hard_mode: bool = False
 
 

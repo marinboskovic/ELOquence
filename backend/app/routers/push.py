@@ -17,12 +17,10 @@ from app.schemas.push import (
     NotificationPreferencesPayload,
     NotificationPreferencesUpdate,
     PushSubscribeRequest,
-    PushTestResponse,
     PushUnsubscribeRequest,
     PushVapidPublicKey,
 )
 from app.services.auth import get_current_user
-from app.services.push import build_payload, send_push_to_subscriptions
 from app.services.rate_limit import rate_limited
 
 router = APIRouter(prefix="/push", tags=["push"])
@@ -157,39 +155,3 @@ async def unsubscribe(
         )
     )
     return {"deleted": result.rowcount or 0}
-
-
-@router.post("/test", response_model=PushTestResponse, dependencies=[rate_limited("push-test", 5, 600, key="user")])
-async def send_test_notification(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> PushTestResponse:
-    """Send a test push to every device the user is subscribed on.
-
-    Useful for the settings-page "Send test" button so a user can confirm
-    the pipeline works end-to-end without having to wait for a real trigger.
-    """
-    if not settings.push_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Push notifications are not configured on this server.",
-        )
-
-    result = await db.execute(
-        select(PushSubscription).where(PushSubscription.user_id == current_user.id)
-    )
-    subs = list(result.scalars().all())
-    if not subs:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No push subscriptions registered for this account.",
-        )
-
-    payload = build_payload(
-        title="ELOquence",
-        body="Push notifications are working. Welcome aboard.",
-        url="/",
-        tag="test-notification",
-    )
-    sent, removed = await send_push_to_subscriptions(db, subs, payload)
-    return PushTestResponse(sent=sent, removed=removed)

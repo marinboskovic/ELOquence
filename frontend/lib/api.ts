@@ -161,7 +161,7 @@ export interface SessionInfo {
 // `/leaderboard/`): without it FastAPI 307-redirects and iOS/WebKit drops
 // the Authorization header across the redirect.
 export const gamesApi = {
-  create: (data: { mode: string; word_pool?: string; hard_mode?: boolean }) => api.post('/games/', data),
+  create: (data: { mode: string; hard_mode?: boolean }) => api.post('/games/', data),
   submitGuess: (gameId: string, guess: string) =>
     api.post(`/games/${gameId}/guess`, { guess, local_date: localDate() }),
   get: (gameId: string) => api.get(`/games/${gameId}`),
@@ -449,7 +449,6 @@ export const pushApi = {
   subscribe: (subscription: PushSubscriptionJSON, userAgent?: string) =>
     api.post<{ id: string }>('/push/subscribe', { subscription, user_agent: userAgent }),
   unsubscribe: (endpoint: string) => api.delete<{ deleted: number }>('/push/subscribe', { data: { endpoint } }),
-  test: () => api.post<{ sent: number; removed: number }>('/push/test'),
   getPreferences: () => api.get<PushPreferences>('/push/preferences'),
   updatePreferences: (patch: Partial<PushPreferences>) => api.patch<PushPreferences>('/push/preferences', patch),
 };

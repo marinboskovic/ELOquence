@@ -357,11 +357,20 @@ export function Hint({
   const heading = title ?? t?.name ?? '';
   const text = body ?? (t ? (detailed ? t.detail : t.simple) : '');
   const [open, setOpen] = useState(false);
+  // Where it actually opens: a hint near the top of the page flips below its trigger so it
+  // never slides under the sticky header (the one on the play-page rating did exactly that).
+  const [placement, setPlacement] = useState<'top' | 'bottom'>(side);
   const id = useRef(`hint-${Math.random().toString(36).slice(2, 8)}`).current;
   const ref = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (!open) return;
+    if (ref.current) {
+      const { top, bottom } = ref.current.getBoundingClientRect();
+      const roomAbove = top - 56 - 120; // header height + a typical hint
+      const roomBelow = window.innerHeight - bottom - 120;
+      setPlacement(side === 'top' ? (roomAbove < 0 && roomBelow > roomAbove ? 'bottom' : 'top') : roomBelow < 0 && roomAbove > roomBelow ? 'top' : 'bottom');
+    }
     const onDoc = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
@@ -374,7 +383,7 @@ export function Hint({
       document.removeEventListener('touchstart', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, side]);
 
   if (!text) return <>{children ?? heading}</>;
 
@@ -396,13 +405,13 @@ export function Hint({
           <motion.span
             id={id}
             role="tooltip"
-            initial={{ opacity: 0, y: side === 'top' ? 4 : -4 }}
+            initial={{ opacity: 0, y: placement === 'top' ? 4 : -4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: side === 'top' ? 4 : -4 }}
+            exit={{ opacity: 0, y: placement === 'top' ? 4 : -4 }}
             transition={{ duration: 0.16, ease: [0.2, 0.8, 0.2, 1] }}
             className={clsx(
-              'absolute left-0 z-40 w-64 max-w-[80vw] bg-bg-ink text-text-on-ink p-3 shadow-ink normal-case tracking-normal text-left font-sans outline outline-1 outline-[var(--bg-base)]',
-              side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+              'absolute left-0 z-[60] w-64 max-w-[80vw] bg-bg-ink text-text-on-ink p-3 shadow-ink normal-case tracking-normal text-left font-sans outline outline-1 outline-[var(--bg-base)]',
+              placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
             )}
           >
             {heading && <span className="block font-mono text-[10px] uppercase tracking-[0.14em] opacity-70 mb-1">{heading}</span>}

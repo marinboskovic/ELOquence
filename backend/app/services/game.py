@@ -39,8 +39,8 @@ def _create_game_lock_key(user_id: uuid.UUID, mode: str) -> int:
 
 
 
-async def _get_word_pool(mode: str, pool_name: str) -> list[str]:
-    """Return the answer word pool based on mode and pool name.
+async def _get_word_pool(mode: str) -> list[str]:
+    """Return the answer word pool for a mode.
 
     Competitive mode uses the expanded pool (standard answers + extra
     competitive words).  All other modes use the standard 2,309 answers.
@@ -278,7 +278,6 @@ async def create_game(
     db: AsyncSession,
     user: User,
     mode: str,
-    word_pool: str = "standard",
     hard_mode: bool = False,
     daily_date: date | None = None,
 ) -> Game:
@@ -288,12 +287,11 @@ async def create_game(
         db: Active async session.
         user: Authenticated player.
         mode: One of daily / competitive / practice.
-        word_pool: 'standard' or 'competitive' (used for practice).
 
     Returns:
         Newly created Game ORM object.
     """
-    pool = await _get_word_pool(mode, word_pool)
+    pool = await _get_word_pool(mode)
 
     # Transaction-scoped advisory lock keyed on (user_id, mode). Forces
     # concurrent `create_game` calls for the same player+mode to serialise
